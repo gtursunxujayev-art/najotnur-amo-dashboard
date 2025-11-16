@@ -10,14 +10,27 @@ export async function GET() {
   try {
     const pipelines = await getPipelinesMeta();
 
-    const sotuvPipelineIdEnv = process.env.SOTUV_PIPELINE_ID;
-    const sotuvPipelineId = sotuvPipelineIdEnv
-      ? Number(sotuvPipelineIdEnv)
-      : null;
+    // Decide which pipeline to use for stages
+    let sotuvPipelineId: number | null = null;
+
+    const envVal = process.env.SOTUV_PIPELINE_ID;
+    if (envVal) {
+      const num = Number(envVal);
+      if (!Number.isNaN(num)) {
+        sotuvPipelineId = num;
+      }
+    }
+
+    // Fallback: take the first pipeline from amo if env not set or invalid
+    if ((!sotuvPipelineId || Number.isNaN(sotuvPipelineId)) && pipelines.length > 0) {
+      sotuvPipelineId = pipelines[0].id;
+      console.warn(
+        "[/api/meta] Using first pipeline as Sotuv because SOTUV_PIPELINE_ID is missing or invalid"
+      );
+    }
 
     let statuses: { id: number; name: string }[] = [];
-
-    if (sotuvPipelineId && !Number.isNaN(sotuvPipelineId)) {
+    if (sotuvPipelineId) {
       statuses = await getPipelineStatusesMeta(sotuvPipelineId);
     }
 
@@ -25,9 +38,9 @@ export async function GET() {
 
     return NextResponse.json({
       pipelines,
+      sotuvPipelineId,
       statuses,
       lossReasons,
-      sotuvPipelineId,
     });
   } catch (err: any) {
     console.error("[/api/meta] error:", err);
