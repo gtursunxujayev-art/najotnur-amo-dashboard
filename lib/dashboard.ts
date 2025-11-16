@@ -6,7 +6,8 @@ import {
   AmoLead,
 } from "@/lib/amocrm";
 import { dashboardConfig } from "@/config/dashboardConfig";
-import { getCalls } from "@/lib/googleSheets";
+import { getSheetCalls } from "@/lib/googleSheets";
+import { getAmoCalls } from "@/lib/amoCalls";
 
 export type Period = {
   from: Date;
@@ -60,11 +61,16 @@ export async function buildDashboardData(
   period: Period,
   periodLabel: string
 ): Promise<DashboardData> {
-  const [users, reasonsMap, leads, calls] = await Promise.all([
+  const [users, reasonsMap, leads, sheetCalls, amoCalls] = await Promise.all([
     getUsers(),
     getLossReasons(),
     getLeadsByCreatedAt(toUnixSeconds(period.from), toUnixSeconds(period.to)),
-    getCalls(period.from, period.to),
+    dashboardConfig.USE_SHEETS_CALLS
+      ? getSheetCalls(period.from, period.to)
+      : Promise.resolve([]),
+    dashboardConfig.USE_AMO_CALLS
+      ? getAmoCalls(period.from, period.to)
+      : Promise.resolve([]),
   ]);
 
   const usersMap = new Map<number, string>();
@@ -96,10 +102,21 @@ export async function buildDashboardData(
   const isOfflineDeal = (lead: AmoLead) =>
     dashboardConfig.OFFLINE_DEAL_STATUS_IDS.includes(lead.status_id || -1);
 
+  const pipelineFilterActive = dashboardConfig.PIPELINE_IDS.length > 0;
+
   leads.forEach((lead) => {
+    const pipelineId = lead.pipeline_id || -1;
+
+    if (
+      pipelineFilterActive &&
+      !dashboardConfig.PIPELINE_IDS.includes(pipelineId)
+    ) {
+      // Skip leads from pipelines that are not selected
+      return;
+    }
+
     leadsCount++;
 
-    const statusId = lead.status_id || -1;
     const managerId = lead.responsible_user_id || 0;
     const managerName = usersMap.get(managerId) || `User ${managerId}`;
     const price = lead.price || 0;
@@ -124,7 +141,6 @@ export async function buildDashboardData(
 
     if (isNotQualified(lead)) {
       nonQualifiedLeadsCount++;
-      // add reason slice
       if (lead.loss_reason_id != null) {
         nonQualifiedReasonMap.set(
           lead.loss_reason_id,
@@ -151,8 +167,7 @@ export async function buildDashboardData(
     }
   });
 
-  // For monthly / weekly income we simply reuse kelishuvSummasi, because
-  // API already filtered by period. In future you can request larger range.
+  // For now, oylik/haftalik tushum equals kelishuvSummasi for the chosen period.
   const oylikTushum = kelishuvSummasi;
   const haftalikTushum = kelishuvSummasi;
 
@@ -166,13 +181,13 @@ export async function buildDashboardData(
   const conversionFromQualified =
     qualifiedLeadsCount > 0 ? wonFromQualifiedCount / qualifiedLeadsCount : 0;
 
-  // Calls grouped by manager
+  // Calls grouped by manager (name)
   const callsPerManager = new Map<string, ManagerCallsStats>();
 
-  calls.forEach((c) => {
-    if (!callsPerManager.has(c.managerName)) {
-      callsPerManager.set(c.managerName, {
-        managerName: c.managerName,
+  const ensureManagerCalls = (managerName: string): ManagerCallsStats => {
+    if (!callsPerManager.has(managerName)) {
+      callsPerManager.set(managerName, {
+        managerName,
         callsAll: 0,
         callsSuccess: 0,
         callSecondsAll: 0,
@@ -180,15 +195,32 @@ export async function buildDashboardData(
         avgCallSeconds: 0,
       });
     }
-    const cs = callsPerManager.get(c.managerName)!;
-    cs.callsAll++;
-    cs.callSecondsAll += c.durationSec;
-    if (c.isSuccess) {
-      cs.callsSuccess++;
-      cs.callSecondsSuccess += c.durationSec;
-    }
-  });
+    return callsPerManager.get(managerName)!;
+  };
 
+  // 1) All calls from amoCRM
+  if (dashboardConfig.USE_AMO_CALLS) {
+    amoCalls.forEach((c) => {
+      const managerName =
+        usersMap.get(c.managerId) || `User ${c.managerId}`;
+      const cs = ensureManagerCalls(managerName);
+      cs.callsAll++;
+      cs.callSecondsAll += c.durationSec;
+    });
+  }
+
+  // 2) Successful calls from Google Sheets (optional)
+  if (dashboardConfig.USE_SHEETS_CALLS) {
+    sheetCalls.forEach((c) => {
+      const cs = ensureManagerCalls(c.managerName);
+      if (c.isSuccess) {
+        cs.callsSuccess++;
+        cs.callSecondsSuccess += c.durationSec;
+      }
+    });
+  }
+
+  // 3) Compute average
   callsPerManager.forEach((cs) => {
     cs.avgCallSeconds =
       cs.callsAll > 0 ? Math.round(cs.callSecondsAll / cs.callsAll) : 0;
