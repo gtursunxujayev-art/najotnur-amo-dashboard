@@ -191,4 +191,207 @@ export default function DashboardPage() {
               className="rounded-md bg-sky-500 px-3 py-1 text-xs font-semibold text-black hover:bg-sky-400"
             >
               Tanlash
-            </
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mb-4 rounded-md border border-red-500 bg-red-950/40 px-3 py-2 text-sm text-red-200">
+            {error}
+          </div>
+        )}
+
+        {/* 1st row: money + conversion */}
+        <div className="grid gap-4 md:grid-cols-4 mb-6">
+          {/* Kelishuv summasi */}
+          <Card title="KELISHUV SUMMASI">
+            <div className="text-2xl font-semibold tracking-wide">
+              {formatCurrency(totalWon)}
+            </div>
+          </Card>
+
+          {/* Sotuv – Online */}
+          <Card title="SOTUV — ONLINE">
+            <div className="text-3xl font-semibold leading-tight">
+              {onlineCount ?? 0}
+            </div>
+            <div className="mt-1 text-xs uppercase tracking-wide text-slate-400">
+              Kelishuvlar soni
+            </div>
+            <div className="mt-3 text-sm font-medium text-slate-100">
+              {formatCurrency(onlineSum)}
+            </div>
+          </Card>
+
+          {/* Sotuv – Offline */}
+          <Card title="SOTUV — OFFLINE">
+            <div className="text-3xl font-semibold leading-tight">
+              {offlineCount ?? 0}
+            </div>
+            <div className="mt-1 text-xs uppercase tracking-wide text-slate-400">
+              Kelishuvlar soni
+            </div>
+            <div className="mt-3 text-sm font-medium text-slate-100">
+              {formatCurrency(offlineSum)}
+            </div>
+          </Card>
+
+          {/* Conversion */}
+          <Card title="KONVERSIYA (QUALIFIED → SOTUV)">
+            <div className="text-3xl font-semibold">
+              {conversion.toFixed(1)}%
+            </div>
+          </Card>
+        </div>
+
+        {/* 2nd row: leads metrics */}
+        <div className="grid gap-4 md:grid-cols-3 mb-6">
+          <Card title="LIDLAR SONI">
+            <BigNumber value={leadsCount} />
+          </Card>
+
+          <Card title="SIFATLI LIDLAR">
+            <BigNumber value={qualifiedCount} />
+          </Card>
+
+          <Card title="SIFATSIZ LIDLAR">
+            <BigNumber value={notQualifiedCount} />
+          </Card>
+        </div>
+
+        {/* 3rd row: two pie charts */}
+        <div className="grid gap-4 md:grid-cols-2 mb-6">
+          <Card title="Sifatsiz lidlar sabablari">
+            {nonQualifiedReasons.length === 0 ? (
+              <EmptyState />
+            ) : (
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={nonQualifiedReasons}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      labelLine={false}
+                      label={({ name, percent }) =>
+                        `${name} ${(percent * 100).toFixed(0)}%`
+                      }
+                    >
+                      {nonQualifiedReasons.map((_, index) => (
+                        <Cell
+                          key={index}
+                          fill={PIE_COLORS[index % PIE_COLORS.length]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value: any, name: any) => [
+                        value,
+                        name as string,
+                      ]}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </Card>
+
+          <Card title="Lid manbalari (Qayerdan)">
+            {leadSources.length === 0 ? (
+              <EmptyState />
+            ) : (
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={leadSources}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      labelLine={false}
+                      label={({ name, percent }) =>
+                        `${name} ${(percent * 100).toFixed(0)}%`
+                      }
+                    >
+                      {leadSources.map((_, index) => (
+                        <Cell
+                          key={index}
+                          fill={PIE_COLORS[index % PIE_COLORS.length]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value: any, name: any) => [
+                        value,
+                        name as string,
+                      ]}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </Card>
+        </div>
+
+        {/* Revenue block */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card title="Oylik tushum">
+            <div className="text-xl font-semibold">
+              {formatCurrency(monthlyRevenue)}
+            </div>
+            <div className="mt-1 text-xs text-slate-400">
+              Hozircha Google Sheets bo‘yicha yoki eski hisob-kitob bo‘yicha
+            </div>
+          </Card>
+
+          <Card title="Haftalik tushum">
+            <div className="text-xl font-semibold">
+              {formatCurrency(weeklyRevenue)}
+            </div>
+            <div className="mt-1 text-xs text-slate-400">
+              Hozircha Google Sheets bo‘yicha yoki eski hisob-kitob bo‘yicha
+            </div>
+          </Card>
+        </div>
+
+        {loading && (
+          <div className="mt-6 text-center text-xs text-slate-400">
+            Yuklanmoqda...
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+function Card(props: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/70 px-4 py-3 shadow-sm">
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+        {props.title}
+      </div>
+      <div className="mt-3 text-sm text-slate-100">{props.children}</div>
+    </div>
+  );
+}
+
+function BigNumber({ value }: { value: number }) {
+  return (
+    <div className="text-4xl font-semibold tracking-wide text-slate-50">
+      {value}
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="flex h-40 items-center justify-center text-sm text-slate-400">
+      Hozircha ma’lumot yo‘q.
+    </div>
+  );
+}
