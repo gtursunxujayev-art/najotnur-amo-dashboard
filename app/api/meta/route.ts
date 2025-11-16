@@ -1,32 +1,37 @@
 // app/api/meta/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
   getPipelinesMeta,
   getPipelineStatusesMeta,
   getLossReasonsMeta,
+  getLeadCustomFieldsMeta,
 } from "@/lib/amocrmMeta";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const search = req.nextUrl.searchParams;
+    const pipelineParam = search.get("pipelineId");
+
     const pipelines = await getPipelinesMeta();
 
-    // Decide which pipeline to use for stages
     let sotuvPipelineId: number | null = null;
 
-    const envVal = process.env.SOTUV_PIPELINE_ID;
-    if (envVal) {
-      const num = Number(envVal);
-      if (!Number.isNaN(num)) {
-        sotuvPipelineId = num;
-      }
+    if (pipelineParam) {
+      const num = Number(pipelineParam);
+      if (!Number.isNaN(num)) sotuvPipelineId = num;
     }
 
-    // Fallback: take the first pipeline from amo if env not set or invalid
-    if ((!sotuvPipelineId || Number.isNaN(sotuvPipelineId)) && pipelines.length > 0) {
-      sotuvPipelineId = pipelines[0].id;
-      console.warn(
-        "[/api/meta] Using first pipeline as Sotuv because SOTUV_PIPELINE_ID is missing or invalid"
-      );
+    // If no pipelineId in query → try env → fallback to first pipeline
+    if (!sotuvPipelineId) {
+      const envVal = process.env.SOTUV_PIPELINE_ID;
+      if (envVal && !Number.isNaN(Number(envVal))) {
+        sotuvPipelineId = Number(envVal);
+      } else if (pipelines.length > 0) {
+        sotuvPipelineId = pipelines[0].id;
+        console.warn(
+          "[/api/meta] Using first pipeline as default; consider setting SOTUV_PIPELINE_ID"
+        );
+      }
     }
 
     let statuses: { id: number; name: string }[] = [];
@@ -35,12 +40,14 @@ export async function GET() {
     }
 
     const lossReasons = await getLossReasonsMeta();
+    const customFields = await getLeadCustomFieldsMeta();
 
     return NextResponse.json({
       pipelines,
       sotuvPipelineId,
       statuses,
       lossReasons,
+      customFields,
     });
   } catch (err: any) {
     console.error("[/api/meta] error:", err);
