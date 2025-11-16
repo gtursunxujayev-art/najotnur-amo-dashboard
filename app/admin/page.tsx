@@ -58,14 +58,6 @@ export default function AdminPage() {
     dashboardConfig.NOT_QUALIFIED_REASON_IDS
   );
 
-  // Online / offline by status (legacy)
-  const [onlineStatuses, setOnlineStatuses] = useState(
-    dashboardConfig.ONLINE_DEAL_STATUS_IDS.join(", ")
-  );
-  const [offlineStatuses, setOfflineStatuses] = useState(
-    dashboardConfig.OFFLINE_DEAL_STATUS_IDS.join(", ")
-  );
-
   // Lead source field (Qayerdan)
   const [leadSourceFieldId, setLeadSourceFieldId] = useState<number | null>(
     dashboardConfig.LEAD_SOURCE_FIELD_ID
@@ -91,9 +83,12 @@ export default function AdminPage() {
     dashboardConfig.USE_SHEETS_CALLS
   );
 
+  // Saving to GitHub
+  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
+
   // ─────────── Load meta from backend ───────────
 
-  // NOTE: allow null to avoid TS error
   async function loadMeta(pipelineId?: number | null) {
     try {
       setMetaError(null);
@@ -154,15 +149,6 @@ export default function AdminPage() {
   // ─────────── Generated config text ───────────
 
   const configText = useMemo(() => {
-    const toIds = (input: string): number[] =>
-      input
-        .split(/[,\s]+/)
-        .map((s) => parseInt(s, 10))
-        .filter((n) => !Number.isNaN(n));
-
-    const onlineIds = toIds(onlineStatuses);
-    const offlineIds = toIds(offlineStatuses);
-
     const pipelineIds =
       selectedPipelineId && !Number.isNaN(selectedPipelineId)
         ? [selectedPipelineId]
@@ -183,8 +169,8 @@ export type DashboardConfig = {
   QUALIFIED_STATUS_IDS: number[];
   QUALIFIED_LOSS_REASON_IDS: number[];
   NOT_QUALIFIED_REASON_IDS: number[];
-  ONLINE_DEAL_STATUS_IDS: number[];
-  OFFLINE_DEAL_STATUS_IDS: number[];
+  ONLINE_DEAL_STATUS_IDS: number[]; // deprecated, kept for compatibility
+  OFFLINE_DEAL_STATUS_IDS: number[]; // deprecated, kept for compatibility
   PIPELINE_IDS: number[];
   LEAD_SOURCE_FIELD_ID: number | null;
   COURSE_TYPE_FIELD_ID: number | null;
@@ -199,8 +185,8 @@ export const dashboardConfig: DashboardConfig = {
   QUALIFIED_STATUS_IDS: [${arr(qualifiedStageIds)}],
   QUALIFIED_LOSS_REASON_IDS: [${arr(qualifiedReasonIds)}],
   NOT_QUALIFIED_REASON_IDS: [${arr(notQualifiedReasonIds)}],
-  ONLINE_DEAL_STATUS_IDS: [${onlineIds.join(", ")}],
-  OFFLINE_DEAL_STATUS_IDS: [${offlineIds.join(", ")}],
+  ONLINE_DEAL_STATUS_IDS: [], // now we use Kurs turi enums instead
+  OFFLINE_DEAL_STATUS_IDS: [], // now we use Kurs turi enums instead
   PIPELINE_IDS: [${pipelineIds.join(", ")}],
   LEAD_SOURCE_FIELD_ID: ${leadSourceFieldLiteral},
   COURSE_TYPE_FIELD_ID: ${courseTypeFieldLiteral},
@@ -214,8 +200,6 @@ export const dashboardConfig: DashboardConfig = {
     qualifiedStageIds,
     qualifiedReasonIds,
     notQualifiedReasonIds,
-    onlineStatuses,
-    offlineStatuses,
     selectedPipelineId,
     leadSourceFieldId,
     courseTypeFieldId,
@@ -225,11 +209,42 @@ export const dashboardConfig: DashboardConfig = {
     useSheetsCalls,
   ]);
 
-  const handleCopy = async () => {
+  const handleCopyConfig = async () => {
     await navigator.clipboard.writeText(configText);
     alert(
-      "Config copied! Paste it into config/dashboardConfig.ts and commit + push."
+      "Config copied! If needed you can paste it manually into config/dashboardConfig.ts."
     );
+  };
+
+  const handleSaveToDashboard = async () => {
+    try {
+      setSaving(true);
+      setSaveStatus(null);
+      const res = await fetch("/api/admin/save-config", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ configText }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setSaveStatus(
+          "Error saving config: " + (data.error || res.statusText)
+        );
+        return;
+      }
+
+      setSaveStatus(
+        "Saved! Vercel will redeploy automatically in about 1–2 minutes."
+      );
+    } catch (err: any) {
+      setSaveStatus("Unexpected error: " + String(err?.message || err));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const pipelineOptions = pipelines;
@@ -247,7 +262,7 @@ export const dashboardConfig: DashboardConfig = {
     }));
 
   return (
-    <main className="space-y-6">
+    <main className="min-h-screen space-y-6 bg-slate-950 px-4 py-6 text-slate-50">
       <header className="flex items-center justify-between gap-4">
         <h1 className="text-3xl font-bold">Dashboard Admin</h1>
 
@@ -268,26 +283,29 @@ export const dashboardConfig: DashboardConfig = {
       {tab === "info" && <InfoSection />}
 
       {tab === "builder" && (
-        <section className="space-y-4 rounded-lg bg-white p-4 shadow-sm">
+        <section className="space-y-4 rounded-lg bg-slate-900 p-4 shadow-sm">
           <h2 className="text-xl font-semibold">
             Constructor – generate dashboardConfig.ts
           </h2>
 
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-slate-300">
             This constructor uses <strong>stages</strong>,{" "}
             <strong>loss reasons</strong> and{" "}
             <strong>lead custom fields</strong> loaded directly from amoCRM.
+            After you adjust the values, click{" "}
+            <strong>“Save to dashboard”</strong> – the config will be committed
+            to GitHub and Vercel will redeploy automatically.
           </p>
 
           {metaError && (
-            <div className="rounded border border-red-300 bg-red-50 p-3 text-xs text-red-700">
+            <div className="rounded border border-red-500 bg-red-900/40 p-3 text-xs text-red-100">
               {metaError}
             </div>
           )}
 
           {/* Pipeline selection */}
-          <div className="rounded border border-slate-200 bg-slate-50 p-3 text-sm space-y-2">
-            <h3 className="font-semibold text-slate-800">
+          <div className="space-y-2 rounded border border-slate-700 bg-slate-900 p-3 text-sm">
+            <h3 className="font-semibold text-slate-100">
               1. Choose funnel (pipeline)
             </h3>
             <SingleSelect
@@ -296,11 +314,11 @@ export const dashboardConfig: DashboardConfig = {
               selectedId={selectedPipelineId}
               onChange={(id) => {
                 setSelectedPipelineId(id);
-                loadMeta(id); // id can be null, function accepts null
+                loadMeta(id);
               }}
               placeholder="Choose Sotuv pipeline"
             />
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-400">
               All metrics will be calculated only for leads in this pipeline.
             </p>
           </div>
@@ -340,22 +358,6 @@ export const dashboardConfig: DashboardConfig = {
             />
           </div>
 
-          {/* Online/offline by status (legacy) */}
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field
-              label="ONLINE_DEAL_STATUS_IDS (online course deals – status ids)"
-              value={onlineStatuses}
-              onChange={setOnlineStatuses}
-              placeholder="e.g. 1011, 1012"
-            />
-            <Field
-              label="OFFLINE_DEAL_STATUS_IDS (offline course deals – status ids)"
-              value={offlineStatuses}
-              onChange={setOfflineStatuses}
-              placeholder="e.g. 1013"
-            />
-          </div>
-
           {/* Lead source and Kurs turi mapping */}
           <div className="grid gap-4 md:grid-cols-2">
             <SingleSelect
@@ -372,7 +374,6 @@ export const dashboardConfig: DashboardConfig = {
               selectedId={courseTypeFieldId}
               onChange={(id) => {
                 setCourseTypeFieldId(id);
-                // reset selections when field changed
                 setOnlineCourseEnumIds([]);
                 setOfflineCourseEnumIds([]);
               }}
@@ -400,17 +401,19 @@ export const dashboardConfig: DashboardConfig = {
           )}
 
           <div className="flex flex-wrap gap-4">
-            <label className="flex items-center gap-2 text-sm text-slate-700">
+            <label className="flex items-center gap-2 text-sm text-slate-100">
               <input
                 type="checkbox"
+                className="h-4 w-4 rounded border-slate-600 bg-slate-900"
                 checked={useAmoCalls}
                 onChange={(e) => setUseAmoCalls(e.target.checked)}
               />
               Use amoCRM calls (call_in, call_out)
             </label>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
+            <label className="flex items-center gap-2 text-sm text-slate-100">
               <input
                 type="checkbox"
+                className="h-4 w-4 rounded border-slate-600 bg-slate-900"
                 checked={useSheetsCalls}
                 onChange={(e) => setUseSheetsCalls(e.target.checked)}
               />
@@ -419,18 +422,34 @@ export const dashboardConfig: DashboardConfig = {
           </div>
 
           <div>
-            <div className="mb-2 flex items-center justify-between gap-4">
-              <h3 className="text-sm font-semibold">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-4">
+              <h3 className="text-sm font-semibold text-slate-100">
                 Generated config (dashboardConfig.ts)
               </h3>
-              <button
-                onClick={handleCopy}
-                className="rounded bg-slate-900 px-3 py-1 text-xs font-semibold text-white"
-              >
-                Copy code
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={handleCopyConfig}
+                  className="rounded bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-900"
+                >
+                  Copy config text
+                </button>
+                <button
+                  onClick={handleSaveToDashboard}
+                  disabled={saving}
+                  className={`rounded px-3 py-1 text-xs font-semibold ${
+                    saving
+                      ? "bg-slate-600 text-slate-300"
+                      : "bg-emerald-500 text-slate-900 hover:bg-emerald-400"
+                  }`}
+                >
+                  {saving ? "Saving..." : "Save to dashboard"}
+                </button>
+              </div>
             </div>
-            <pre className="max-h-80 overflow-auto rounded bg-slate-900 p-3 text-xs text-slate-100">
+            {saveStatus && (
+              <p className="mb-2 text-xs text-slate-300">{saveStatus}</p>
+            )}
+            <pre className="max-h-80 overflow-auto rounded bg-slate-950 p-3 text-xs text-slate-100">
 {configText}
             </pre>
           </div>
@@ -454,36 +473,14 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`rounded-md px-3 py-1 text-xs font-semibold ${
-        active ? "bg-white text-slate-900" : "text-slate-200"
+      className={`rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
+        active
+          ? "bg-slate-100 text-slate-900"
+          : "text-slate-200 hover:bg-slate-700"
       }`}
     >
       {label}
     </button>
-  );
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-}) {
-  return (
-    <label className="space-y-1 text-sm">
-      <div className="font-semibold text-slate-700">{label}</div>
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full rounded border px-2 py-1 text-sm"
-      />
-    </label>
   );
 }
 
@@ -524,35 +521,36 @@ function MultiSelect({
         } more`;
 
   return (
-    <div className="space-y-1 text-sm relative">
-      <div className="font-semibold text-slate-700">{label}</div>
+    <div className="relative space-y-1 text-sm">
+      <div className="font-semibold text-slate-100">{label}</div>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full rounded border px-3 py-2 text-left text-sm bg-white"
+        className="w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 text-left text-sm text-slate-100 placeholder:text-slate-500"
       >
         {buttonText}
       </button>
       {open && (
-        <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded border bg-white shadow">
+        <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded border border-slate-600 bg-slate-900 shadow-lg">
           {options.length === 0 && (
-            <div className="px-3 py-2 text-xs text-slate-500">
+            <div className="px-3 py-2 text-xs text-slate-400">
               No options loaded.
             </div>
           )}
           {options.map((opt) => (
             <label
               key={opt.id}
-              className="flex items-center gap-2 px-3 py-1 text-sm hover:bg-slate-100"
+              className="flex items-center gap-2 px-3 py-1 text-sm text-slate-100 hover:bg-slate-800"
             >
               <input
                 type="checkbox"
+                className="h-4 w-4 rounded border-slate-600 bg-slate-900"
                 checked={selectedIds.includes(opt.id)}
                 onChange={() => toggleId(opt.id)}
               />
               <span>
                 {opt.name}{" "}
-                <span className="text-xs text-slate-400">({opt.id})</span>
+                <span className="text-xs text-slate-500">({opt.id})</span>
               </span>
             </label>
           ))}
@@ -581,19 +579,19 @@ function SingleSelect({
     options.find((o) => o.id === selectedId)?.name || placeholder || "Choose…";
 
   return (
-    <div className="space-y-1 text-sm relative">
-      <div className="font-semibold text-slate-700">{label}</div>
+    <div className="relative space-y-1 text-sm">
+      <div className="font-semibold text-slate-100">{label}</div>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full rounded border px-3 py-2 text-left text-sm bg-white"
+        className="w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 text-left text-sm text-slate-100"
       >
         {selectedLabel}
       </button>
       {open && (
-        <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded border bg-white shadow">
+        <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded border border-slate-600 bg-slate-900 shadow-lg">
           <button
-            className="w-full px-3 py-1 text-left text-xs text-slate-500 hover:bg-slate-100"
+            className="w-full px-3 py-1 text-left text-xs text-slate-400 hover:bg-slate-800"
             onClick={() => {
               onChange(null);
               setOpen(false);
@@ -604,7 +602,7 @@ function SingleSelect({
           {options.map((opt) => (
             <button
               key={opt.id}
-              className="flex w-full items-center gap-2 px-3 py-1 text-sm hover:bg-slate-100 text-left"
+              className="flex w-full items-center gap-2 px-3 py-1 text-left text-sm text-slate-100 hover:bg-slate-800"
               onClick={() => {
                 onChange(opt.id);
                 setOpen(false);
@@ -622,21 +620,25 @@ function SingleSelect({
 function InfoSection() {
   return (
     <section className="space-y-4">
-      <div className="space-y-2 rounded-lg bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold">amoCRM data</h2>
-        <ul className="list-disc pl-5 text-sm text-slate-700">
+      <div className="space-y-2 rounded-lg bg-slate-900 p-4 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-100">amoCRM data</h2>
+        <ul className="list-disc pl-5 text-sm text-slate-300">
           <li>
             Stages and loss reasons are read from amoCRM via{" "}
-            <code>/api/meta</code>.
+            <code className="rounded bg-slate-800 px-1 py-0.5 text-xs">
+              /api/meta
+            </code>
+            .
           </li>
           <li>
             You can choose the funnel, lead source field (<b>Qayerdan</b>) and
             course type field (<b>Kurs turi</b>) from real CRM custom fields.
           </li>
           <li>
-            After changing config, copy the generated code into{" "}
-            <code>config/dashboardConfig.ts</code> and push to GitHub – Vercel
-            will redeploy automatically.
+            After you click{" "}
+            <strong className="font-semibold">“Save to dashboard”</strong>,
+            config is committed to GitHub and Vercel redeploys. In 1–2 minutes
+            the <b>Dashboard</b> page will use the new settings.
           </li>
         </ul>
       </div>
