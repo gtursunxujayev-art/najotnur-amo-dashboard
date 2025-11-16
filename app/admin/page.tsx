@@ -1,4 +1,3 @@
-// app/admin/page.tsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -9,7 +8,6 @@ type Tab = "info" | "builder";
 export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("info");
 
-  // Text fields for IDs (comma / space separated)
   const [won, setWon] = useState(
     dashboardConfig.WON_STATUS_IDS.join(", ")
   );
@@ -28,6 +26,15 @@ export default function AdminPage() {
   const [pipelines, setPipelines] = useState(
     dashboardConfig.PIPELINE_IDS.join(", ")
   );
+  const [nonQualReasons, setNonQualReasons] = useState(
+    (dashboardConfig.NON_QUALIFIED_REASON_MAIN_IDS || []).join(", ")
+  );
+  const [leadSourceFieldId, setLeadSourceFieldId] = useState(
+    dashboardConfig.LEAD_SOURCE_FIELD_ID != null
+      ? String(dashboardConfig.LEAD_SOURCE_FIELD_ID)
+      : ""
+  );
+
   const [useAmoCalls, setUseAmoCalls] = useState(
     dashboardConfig.USE_AMO_CALLS
   );
@@ -48,6 +55,12 @@ export default function AdminPage() {
     const onlineIds = toIds(online);
     const offlineIds = toIds(offline);
     const pipelineIds = toIds(pipelines);
+    const nonQualReasonIds = toIds(nonQualReasons);
+    const leadSourceIdNum = parseInt(leadSourceFieldId || "", 10);
+    const leadSourceIdStr =
+      !Number.isNaN(leadSourceIdNum) && leadSourceFieldId.trim().length > 0
+        ? leadSourceFieldId.trim()
+        : "null";
 
     return `// config/dashboardConfig.ts
 
@@ -58,6 +71,8 @@ export type DashboardConfig = {
   ONLINE_DEAL_STATUS_IDS: number[];
   OFFLINE_DEAL_STATUS_IDS: number[];
   PIPELINE_IDS: number[];
+  NON_QUALIFIED_REASON_MAIN_IDS: number[];
+  LEAD_SOURCE_FIELD_ID: number | null;
   USE_AMO_CALLS: boolean;
   USE_SHEETS_CALLS: boolean;
 };
@@ -69,18 +84,33 @@ export const dashboardConfig: DashboardConfig = {
   ONLINE_DEAL_STATUS_IDS: [${onlineIds.join(", ")}],
   OFFLINE_DEAL_STATUS_IDS: [${offlineIds.join(", ")}],
   PIPELINE_IDS: [${pipelineIds.join(", ")}],
+  NON_QUALIFIED_REASON_MAIN_IDS: [${nonQualReasonIds.join(", ")}],
+  LEAD_SOURCE_FIELD_ID: ${leadSourceIdStr},
   USE_AMO_CALLS: ${useAmoCalls},
   USE_SHEETS_CALLS: ${useSheetsCalls},
 };`;
-  }, [won, qualified, notQualified, online, offline, pipelines, useAmoCalls, useSheetsCalls]);
+  }, [
+    won,
+    qualified,
+    notQualified,
+    online,
+    offline,
+    pipelines,
+    nonQualReasons,
+    leadSourceFieldId,
+    useAmoCalls,
+    useSheetsCalls,
+  ]);
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(configText);
-    alert("Config copied! Paste it into config/dashboardConfig.ts and commit + push.");
+    alert(
+      "Config copied! Paste it into config/dashboardConfig.ts and commit + push."
+    );
   };
 
   return (
-    <main className="mx-auto max-w-5xl p-6 space-y-6">
+    <main className="space-y-6">
       <header className="flex items-center justify-between gap-4">
         <h1 className="text-3xl font-bold">Dashboard Admin</h1>
 
@@ -107,8 +137,8 @@ export const dashboardConfig: DashboardConfig = {
           </h2>
 
           <p className="text-sm text-slate-600">
-            Bu bo‘limda status ID larni kiritasiz. Pastda tayyor{" "}
-            <code>dashboardConfig.ts</code> kodini nusxa ko‘chirib,
+            Bu bo‘limda status ID larni va maydon ID larini kiritasiz. Pastda
+            tayyor <code>dashboardConfig.ts</code> kodini nusxa ko‘chirib,
             loyihadagi faylga qo‘yasiz (GitHub → commit → push).
           </p>
 
@@ -120,16 +150,16 @@ export const dashboardConfig: DashboardConfig = {
               placeholder="masalan: 142, 555555"
             />
             <Field
-              label="QUALIFIED_STATUS_IDS (sifatli lidlar)"
+              label="QUALIFIED_STATUS_IDS (sifatli lidlar statuslari)"
               value={qualified}
               onChange={setQualified}
-              placeholder="status ID lar ro‘yxati"
+              placeholder="O‘ylab ko‘radi, Coachingga qiziqdi, ..."
             />
             <Field
-              label="NOT_QUALIFIED_STATUS_IDS (sifatsiz lidlar)"
+              label="NOT_QUALIFIED_STATUS_IDS (sifatsiz lidlar statuslari)"
               value={notQualified}
               onChange={setNotQualified}
-              placeholder="status ID lar ro‘yxati"
+              placeholder="Muvaffaqiyatsiz bosqich statuslari"
             />
             <Field
               label="ONLINE_DEAL_STATUS_IDS (online kurs kelishuvlari)"
@@ -148,6 +178,18 @@ export const dashboardConfig: DashboardConfig = {
               value={pipelines}
               onChange={setPipelines}
               placeholder="pipeline ID lar, masalan: 123456, 987654"
+            />
+            <Field
+              label="NON_QUALIFIED_REASON_MAIN_IDS (asosiy e'tiroz sabablari – loss_reason_id)"
+              value={nonQualReasons}
+              onChange={setNonQualReasons}
+              placeholder="masalan: 1, 2, 3 – boshqalar 'Boshqa sabablar' bo‘ladi"
+            />
+            <Field
+              label="LEAD_SOURCE_FIELD_ID ({Qayerdan} maydon field_id)"
+              value={leadSourceFieldId}
+              onChange={setLeadSourceFieldId}
+              placeholder="masalan: 1234567"
             />
           </div>
 
@@ -292,7 +334,8 @@ function InfoSection() {
         <ol className="list-decimal pl-5 text-sm text-slate-700 space-y-1">
           <li>
             <strong>Constructor</strong> bo‘limida status ID larni,
-            pipeline ID larni va qo‘ng‘iroq manbalarini tanlang.
+            pipeline ID larni, asosiy e'tiroz sabablari va {`{Qayerdan}`} field
+            ID sini kiriting.
           </li>
           <li>
             Yaratilgan kodni nusxa ko‘chirib,{" "}
