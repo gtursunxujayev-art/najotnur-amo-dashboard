@@ -1,14 +1,10 @@
 // config/dashboardConfig.ts
 
 /**
- * Here you configure which amoCRM status IDs mean:
- * - Won
- * - Qualified
- * - Not qualified (with reasons)
- * - Online deals
- * - Offline deals
- *
- * You MUST open your pipeline settings in amoCRM and put correct IDs here.
+ * Dashboard configuration:
+ * - Which statuses mean WON / QUALIFIED / NOT QUALIFIED / ONLINE / OFFLINE
+ * - Which pipelines to include
+ * - Whether to use amoCRM calls and/or Google Sheets calls
  */
 
 export type DashboardConfig = {
@@ -17,10 +13,13 @@ export type DashboardConfig = {
   NOT_QUALIFIED_STATUS_IDS: number[];
   ONLINE_DEAL_STATUS_IDS: number[];
   OFFLINE_DEAL_STATUS_IDS: number[];
+  PIPELINE_IDS: number[]; // empty = all pipelines
+  USE_AMO_CALLS: boolean;
+  USE_SHEETS_CALLS: boolean;
 };
 
 export const dashboardConfig: DashboardConfig = {
-  // Default amoCRM "Won" status id is usually 142 – check in your pipeline.
+  // Default amoCRM "Won" status id is often 142 – but check in your account.
   WON_STATUS_IDS: [142],
 
   // Statuses that mean "qualified lead" (client is suitable, we can sell).
@@ -34,4 +33,11 @@ export const dashboardConfig: DashboardConfig = {
 
   // Statuses where deal is for OFFLINE course
   OFFLINE_DEAL_STATUS_IDS: [],
+
+  // If empty → include all pipelines. Otherwise, only these pipeline IDs.
+  PIPELINE_IDS: [],
+
+  // Sources for call statistics:
+  USE_AMO_CALLS: true,   // all calls from amoCRM notes
+  USE_SHEETS_CALLS: false, // successful calls from Google Sheets (optional)
 };
