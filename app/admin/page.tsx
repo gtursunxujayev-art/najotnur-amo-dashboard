@@ -54,11 +54,11 @@ export default function AdminPage() {
   const [qualifiedReasonIds, setQualifiedReasonIds] = useState<number[]>(
     dashboardConfig.QUALIFIED_LOSS_REASON_IDS
   );
-  const [notQualifiedReasonIds, setNotQualifiedReasonIds] = useState<
-    number[]
-  >(dashboardConfig.NOT_QUALIFIED_REASON_IDS);
+  const [notQualifiedReasonIds, setNotQualifiedReasonIds] = useState<number[]>(
+    dashboardConfig.NOT_QUALIFIED_REASON_IDS
+  );
 
-  // Online / offline status-based (old behaviour, still supported)
+  // Online / offline by status (legacy)
   const [onlineStatuses, setOnlineStatuses] = useState(
     dashboardConfig.ONLINE_DEAL_STATUS_IDS.join(", ")
   );
@@ -71,7 +71,7 @@ export default function AdminPage() {
     dashboardConfig.LEAD_SOURCE_FIELD_ID
   );
 
-  // Kurs turi field + its enums → online/offline mapping
+  // Kurs turi field + enums
   const [courseTypeFieldId, setCourseTypeFieldId] = useState<number | null>(
     dashboardConfig.COURSE_TYPE_FIELD_ID
   );
@@ -93,12 +93,15 @@ export default function AdminPage() {
 
   // ─────────── Load meta from backend ───────────
 
-  async function loadMeta(pipelineId?: number) {
+  // NOTE: allow null to avoid TS error
+  async function loadMeta(pipelineId?: number | null) {
     try {
       setMetaError(null);
-      const url = pipelineId
-        ? `/api/meta?pipelineId=${pipelineId}`
-        : "/api/meta";
+
+      const url =
+        pipelineId != null
+          ? `/api/meta?pipelineId=${pipelineId}`
+          : "/api/meta";
 
       const res = await fetch(url);
       if (!res.ok) {
@@ -293,7 +296,7 @@ export const dashboardConfig: DashboardConfig = {
               selectedId={selectedPipelineId}
               onChange={(id) => {
                 setSelectedPipelineId(id);
-                loadMeta(id);
+                loadMeta(id); // id can be null, function accepts null
               }}
               placeholder="Choose Sotuv pipeline"
             />
@@ -337,7 +340,7 @@ export const dashboardConfig: DashboardConfig = {
             />
           </div>
 
-          {/* Online/offline by status (old) */}
+          {/* Online/offline by status (legacy) */}
           <div className="grid gap-4 md:grid-cols-2">
             <Field
               label="ONLINE_DEAL_STATUS_IDS (online course deals – status ids)"
