@@ -39,17 +39,31 @@ export type Slice = {
 
 export type DashboardData = {
   periodLabel: string;
+
+  // Money
   kelishuvSummasi: number;
   onlineSummasi: number;
   offlineSummasi: number;
   oylikTushum: number;
   haftalikTushum: number;
+
+  // Counts
   leadsCount: number;
   qualifiedLeadsCount: number;
   nonQualifiedLeadsCount: number;
-  conversionFromQualified: number; // 0–1
-  nonQualifiedReasons: Slice[];    // actually: ALL lost leads by loss reason
+
+  // NEW: number of online / offline deals
+  onlineDealsCount: number;
+  offlineDealsCount: number;
+
+  // 0–1
+  conversionFromQualified: number;
+
+  // Charts
+  nonQualifiedReasons: Slice[]; // all lost leads by loss reason
   leadSources: Slice[];
+
+  // Per-manager stats
   managerSales: ManagerSalesStats[];
   managerCalls: ManagerCallsStats[];
 };
@@ -58,10 +72,7 @@ function toUnixSeconds(d: Date): number {
   return Math.floor(d.getTime() / 1000);
 }
 
-function getCustomFieldString(
-  lead: AmoLead,
-  fieldId: number
-): string | null {
+function getCustomFieldString(lead: AmoLead, fieldId: number): string | null {
   const cf = (lead as any).custom_fields_values as
     | Array<{
         field_id: number;
@@ -75,6 +86,23 @@ function getCustomFieldString(
   const v = f.values[0].value;
   if (v == null) return null;
   return String(v);
+}
+
+// Helper for enum fields (like Kurs turi)
+function getCustomFieldEnum(lead: AmoLead, fieldId: number): number | null {
+  const cf = (lead as any).custom_fields_values as
+    | Array<{
+        field_id: number;
+        values?: { enum_id?: number; value?: any }[];
+      }>
+    | undefined;
+
+  if (!cf) return null;
+  const f = cf.find((x) => x.field_id === fieldId);
+  if (!f || !f.values || !f.values[0]) return null;
+  const v = f.values[0].enum_id;
+  if (v == null) return null;
+  return Number(v);
 }
 
 export async function buildDashboardData(
@@ -103,6 +131,10 @@ export async function buildDashboardData(
   let kelishuvSummasi = 0;
   let onlineSummasi = 0;
   let offlineSummasi = 0;
+
+  let onlineDealsCount = 0;
+  let offlineDealsCount = 0;
+
   let leadsCount = 0;
   let qualifiedLeadsCount = 0;
   let nonQualifiedLeadsCount = 0;
@@ -112,12 +144,6 @@ export async function buildDashboardData(
 
   const isWon = (lead: AmoLead) =>
     dashboardConfig.WON_STATUS_IDS.includes(lead.status_id || -1);
-
-  const isOnlineDeal = (lead: AmoLead) =>
-    dashboardConfig.ONLINE_DEAL_STATUS_IDS.includes(lead.status_id || -1);
-
-  const isOfflineDeal = (lead: AmoLead) =>
-    dashboardConfig.OFFLINE_DEAL_STATUS_IDS.includes(lead.status_id || -1);
 
   const isLost = (lead: AmoLead) => lead.loss_reason_id != null;
 
@@ -200,11 +226,31 @@ export async function buildDashboardData(
         wonFromQualifiedCount++;
       }
 
-      if (isOnlineDeal(lead)) {
-        onlineSummasi += price;
-      }
-      if (isOfflineDeal(lead)) {
-        offlineSummasi += price;
+      // --- ONLINE / OFFLINE via Kurs turi (enum) ---
+      if (
+        dashboardConfig.COURSE_TYPE_FIELD_ID != null &&
+        dashboardConfig.COURSE_TYPE_FIELD_ID > 0
+      ) {
+        const courseEnum = getCustomFieldEnum(
+          lead,
+          dashboardConfig.COURSE_TYPE_FIELD_ID
+        );
+
+        if (
+          courseEnum != null &&
+          dashboardConfig.ONLINE_COURSE_ENUM_IDS.includes(courseEnum)
+        ) {
+          onlineSummasi += price;
+          onlineDealsCount++;
+        }
+
+        if (
+          courseEnum != null &&
+          dashboardConfig.OFFLINE_COURSE_ENUM_IDS.includes(courseEnum)
+        ) {
+          offlineSummasi += price;
+          offlineDealsCount++;
+        }
       }
     }
 
@@ -223,6 +269,7 @@ export async function buildDashboardData(
   });
 
   // For now, oylik / haftalik tushum = kelishuvSummasi for selected period.
+  // Later we can switch these two to Google Sheets revenue.
   const oylikTushum = kelishuvSummasi;
   const haftalikTushum = kelishuvSummasi;
 
@@ -295,6 +342,8 @@ export async function buildDashboardData(
     leadsCount,
     qualifiedLeadsCount,
     nonQualifiedLeadsCount,
+    onlineDealsCount,
+    offlineDealsCount,
     conversionFromQualified,
     nonQualifiedReasons, // lost leads by loss reason
     leadSources,
