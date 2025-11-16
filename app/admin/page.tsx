@@ -10,22 +10,41 @@ type Option = {
   name: string;
 };
 
+type CustomFieldEnum = {
+  id: number;
+  value: string;
+};
+
+type CustomField = {
+  id: number;
+  name: string;
+  type: string;
+  enums: CustomFieldEnum[];
+};
+
 type MetaResponse = {
   pipelines: Option[];
+  sotuvPipelineId?: number | null;
   statuses: Option[];
   lossReasons: Option[];
-  sotuvPipelineId?: number | null;
+  customFields: CustomField[];
 };
 
 export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("info");
 
-  // Options loaded from /api/meta
-  const [stages, setStages] = useState<Option[]>([]);
-  const [reasons, setReasons] = useState<Option[]>([]);
   const [metaError, setMetaError] = useState<string | null>(null);
 
-  // Selected ids (config)
+  // Pipelines & stages
+  const [pipelines, setPipelines] = useState<Option[]>([]);
+  const [selectedPipelineId, setSelectedPipelineId] = useState<number | null>(
+    dashboardConfig.PIPELINE_IDS[0] ?? null
+  );
+  const [stages, setStages] = useState<Option[]>([]);
+  const [reasons, setReasons] = useState<Option[]>([]);
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+
+  // Stage / reason selections
   const [wonStageIds, setWonStageIds] = useState<number[]>(
     dashboardConfig.WON_STATUS_IDS
   );
@@ -39,22 +58,32 @@ export default function AdminPage() {
     number[]
   >(dashboardConfig.NOT_QUALIFIED_REASON_IDS);
 
-  // Other config fields
+  // Online / offline status-based (old behaviour, still supported)
   const [onlineStatuses, setOnlineStatuses] = useState(
     dashboardConfig.ONLINE_DEAL_STATUS_IDS.join(", ")
   );
   const [offlineStatuses, setOfflineStatuses] = useState(
     dashboardConfig.OFFLINE_DEAL_STATUS_IDS.join(", ")
   );
-  const [pipelines, setPipelines] = useState(
-    dashboardConfig.PIPELINE_IDS.join(", ")
-  );
-  const [leadSourceFieldId, setLeadSourceFieldId] = useState(
-    dashboardConfig.LEAD_SOURCE_FIELD_ID != null
-      ? String(dashboardConfig.LEAD_SOURCE_FIELD_ID)
-      : ""
+
+  // Lead source field (Qayerdan)
+  const [leadSourceFieldId, setLeadSourceFieldId] = useState<number | null>(
+    dashboardConfig.LEAD_SOURCE_FIELD_ID
   );
 
+  // Kurs turi field + its enums → online/offline mapping
+  const [courseTypeFieldId, setCourseTypeFieldId] = useState<number | null>(
+    dashboardConfig.COURSE_TYPE_FIELD_ID
+  );
+  const [courseTypeEnums, setCourseTypeEnums] = useState<Option[]>([]);
+  const [onlineCourseEnumIds, setOnlineCourseEnumIds] = useState<number[]>(
+    dashboardConfig.ONLINE_COURSE_ENUM_IDS ?? []
+  );
+  const [offlineCourseEnumIds, setOfflineCourseEnumIds] = useState<number[]>(
+    dashboardConfig.OFFLINE_COURSE_ENUM_IDS ?? []
+  );
+
+  // Calls usage
   const [useAmoCalls, setUseAmoCalls] = useState(
     dashboardConfig.USE_AMO_CALLS
   );
@@ -62,26 +91,64 @@ export default function AdminPage() {
     dashboardConfig.USE_SHEETS_CALLS
   );
 
-  // Load meta from backend
-  useEffect(() => {
-    async function loadMeta() {
-      try {
-        setMetaError(null);
-        const res = await fetch("/api/meta");
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(text || "Failed to load /api/meta");
-        }
-        const data: MetaResponse = await res.json();
-        setStages(data.statuses || []);
-        setReasons(data.lossReasons || []);
-      } catch (err: any) {
-        console.error("Admin meta error:", err);
-        setMetaError("Failed to load stages and loss reasons from amoCRM.");
+  // ─────────── Load meta from backend ───────────
+
+  async function loadMeta(pipelineId?: number) {
+    try {
+      setMetaError(null);
+      const url = pipelineId
+        ? `/api/meta?pipelineId=${pipelineId}`
+        : "/api/meta";
+
+      const res = await fetch(url);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Failed to load /api/meta");
       }
+
+      const data: MetaResponse = await res.json();
+
+      setPipelines(data.pipelines || []);
+      setStages(data.statuses || []);
+      setReasons(data.lossReasons || []);
+      setCustomFields(data.customFields || []);
+
+      const effectivePipelineId =
+        pipelineId ??
+        dashboardConfig.PIPELINE_IDS[0] ??
+        data.sotuvPipelineId ??
+        data.pipelines?.[0]?.id ??
+        null;
+
+      setSelectedPipelineId(effectivePipelineId);
+    } catch (err: any) {
+      console.error("Admin meta error:", err);
+      setMetaError("Failed to load stages / reasons / fields from amoCRM.");
     }
+  }
+
+  useEffect(() => {
     loadMeta();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // When courseTypeFieldId or customFields change → update enums list
+  useEffect(() => {
+    if (!courseTypeFieldId) {
+      setCourseTypeEnums([]);
+      return;
+    }
+    const cf = customFields.find((f) => f.id === courseTypeFieldId);
+    if (!cf) {
+      setCourseTypeEnums([]);
+      return;
+    }
+    setCourseTypeEnums(
+      (cf.enums || []).map((e) => ({ id: e.id, name: e.value }))
+    );
+  }, [courseTypeFieldId, customFields]);
+
+  // ─────────── Generated config text ───────────
 
   const configText = useMemo(() => {
     const toIds = (input: string): number[] =>
@@ -92,15 +159,19 @@ export default function AdminPage() {
 
     const onlineIds = toIds(onlineStatuses);
     const offlineIds = toIds(offlineStatuses);
-    const pipelineIds = toIds(pipelines);
 
-    const leadSourceIdNum = parseInt(leadSourceFieldId || "", 10);
-    const leadSourceIdStr =
-      !Number.isNaN(leadSourceIdNum) && leadSourceFieldId.trim().length > 0
-        ? leadSourceFieldId.trim()
-        : "null";
+    const pipelineIds =
+      selectedPipelineId && !Number.isNaN(selectedPipelineId)
+        ? [selectedPipelineId]
+        : [];
 
     const arr = (ids: number[]) => ids.join(", ");
+
+    const leadSourceFieldLiteral =
+      leadSourceFieldId !== null ? leadSourceFieldId : "null";
+
+    const courseTypeFieldLiteral =
+      courseTypeFieldId !== null ? courseTypeFieldId : "null";
 
     return `// config/dashboardConfig.ts
 
@@ -113,6 +184,9 @@ export type DashboardConfig = {
   OFFLINE_DEAL_STATUS_IDS: number[];
   PIPELINE_IDS: number[];
   LEAD_SOURCE_FIELD_ID: number | null;
+  COURSE_TYPE_FIELD_ID: number | null;
+  ONLINE_COURSE_ENUM_IDS: number[];
+  OFFLINE_COURSE_ENUM_IDS: number[];
   USE_AMO_CALLS: boolean;
   USE_SHEETS_CALLS: boolean;
 };
@@ -125,7 +199,10 @@ export const dashboardConfig: DashboardConfig = {
   ONLINE_DEAL_STATUS_IDS: [${onlineIds.join(", ")}],
   OFFLINE_DEAL_STATUS_IDS: [${offlineIds.join(", ")}],
   PIPELINE_IDS: [${pipelineIds.join(", ")}],
-  LEAD_SOURCE_FIELD_ID: ${leadSourceIdStr},
+  LEAD_SOURCE_FIELD_ID: ${leadSourceFieldLiteral},
+  COURSE_TYPE_FIELD_ID: ${courseTypeFieldLiteral},
+  ONLINE_COURSE_ENUM_IDS: [${arr(onlineCourseEnumIds)}],
+  OFFLINE_COURSE_ENUM_IDS: [${arr(offlineCourseEnumIds)}],
   USE_AMO_CALLS: ${useAmoCalls},
   USE_SHEETS_CALLS: ${useSheetsCalls},
 };`;
@@ -136,8 +213,11 @@ export const dashboardConfig: DashboardConfig = {
     notQualifiedReasonIds,
     onlineStatuses,
     offlineStatuses,
-    pipelines,
+    selectedPipelineId,
     leadSourceFieldId,
+    courseTypeFieldId,
+    onlineCourseEnumIds,
+    offlineCourseEnumIds,
     useAmoCalls,
     useSheetsCalls,
   ]);
@@ -148,6 +228,20 @@ export const dashboardConfig: DashboardConfig = {
       "Config copied! Paste it into config/dashboardConfig.ts and commit + push."
     );
   };
+
+  const pipelineOptions = pipelines;
+
+  const leadFieldOptions: Option[] = customFields.map((f) => ({
+    id: f.id,
+    name: `${f.name} (${f.id})`,
+  }));
+
+  const courseFieldOptions: Option[] = customFields
+    .filter((f) => (f.enums || []).length > 0)
+    .map((f) => ({
+      id: f.id,
+      name: `${f.name} (${f.id})`,
+    }));
 
   return (
     <main className="space-y-6">
@@ -177,10 +271,9 @@ export const dashboardConfig: DashboardConfig = {
           </h2>
 
           <p className="text-sm text-slate-600">
-            This constructor uses <strong>stages</strong> and{" "}
-            <strong>loss reasons</strong> loaded directly from amoCRM.
-            Below you will get ready <code>dashboardConfig.ts</code> code –
-            copy it into the file and commit + push.
+            This constructor uses <strong>stages</strong>,{" "}
+            <strong>loss reasons</strong> and{" "}
+            <strong>lead custom fields</strong> loaded directly from amoCRM.
           </p>
 
           {metaError && (
@@ -189,6 +282,27 @@ export const dashboardConfig: DashboardConfig = {
             </div>
           )}
 
+          {/* Pipeline selection */}
+          <div className="rounded border border-slate-200 bg-slate-50 p-3 text-sm space-y-2">
+            <h3 className="font-semibold text-slate-800">
+              1. Choose funnel (pipeline)
+            </h3>
+            <SingleSelect
+              label="Pipeline for this dashboard"
+              options={pipelineOptions}
+              selectedId={selectedPipelineId}
+              onChange={(id) => {
+                setSelectedPipelineId(id);
+                loadMeta(id);
+              }}
+              placeholder="Choose Sotuv pipeline"
+            />
+            <p className="text-xs text-slate-500">
+              All metrics will be calculated only for leads in this pipeline.
+            </p>
+          </div>
+
+          {/* Stages & reasons */}
           <div className="grid gap-4 md:grid-cols-2">
             <MultiSelect
               label="WON_STATUS_IDS (stages counted as Won)"
@@ -203,7 +317,7 @@ export const dashboardConfig: DashboardConfig = {
               options={stages}
               selectedIds={qualifiedStageIds}
               setSelectedIds={setQualifiedStageIds}
-              placeholder="Choose 'O'YLAB KO'RADI', 'ONLINE QIZIQISH BILDIRDI', ..."
+              placeholder="Choose O'ylab ko'radi, Online qiziqish bildirdi, ..."
             />
 
             <MultiSelect
@@ -221,7 +335,10 @@ export const dashboardConfig: DashboardConfig = {
               setSelectedIds={setNotQualifiedReasonIds}
               placeholder="Choose E'tiroz sababi for NOT qualified leads"
             />
+          </div>
 
+          {/* Online/offline by status (old) */}
+          <div className="grid gap-4 md:grid-cols-2">
             <Field
               label="ONLINE_DEAL_STATUS_IDS (online course deals – status ids)"
               value={onlineStatuses}
@@ -232,21 +349,52 @@ export const dashboardConfig: DashboardConfig = {
               label="OFFLINE_DEAL_STATUS_IDS (offline course deals – status ids)"
               value={offlineStatuses}
               onChange={setOfflineStatuses}
-              placeholder="e.g. 1012"
-            />
-            <Field
-              label="PIPELINE_IDS (leave empty → all pipelines)"
-              value={pipelines}
-              onChange={setPipelines}
-              placeholder="pipeline ids: 123456, 987654"
-            />
-            <Field
-              label="LEAD_SOURCE_FIELD_ID ({Qayerdan} custom field id)"
-              value={leadSourceFieldId}
-              onChange={setLeadSourceFieldId}
-              placeholder="e.g. 1234567"
+              placeholder="e.g. 1013"
             />
           </div>
+
+          {/* Lead source and Kurs turi mapping */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <SingleSelect
+              label="LEAD_SOURCE_FIELD_ID ({Qayerdan} custom field)"
+              options={leadFieldOptions}
+              selectedId={leadSourceFieldId}
+              onChange={setLeadSourceFieldId}
+              placeholder="Choose field like 'Qayerdan'"
+            />
+
+            <SingleSelect
+              label="COURSE_TYPE_FIELD_ID ({Kurs turi} field for online/offline)"
+              options={courseFieldOptions}
+              selectedId={courseTypeFieldId}
+              onChange={(id) => {
+                setCourseTypeFieldId(id);
+                // reset selections when field changed
+                setOnlineCourseEnumIds([]);
+                setOfflineCourseEnumIds([]);
+              }}
+              placeholder="Choose field like 'Kurs turi'"
+            />
+          </div>
+
+          {courseTypeFieldId && (
+            <div className="grid gap-4 md:grid-cols-2">
+              <MultiSelect
+                label="ONLINE_COURSE_ENUM_IDS (Kurs turi options = online)"
+                options={courseTypeEnums}
+                selectedIds={onlineCourseEnumIds}
+                setSelectedIds={setOnlineCourseEnumIds}
+                placeholder="Choose options that mean ONLINE course"
+              />
+              <MultiSelect
+                label="OFFLINE_COURSE_ENUM_IDS (Kurs turi options = offline)"
+                options={courseTypeEnums}
+                selectedIds={offlineCourseEnumIds}
+                setSelectedIds={setOfflineCourseEnumIds}
+                placeholder="Choose options that mean OFFLINE course"
+              />
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-4">
             <label className="flex items-center gap-2 text-sm text-slate-700">
@@ -289,7 +437,7 @@ export const dashboardConfig: DashboardConfig = {
   );
 }
 
-// ───────────────── helpers ─────────────────
+// ─────────── UI helpers ───────────
 
 function TabButton({
   label,
@@ -386,7 +534,7 @@ function MultiSelect({
         <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded border bg-white shadow">
           {options.length === 0 && (
             <div className="px-3 py-2 text-xs text-slate-500">
-              No options loaded. Check /api/meta and SOTUV_PIPELINE_ID env.
+              No options loaded.
             </div>
           )}
           {options.map((opt) => (
@@ -411,6 +559,63 @@ function MultiSelect({
   );
 }
 
+function SingleSelect({
+  label,
+  options,
+  selectedId,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  options: Option[];
+  selectedId: number | null;
+  onChange: (id: number | null) => void;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const selectedLabel =
+    options.find((o) => o.id === selectedId)?.name || placeholder || "Choose…";
+
+  return (
+    <div className="space-y-1 text-sm relative">
+      <div className="font-semibold text-slate-700">{label}</div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full rounded border px-3 py-2 text-left text-sm bg-white"
+      >
+        {selectedLabel}
+      </button>
+      {open && (
+        <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded border bg-white shadow">
+          <button
+            className="w-full px-3 py-1 text-left text-xs text-slate-500 hover:bg-slate-100"
+            onClick={() => {
+              onChange(null);
+              setOpen(false);
+            }}
+          >
+            — Clear —
+          </button>
+          {options.map((opt) => (
+            <button
+              key={opt.id}
+              className="flex w-full items-center gap-2 px-3 py-1 text-sm hover:bg-slate-100 text-left"
+              onClick={() => {
+                onChange(opt.id);
+                setOpen(false);
+              }}
+            >
+              {opt.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function InfoSection() {
   return (
     <section className="space-y-4">
@@ -418,18 +623,17 @@ function InfoSection() {
         <h2 className="text-lg font-semibold">amoCRM data</h2>
         <ul className="list-disc pl-5 text-sm text-slate-700">
           <li>
-            Stages (statuses) and loss reasons are loaded dynamically from
-            amoCRM via <code>/api/meta</code>.
+            Stages and loss reasons are read from amoCRM via{" "}
+            <code>/api/meta</code>.
           </li>
           <li>
-            Configuration file:{" "}
-            <code>config/dashboardConfig.ts</code> – this constructor generates
-            the content for that file.
+            You can choose the funnel, lead source field (<b>Qayerdan</b>) and
+            course type field (<b>Kurs turi</b>) from real CRM custom fields.
           </li>
           <li>
-            Env variables: <code>AMO_BASE_URL</code>,{" "}
-            <code>AMO_LONG_LIVED_TOKEN</code>,{" "}
-            <code>SOTUV_PIPELINE_ID</code>.
+            After changing config, copy the generated code into{" "}
+            <code>config/dashboardConfig.ts</code> and push to GitHub – Vercel
+            will redeploy automatically.
           </li>
         </ul>
       </div>
