@@ -201,7 +201,7 @@ export default function DashboardPage() {
                         cx="50%"
                         cy="50%"
                         outerRadius={80}
-                        label={(entry) => entry.label}
+                        label={(entry: any) => entry.payload?.label ?? ""}
                       >
                         {data.nonQualifiedReasons.map((entry, index) => (
                           <Cell
