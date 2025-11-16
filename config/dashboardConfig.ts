@@ -1,43 +1,26 @@
 // config/dashboardConfig.ts
 
 export type DashboardConfig = {
-  // Which statuses mean "Won deal"
   WON_STATUS_IDS: number[];
-
-  // Which statuses mean "Qualified lead"
   QUALIFIED_STATUS_IDS: number[];
-
-  // Lost reasons that still mean the lead was Qualified
   QUALIFIED_LOSS_REASON_IDS: number[];
-
-  // Lost reasons that mean NOT qualified
   NOT_QUALIFIED_REASON_IDS: number[];
-
-  // Pipelines we include in the dashboard
+  ONLINE_DEAL_STATUS_IDS: number[]; // deprecated, kept for compatibility
+  OFFLINE_DEAL_STATUS_IDS: number[]; // deprecated, kept for compatibility
   PIPELINE_IDS: number[];
-
-  // "Qayerdan" field id (lead source)
   LEAD_SOURCE_FIELD_ID: number | null;
-
-  // "Kurs turi" custom field id (enum field)
   COURSE_TYPE_FIELD_ID: number | null;
-
-  // Enum ids in Kurs turi that mean ONLINE course
   ONLINE_COURSE_ENUM_IDS: number[];
-
-  // Enum ids in Kurs turi that mean OFFLINE course
   OFFLINE_COURSE_ENUM_IDS: number[];
-
-  // Call sources
   USE_AMO_CALLS: boolean;
   USE_SHEETS_CALLS: boolean;
 };
 
 export const dashboardConfig: DashboardConfig = {
-  // statuses that count as Won
+  // Stages that mean deal is Won
   WON_STATUS_IDS: [79190542, 142],
 
-  // statuses that count as Qualified
+  // Stages that mean the lead is Qualified (active interest)
   QUALIFIED_STATUS_IDS: [
     79190526,
     79190530,
@@ -49,28 +32,28 @@ export const dashboardConfig: DashboardConfig = {
     142,
   ],
 
-  // lost reasons that still mean Qualified lead
+  // Lost reasons that STILL mean "Qualified" (good lead, but something happened)
   QUALIFIED_LOSS_REASON_IDS: [6, 10, 7, 11],
 
-  // lost reasons that mean NOT Qualified lead
+  // Lost reasons that mean "Not qualified" lead
   NOT_QUALIFIED_REASON_IDS: [0, 1, 2, 3, 4, 5, 8, 9, 12, 13],
 
-  // Only these pipelines will be used in dashboard
+  // Kept only for backward compatibility – now we use Kurs turi enums instead.
+  ONLINE_DEAL_STATUS_IDS: [],
+  OFFLINE_DEAL_STATUS_IDS: [],
+
+  // Pipelines used for dashboard (usually only Sotuv pipeline)
   PIPELINE_IDS: [9975586],
 
-  // "Qayerdan" custom field id
-  LEAD_SOURCE_FIELD_ID: 1312637,
+  // Custom field IDs from amoCRM
+  LEAD_SOURCE_FIELD_ID: 1312637, // Qayerdan
+  COURSE_TYPE_FIELD_ID: 1119699, // Kurs turi
 
-  // "Kurs turi" custom field id
-  COURSE_TYPE_FIELD_ID: 1119699,
-
-  // Kurs turi enum ids meaning ONLINE course
+  // Kurs turi enum ids for ONLINE and OFFLINE
   ONLINE_COURSE_ENUM_IDS: [2, 3, 6, 7],
-
-  // Kurs turi enum ids meaning OFFLINE course
   OFFLINE_COURSE_ENUM_IDS: [0, 4, 5],
 
-  // Calls
+  // Calls sources
   USE_AMO_CALLS: true,
   USE_SHEETS_CALLS: false,
 };
