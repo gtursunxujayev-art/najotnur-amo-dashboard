@@ -307,17 +307,17 @@ export default function DashboardPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={leadSources}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={80}
-                      labelLine={false}
-                      label={({ name, percent }) =>
-                        `${name} ${(percent * 100).toFixed(0)}%`
-                      }
-                    >
+  data={nonQualifiedReasons}
+  dataKey="value"
+  nameKey="label"
+  cx="50%"
+  cy="50%"
+  outerRadius={80}
+  labelLine={false}
+  label={({ name, percent = 0 }) =>
+    `${name} ${(percent * 100).toFixed(0)}%`
+  }
+>
                       {leadSources.map((_, index) => (
                         <Cell
                           key={index}
