@@ -1,15 +1,31 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { dashboardConfig } from "@/config/dashboardConfig";
-import { STAGE_OPTIONS, LOSS_REASON_OPTIONS, Option } from "@/config/options";
 
 type Tab = "info" | "builder";
+
+type Option = {
+  id: number;
+  name: string;
+};
+
+type MetaResponse = {
+  pipelines: Option[];
+  statuses: Option[];
+  lossReasons: Option[];
+  sotuvPipelineId?: number | null;
+};
 
 export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("info");
 
-  // Multi-selects: store ids
+  // Options loaded from /api/meta
+  const [stages, setStages] = useState<Option[]>([]);
+  const [reasons, setReasons] = useState<Option[]>([]);
+  const [metaError, setMetaError] = useState<string | null>(null);
+
+  // Selected ids (config)
   const [wonStageIds, setWonStageIds] = useState<number[]>(
     dashboardConfig.WON_STATUS_IDS
   );
@@ -23,7 +39,7 @@ export default function AdminPage() {
     number[]
   >(dashboardConfig.NOT_QUALIFIED_REASON_IDS);
 
-  // Other fields keep as simple text
+  // Other config fields
   const [onlineStatuses, setOnlineStatuses] = useState(
     dashboardConfig.ONLINE_DEAL_STATUS_IDS.join(", ")
   );
@@ -45,6 +61,27 @@ export default function AdminPage() {
   const [useSheetsCalls, setUseSheetsCalls] = useState(
     dashboardConfig.USE_SHEETS_CALLS
   );
+
+  // Load meta from backend
+  useEffect(() => {
+    async function loadMeta() {
+      try {
+        setMetaError(null);
+        const res = await fetch("/api/meta");
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || "Failed to load /api/meta");
+        }
+        const data: MetaResponse = await res.json();
+        setStages(data.statuses || []);
+        setReasons(data.lossReasons || []);
+      } catch (err: any) {
+        console.error("Admin meta error:", err);
+        setMetaError("Failed to load stages and loss reasons from amoCRM.");
+      }
+    }
+    loadMeta();
+  }, []);
 
   const configText = useMemo(() => {
     const toIds = (input: string): number[] =>
@@ -140,37 +177,46 @@ export const dashboardConfig: DashboardConfig = {
           </h2>
 
           <p className="text-sm text-slate-600">
-            In this section you choose <strong>stages</strong> and{" "}
-            <strong>loss reasons</strong>. Below you will get ready{" "}
-            <code>dashboardConfig.ts</code> code – copy it into the project
-            file (GitHub → commit → push).
+            This constructor uses <strong>stages</strong> and{" "}
+            <strong>loss reasons</strong> loaded directly from amoCRM.
+            Below you will get ready <code>dashboardConfig.ts</code> code –
+            copy it into the file and commit + push.
           </p>
+
+          {metaError && (
+            <div className="rounded border border-red-300 bg-red-50 p-3 text-xs text-red-700">
+              {metaError}
+            </div>
+          )}
 
           <div className="grid gap-4 md:grid-cols-2">
             <MultiSelect
               label="WON_STATUS_IDS (stages counted as Won)"
-              options={STAGE_OPTIONS}
+              options={stages}
               selectedIds={wonStageIds}
               setSelectedIds={setWonStageIds}
-              placeholder="Choose stages from Sotuv funnel"
+              placeholder="Choose stages like 'SOTIB OLDI'"
             />
+
             <MultiSelect
-              label="QUALIFIED_STATUS_IDS (stages counted as Qualified)"
-              options={STAGE_OPTIONS}
+              label="QUALIFIED_STATUS_IDS (stages counted as Qualified leads)"
+              options={stages}
               selectedIds={qualifiedStageIds}
               setSelectedIds={setQualifiedStageIds}
-              placeholder="Choose 'O‘ylab ko‘radi', 'Coachingga qiziqdi', ..."
+              placeholder="Choose 'O'YLAB KO'RADI', 'ONLINE QIZIQISH BILDIRDI', ..."
             />
+
             <MultiSelect
               label="QUALIFIED_LOSS_REASON_IDS (lost reasons that still mean Qualified lead)"
-              options={LOSS_REASON_OPTIONS}
+              options={reasons}
               selectedIds={qualifiedReasonIds}
               setSelectedIds={setQualifiedReasonIds}
               placeholder="Choose E'tiroz sababi for qualified but lost leads"
             />
+
             <MultiSelect
-              label="NOT_QUALIFIED_REASON_IDS (lost reasons for Not Qualified leads)"
-              options={LOSS_REASON_OPTIONS}
+              label="NOT_QUALIFIED_REASON_IDS (lost reasons for NOT qualified leads)"
+              options={reasons}
               selectedIds={notQualifiedReasonIds}
               setSelectedIds={setNotQualifiedReasonIds}
               placeholder="Choose E'tiroz sababi for NOT qualified leads"
@@ -180,13 +226,13 @@ export const dashboardConfig: DashboardConfig = {
               label="ONLINE_DEAL_STATUS_IDS (online course deals – status ids)"
               value={onlineStatuses}
               onChange={setOnlineStatuses}
-              placeholder="e.g. 555555, 777777"
+              placeholder="e.g. 1011, 1012"
             />
             <Field
               label="OFFLINE_DEAL_STATUS_IDS (offline course deals – status ids)"
               value={offlineStatuses}
               onChange={setOfflineStatuses}
-              placeholder="e.g. 888888"
+              placeholder="e.g. 1012"
             />
             <Field
               label="PIPELINE_IDS (leave empty → all pipelines)"
@@ -340,7 +386,7 @@ function MultiSelect({
         <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded border bg-white shadow">
           {options.length === 0 && (
             <div className="px-3 py-2 text-xs text-slate-500">
-              Add options in config/options.ts
+              No options loaded. Check /api/meta and SOTUV_PIPELINE_ID env.
             </div>
           )}
           {options.map((opt) => (
@@ -372,33 +418,18 @@ function InfoSection() {
         <h2 className="text-lg font-semibold">amoCRM data</h2>
         <ul className="list-disc pl-5 text-sm text-slate-700">
           <li>
-            API: <code>/api/v4/leads</code>, filter{" "}
-            <code>created_at[from,to]</code>.
+            Stages (statuses) and loss reasons are loaded dynamically from
+            amoCRM via <code>/api/meta</code>.
           </li>
           <li>
             Configuration file:{" "}
-            <code>config/dashboardConfig.ts</code> – here we store which
-            stages and reasons mean <strong>Won / Qualified / Not qualified</strong>.
+            <code>config/dashboardConfig.ts</code> – this constructor generates
+            the content for that file.
           </li>
           <li>
             Env variables: <code>AMO_BASE_URL</code>,{" "}
-            <code>AMO_LONG_LIVED_TOKEN</code>.
-          </li>
-        </ul>
-      </div>
-
-      <div className="space-y-2 rounded-lg bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold">Calls (amoCRM + Google Sheets)</h2>
-        <ul className="list-disc pl-5 text-sm text-slate-700">
-          <li>
-            amoCRM calls: <code>/api/v4/leads/notes</code> with{" "}
-            <code>note_type=call_in, call_out</code>.
-          </li>
-          <li>
-            Google Sheets env variables:{" "}
-            <code>SHEETS_API_KEY</code>,{" "}
-            <code>SHEETS_SPREADSHEET_ID</code>,{" "}
-            <code>SHEETS_CALLS_RANGE</code>.
+            <code>AMO_LONG_LIVED_TOKEN</code>,{" "}
+            <code>SOTUV_PIPELINE_ID</code>.
           </li>
         </ul>
       </div>
