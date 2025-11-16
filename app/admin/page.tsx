@@ -54,9 +54,9 @@ export default function AdminPage() {
   const [qualifiedReasonIds, setQualifiedReasonIds] = useState<number[]>(
     dashboardConfig.QUALIFIED_LOSS_REASON_IDS
   );
-  const [notQualifiedReasonIds, setNotQualifiedReasonIds] = useState<number[]>(
-    dashboardConfig.NOT_QUALIFIED_REASON_IDS
-  );
+  const [notQualifiedReasonIds, setNotQualifiedReasonIds] = useState<
+    number[]
+  >(dashboardConfig.NOT_QUALIFIED_REASON_IDS);
 
   // Lead source field (Qayerdan)
   const [leadSourceFieldId, setLeadSourceFieldId] = useState<number | null>(
