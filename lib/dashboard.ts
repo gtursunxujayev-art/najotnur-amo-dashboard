@@ -32,7 +32,7 @@ export type ManagerCallsStats = {
   avgCallSeconds: number;
 };
 
-export type NonQualifiedReasonSlice = {
+export type Slice = {
   label: string;
   value: number;
 };
@@ -48,13 +48,33 @@ export type DashboardData = {
   qualifiedLeadsCount: number;
   nonQualifiedLeadsCount: number;
   conversionFromQualified: number; // 0–1
-  nonQualifiedReasons: NonQualifiedReasonSlice[];
+  nonQualifiedReasons: Slice[];
+  leadSources: Slice[];
   managerSales: ManagerSalesStats[];
   managerCalls: ManagerCallsStats[];
 };
 
 function toUnixSeconds(d: Date): number {
   return Math.floor(d.getTime() / 1000);
+}
+
+function getCustomFieldString(
+  lead: AmoLead,
+  fieldId: number
+): string | null {
+  const cf = (lead as any).custom_fields_values as
+    | Array<{
+        field_id: number;
+        values?: { value?: any }[];
+      }>
+    | undefined;
+
+  if (!cf) return null;
+  const f = cf.find((x) => x.field_id === fieldId);
+  if (!f || !f.values || !f.values[0]) return null;
+  const v = f.values[0].value;
+  if (v == null) return null;
+  return String(v);
 }
 
 export async function buildDashboardData(
@@ -78,6 +98,7 @@ export async function buildDashboardData(
 
   const managerSalesMap = new Map<number, ManagerSalesStats>();
   const nonQualifiedReasonMap = new Map<number, number>();
+  const leadSourcesMap = new Map<string, number>();
 
   let kelishuvSummasi = 0;
   let onlineSummasi = 0;
@@ -86,6 +107,7 @@ export async function buildDashboardData(
   let qualifiedLeadsCount = 0;
   let nonQualifiedLeadsCount = 0;
   let wonFromQualifiedCount = 0;
+  let otherNonQualifiedReasonsCount = 0;
 
   const isWon = (lead: AmoLead) =>
     dashboardConfig.WON_STATUS_IDS.includes(lead.status_id || -1);
@@ -103,6 +125,8 @@ export async function buildDashboardData(
     dashboardConfig.OFFLINE_DEAL_STATUS_IDS.includes(lead.status_id || -1);
 
   const pipelineFilterActive = dashboardConfig.PIPELINE_IDS.length > 0;
+  const reasonFilterActive =
+    dashboardConfig.NON_QUALIFIED_REASON_MAIN_IDS.length > 0;
 
   leads.forEach((lead) => {
     const pipelineId = lead.pipeline_id || -1;
@@ -142,10 +166,18 @@ export async function buildDashboardData(
     if (isNotQualified(lead)) {
       nonQualifiedLeadsCount++;
       if (lead.loss_reason_id != null) {
-        nonQualifiedReasonMap.set(
-          lead.loss_reason_id,
-          (nonQualifiedReasonMap.get(lead.loss_reason_id) || 0) + 1
-        );
+        const rId = lead.loss_reason_id;
+        if (
+          !reasonFilterActive ||
+          dashboardConfig.NON_QUALIFIED_REASON_MAIN_IDS.includes(rId)
+        ) {
+          nonQualifiedReasonMap.set(
+            rId,
+            (nonQualifiedReasonMap.get(rId) || 0) + 1
+          );
+        } else {
+          otherNonQualifiedReasonsCount++;
+        }
       }
     }
 
@@ -165,21 +197,45 @@ export async function buildDashboardData(
         offlineSummasi += price;
       }
     }
+
+    // Lead sources ("Qayerdan") – only for new leads in the period
+    if (dashboardConfig.LEAD_SOURCE_FIELD_ID != null) {
+      const srcVal = getCustomFieldString(
+        lead,
+        dashboardConfig.LEAD_SOURCE_FIELD_ID
+      );
+      const label =
+        srcVal && srcVal.trim().length > 0
+          ? srcVal.trim()
+          : "Noma'lum manba";
+      leadSourcesMap.set(label, (leadSourcesMap.get(label) || 0) + 1);
+    }
   });
 
   // For now, oylik/haftalik tushum equals kelishuvSummasi for the chosen period.
   const oylikTushum = kelishuvSummasi;
   const haftalikTushum = kelishuvSummasi;
 
-  const nonQualifiedReasons: NonQualifiedReasonSlice[] = Array.from(
+  const nonQualifiedReasons: Slice[] = Array.from(
     nonQualifiedReasonMap.entries()
   ).map(([reasonId, count]) => ({
     label: reasonsMap[reasonId] || `Reason ${reasonId}`,
     value: count,
   }));
 
+  if (otherNonQualifiedReasonsCount > 0) {
+    nonQualifiedReasons.push({
+      label: "Boshqa sabablar",
+      value: otherNonQualifiedReasonsCount,
+    });
+  }
+
   const conversionFromQualified =
     qualifiedLeadsCount > 0 ? wonFromQualifiedCount / qualifiedLeadsCount : 0;
+
+  const leadSources: Slice[] = Array.from(leadSourcesMap.entries()).map(
+    ([label, value]) => ({ label, value })
+  );
 
   // Calls grouped by manager (name)
   const callsPerManager = new Map<string, ManagerCallsStats>();
@@ -238,6 +294,7 @@ export async function buildDashboardData(
     nonQualifiedLeadsCount,
     conversionFromQualified,
     nonQualifiedReasons,
+    leadSources,
     managerSales: Array.from(managerSalesMap.values()),
     managerCalls: Array.from(callsPerManager.values()),
   };
