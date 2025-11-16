@@ -48,7 +48,7 @@ export type DashboardData = {
   qualifiedLeadsCount: number;
   nonQualifiedLeadsCount: number;
   conversionFromQualified: number; // 0–1
-  nonQualifiedReasons: Slice[];
+  nonQualifiedReasons: Slice[];    // actually: ALL lost leads by loss reason
   leadSources: Slice[];
   managerSales: ManagerSalesStats[];
   managerCalls: ManagerCallsStats[];
@@ -83,7 +83,7 @@ export async function buildDashboardData(
 ): Promise<DashboardData> {
   const [users, reasonsMap, leads, sheetCalls, amoCalls] = await Promise.all([
     getUsers(),
-    getLossReasons(),
+    getLossReasons(), // returns { [id]: name }
     getLeadsByCreatedAt(toUnixSeconds(period.from), toUnixSeconds(period.to)),
     dashboardConfig.USE_SHEETS_CALLS
       ? getSheetCalls(period.from, period.to)
@@ -97,7 +97,7 @@ export async function buildDashboardData(
   users.forEach((u) => usersMap.set(u.id, u.name));
 
   const managerSalesMap = new Map<number, ManagerSalesStats>();
-  const nonQualifiedReasonMap = new Map<number, number>();
+  const lostReasonMap = new Map<number, number>();
   const leadSourcesMap = new Map<string, number>();
 
   let kelishuvSummasi = 0;
@@ -107,16 +107,11 @@ export async function buildDashboardData(
   let qualifiedLeadsCount = 0;
   let nonQualifiedLeadsCount = 0;
   let wonFromQualifiedCount = 0;
-  let otherNonQualifiedReasonsCount = 0;
+
+  const hasPipelineFilter = dashboardConfig.PIPELINE_IDS.length > 0;
 
   const isWon = (lead: AmoLead) =>
     dashboardConfig.WON_STATUS_IDS.includes(lead.status_id || -1);
-
-  const isQualified = (lead: AmoLead) =>
-    dashboardConfig.QUALIFIED_STATUS_IDS.includes(lead.status_id || -1);
-
-  const isNotQualified = (lead: AmoLead) =>
-    dashboardConfig.NOT_QUALIFIED_STATUS_IDS.includes(lead.status_id || -1);
 
   const isOnlineDeal = (lead: AmoLead) =>
     dashboardConfig.ONLINE_DEAL_STATUS_IDS.includes(lead.status_id || -1);
@@ -124,18 +119,39 @@ export async function buildDashboardData(
   const isOfflineDeal = (lead: AmoLead) =>
     dashboardConfig.OFFLINE_DEAL_STATUS_IDS.includes(lead.status_id || -1);
 
-  const pipelineFilterActive = dashboardConfig.PIPELINE_IDS.length > 0;
-  const reasonFilterActive =
-    dashboardConfig.NON_QUALIFIED_REASON_MAIN_IDS.length > 0;
+  const isLost = (lead: AmoLead) => lead.loss_reason_id != null;
+
+  const isQualified = (lead: AmoLead) => {
+    const statusId = lead.status_id || -1;
+    const lossReasonId = lead.loss_reason_id ?? null;
+
+    if (dashboardConfig.QUALIFIED_STATUS_IDS.includes(statusId)) {
+      return true;
+    }
+    if (
+      lossReasonId != null &&
+      dashboardConfig.QUALIFIED_LOSS_REASON_IDS.includes(lossReasonId)
+    ) {
+      // Lost lead but with a "qualified" reason → still counted as qualified
+      return true;
+    }
+    return false;
+  };
+
+  const isNotQualified = (lead: AmoLead) => {
+    if (!isLost(lead)) return false;
+    const reasonId = lead.loss_reason_id!;
+    return dashboardConfig.NOT_QUALIFIED_REASON_IDS.includes(reasonId);
+  };
 
   leads.forEach((lead) => {
     const pipelineId = lead.pipeline_id || -1;
 
     if (
-      pipelineFilterActive &&
+      hasPipelineFilter &&
       !dashboardConfig.PIPELINE_IDS.includes(pipelineId)
     ) {
-      // Skip leads from pipelines that are not selected
+      // skip leads from other pipelines
       return;
     }
 
@@ -158,6 +174,13 @@ export async function buildDashboardData(
     const ms = managerSalesMap.get(managerId)!;
     ms.totalLeads++;
 
+    // Lost reason map (for pie chart)
+    if (isLost(lead) && lead.loss_reason_id != null) {
+      const rId = lead.loss_reason_id;
+      lostReasonMap.set(rId, (lostReasonMap.get(rId) || 0) + 1);
+    }
+
+    // Qualified / Not qualified counters
     if (isQualified(lead)) {
       qualifiedLeadsCount++;
       ms.qualifiedLeads++;
@@ -165,22 +188,9 @@ export async function buildDashboardData(
 
     if (isNotQualified(lead)) {
       nonQualifiedLeadsCount++;
-      if (lead.loss_reason_id != null) {
-        const rId = lead.loss_reason_id;
-        if (
-          !reasonFilterActive ||
-          dashboardConfig.NON_QUALIFIED_REASON_MAIN_IDS.includes(rId)
-        ) {
-          nonQualifiedReasonMap.set(
-            rId,
-            (nonQualifiedReasonMap.get(rId) || 0) + 1
-          );
-        } else {
-          otherNonQualifiedReasonsCount++;
-        }
-      }
     }
 
+    // Won / deals
     if (isWon(lead)) {
       kelishuvSummasi += price;
       ms.wonDeals++;
@@ -198,7 +208,7 @@ export async function buildDashboardData(
       }
     }
 
-    // Lead sources ("Qayerdan") – only for new leads in the period
+    // Lead sources ("Qayerdan")
     if (dashboardConfig.LEAD_SOURCE_FIELD_ID != null) {
       const srcVal = getCustomFieldString(
         lead,
@@ -207,28 +217,21 @@ export async function buildDashboardData(
       const label =
         srcVal && srcVal.trim().length > 0
           ? srcVal.trim()
-          : "Noma'lum manba";
+          : "Unknown source";
       leadSourcesMap.set(label, (leadSourcesMap.get(label) || 0) + 1);
     }
   });
 
-  // For now, oylik/haftalik tushum equals kelishuvSummasi for the chosen period.
+  // For now, oylik / haftalik tushum = kelishuvSummasi for selected period.
   const oylikTushum = kelishuvSummasi;
   const haftalikTushum = kelishuvSummasi;
 
   const nonQualifiedReasons: Slice[] = Array.from(
-    nonQualifiedReasonMap.entries()
+    lostReasonMap.entries()
   ).map(([reasonId, count]) => ({
     label: reasonsMap[reasonId] || `Reason ${reasonId}`,
     value: count,
   }));
-
-  if (otherNonQualifiedReasonsCount > 0) {
-    nonQualifiedReasons.push({
-      label: "Boshqa sabablar",
-      value: otherNonQualifiedReasonsCount,
-    });
-  }
 
   const conversionFromQualified =
     qualifiedLeadsCount > 0 ? wonFromQualifiedCount / qualifiedLeadsCount : 0;
@@ -237,7 +240,7 @@ export async function buildDashboardData(
     ([label, value]) => ({ label, value })
   );
 
-  // Calls grouped by manager (name)
+  // Calls per manager
   const callsPerManager = new Map<string, ManagerCallsStats>();
 
   const ensureManagerCalls = (managerName: string): ManagerCallsStats => {
@@ -254,7 +257,7 @@ export async function buildDashboardData(
     return callsPerManager.get(managerName)!;
   };
 
-  // 1) All calls from amoCRM
+  // 1) amoCRM calls
   if (dashboardConfig.USE_AMO_CALLS) {
     amoCalls.forEach((c) => {
       const managerName =
@@ -265,7 +268,7 @@ export async function buildDashboardData(
     });
   }
 
-  // 2) Successful calls from Google Sheets (optional)
+  // 2) Google Sheets calls (successful)
   if (dashboardConfig.USE_SHEETS_CALLS) {
     sheetCalls.forEach((c) => {
       const cs = ensureManagerCalls(c.managerName);
@@ -276,7 +279,7 @@ export async function buildDashboardData(
     });
   }
 
-  // 3) Compute average
+  // 3) Average call length
   callsPerManager.forEach((cs) => {
     cs.avgCallSeconds =
       cs.callsAll > 0 ? Math.round(cs.callSecondsAll / cs.callsAll) : 0;
@@ -293,7 +296,7 @@ export async function buildDashboardData(
     qualifiedLeadsCount,
     nonQualifiedLeadsCount,
     conversionFromQualified,
-    nonQualifiedReasons,
+    nonQualifiedReasons, // lost leads by loss reason
     leadSources,
     managerSales: Array.from(managerSalesMap.values()),
     managerCalls: Array.from(callsPerManager.values()),
