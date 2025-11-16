@@ -14,10 +14,10 @@ export type SheetCallRow = {
 /**
  * Optional call stats from Google Sheets.
  * Expected columns:
- * A – datetime (YYYY-MM-DD HH:MM)
- * B – manager name
- * C – duration in seconds
- * D – result ("success" / anything else)
+ *  A – datetime (YYYY-MM-DD HH:MM)
+ *  B – manager name
+ *  C – duration in seconds
+ *  D – result ("success" / anything else)
  */
 export async function getSheetCalls(
   from: Date,
@@ -55,7 +55,5 @@ export async function getSheetCalls(
         isSuccess: (result || "").toLowerCase() === "success",
       };
     })
-    .filter(
-      (row) => row.datetime >= from && row.datetime <= to
-    );
+    .filter((row) => row.datetime >= from && row.datetime <= to);
 }
