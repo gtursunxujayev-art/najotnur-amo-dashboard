@@ -1,5 +1,5 @@
 // lib/amocrmMeta.ts
-// Helpers for amoCRM "meta" data: pipelines, stages, loss reasons (E'tiroz sababi).
+// Helpers for amoCRM "meta" data: pipelines, stages, loss reasons, custom fields.
 
 const AMO_BASE_URL = process.env.AMO_BASE_URL!;
 const AMO_TOKEN = process.env.AMO_LONG_LIVED_TOKEN!;
@@ -47,7 +47,19 @@ export type AmoLossReason = {
   name: string;
 };
 
-// ───────────────── pipelines & stages ─────────────────
+export type AmoCustomFieldEnum = {
+  id: number;
+  value: string;
+};
+
+export type AmoCustomField = {
+  id: number;
+  name: string;
+  type: string;
+  enums: AmoCustomFieldEnum[];
+};
+
+// ──────────────── pipelines & stages ────────────────
 
 export async function getPipelinesMeta(): Promise<AmoPipeline[]> {
   const data = await amoMetaFetch("/api/v4/leads/pipelines");
@@ -69,15 +81,36 @@ export async function getPipelineStatusesMeta(
   }));
 }
 
-// ───────────────── loss reasons / E'tiroz sababi ─────────────────
+// ──────────────── lead custom fields (Qayerdan, Kurs turi, E'tiroz sababi …) ────────────────
+
+export async function getLeadCustomFieldsMeta(): Promise<AmoCustomField[]> {
+  const data = await amoMetaFetch("/api/v4/leads/custom_fields");
+  const fields = data?._embedded?.custom_fields ?? [];
+
+  return fields.map((f: any) => {
+    const enumsObj = (f.enums || {}) as Record<string, any>;
+    const enums: AmoCustomFieldEnum[] = Object.entries(enumsObj).map(
+      ([enumId, enumVal]) => ({
+        id: Number(enumId),
+        value: String((enumVal as any).value),
+      })
+    );
+
+    return {
+      id: Number(f.id),
+      name: String(f.name),
+      type: String(f.type ?? f.field_type ?? ""),
+      enums,
+    };
+  });
+}
+
+// ──────────────── loss reasons (E'tiroz sababi) ────────────────
 //
-// We first try to read enums of custom field "E'tiroz sababi"
-// from /api/v4/leads/custom_fields.
-// If not found (or error), we fall back to global /leads/loss_reasons
-// so the page still works.
+// 1) Try to take enums from custom field "E'tiroz sababi".
+// 2) If not found, fall back to global /leads/loss_reasons.
 
 export async function getLossReasonsMeta(): Promise<AmoLossReason[]> {
-  // 1) Try custom field "E'tiroz sababi"
   try {
     const data = await amoMetaFetch("/api/v4/leads/custom_fields");
     const fields = data?._embedded?.custom_fields ?? [];
@@ -87,33 +120,25 @@ export async function getLossReasonsMeta(): Promise<AmoLossReason[]> {
       return (
         name.includes("e'tiroz sababi") ||
         name.includes("eʼtiroz sababi") ||
-        name.includes("e'tiroz") // more tolerant match
+        name.includes("e'tiroz")
       );
     });
 
     if (targetField && targetField.enums) {
-      // In amoCRM v4 enums is an object: { [enum_id]: { value: string, ... } }
-      const enumsObj = targetField.enums as Record<
-        string,
-        { value: string; [k: string]: any }
-      >;
-
+      const enumsObj = targetField.enums as Record<string, { value: string }>;
       const list: AmoLossReason[] = Object.entries(enumsObj).map(
         ([enumId, enumVal]) => ({
           id: Number(enumId),
-          name: String((enumVal as any).value),
+          name: String(enumVal.value),
         })
       );
-
-      if (list.length > 0) {
-        return list;
-      }
+      if (list.length > 0) return list;
     }
   } catch (err) {
     console.error("[amoMeta] error reading custom field E'tiroz sababi:", err);
   }
 
-  // 2) Fallback: global loss reasons (those Russian ones)
+  // Fallback – global loss reasons (Russian ones)
   try {
     const data = await amoMetaFetch("/api/v4/leads/loss_reasons");
     const reasons = data?._embedded?.loss_reasons ?? [];
@@ -126,4 +151,3 @@ export async function getLossReasonsMeta(): Promise<AmoLossReason[]> {
     return [];
   }
 }
-
