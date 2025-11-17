@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { buildDashboardData, type DashboardData } from "@/lib/dashboard";
+import type { DashboardData } from "@/lib/dashboard";
 import {
   PieChart,
   Pie,
@@ -21,36 +21,13 @@ type UiState = {
 
 const COLORS = ["#22c55e", "#3b82f6", "#a855f7", "#f97316", "#ef4444", "#eab308"];
 
-function getPeriodDates(period: PeriodKey): { from: Date; to: Date; label: string } {
-  const now = new Date();
-  const todayStart = new Date(now);
-  todayStart.setHours(0, 0, 0, 0);
-
-  if (period === "today") {
-    return { from: todayStart, to: now, label: "Bugun" };
-  }
-
-  if (period === "week") {
-    const from = new Date(todayStart);
-    const day = from.getDay(); // 0–6, with 1 = Monday
-    const diffToMonday = (day + 6) % 7;
-    from.setDate(from.getDate() - diffToMonday);
-    return { from, to: now, label: "Bu hafta" };
-  }
-
-  // month
-  const from = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
-  return { from, to: now, label: "Bu oy" };
-}
-
-// Safe label for pie slices (avoids percent being undefined)
+// Safe label helpers for pie charts
 function pieLabelLossReason(props: { name?: string; percent?: number }) {
   const { name, percent } = props;
   const p = typeof percent === "number" ? percent : 0;
   return `${name ?? ""} ${(p * 100).toFixed(0)}%`;
 }
 
-// For lead sources chart
 function pieLabelSource(props: { name?: string; percent?: number }) {
   const { name, percent } = props;
   const p = typeof percent === "number" ? percent : 0;
@@ -68,9 +45,19 @@ export default function DashboardPage() {
   async function load(periodKey: PeriodKey) {
     try {
       setState((s) => ({ ...s, loading: true, error: null, period: periodKey }));
-      const { from, to, label } = getPeriodDates(periodKey);
 
-      const data = await buildDashboardData({ from, to }, label);
+      const res = await fetch(`/api/dashboard?period=${periodKey}`, {
+        cache: "no-store",
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const msg = body.error || res.statusText || "Failed to load data";
+        throw new Error(msg);
+      }
+
+      const json = await res.json();
+      const data: DashboardData = json.data;
 
       setState((s) => ({
         ...s,
@@ -188,9 +175,9 @@ export default function DashboardPage() {
             />
           </section>
 
-          {/* Charts row: Lost reasons + lead sources */}
+          {/* Charts: lost reasons + lead sources */}
           <section className="grid gap-4 lg:grid-cols-2">
-            {/* Sifatsiz lid sabablari */}
+            {/* Lost reasons */}
             <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
               <h2 className="mb-2 text-sm font-semibold text-slate-200">
                 Sifatsiz lid sabablari (Muvaffaqiyatsiz E&apos;tiroz sababi)
@@ -285,7 +272,7 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          {/* Manager sales table */}
+          {/* Manager sales */}
           <section className="rounded-lg border border-slate-700 bg-slate-900 p-4">
             <h2 className="mb-3 text-sm font-semibold text-slate-200">
               Sotuv bo&apos;yicha menejerlar
@@ -333,7 +320,7 @@ export default function DashboardPage() {
             )}
           </section>
 
-          {/* Manager calls table */}
+          {/* Manager calls */}
           <section className="rounded-lg border border-slate-700 bg-slate-900 p-4">
             <h2 className="mb-3 text-sm font-semibold text-slate-200">
               Qo&apos;ng&apos;iroqlar bo&apos;yicha menejerlar
@@ -357,7 +344,10 @@ export default function DashboardPage() {
                   </thead>
                   <tbody>
                     {data.managerCalls.map((m) => (
-                      <tr key={m.managerName} className="border-b border-slate-800 last:border-0">
+                      <tr
+                        key={m.managerName}
+                        className="border-b border-slate-800 last:border-0"
+                      >
                         <td className="px-3 py-2">{m.managerName}</td>
                         <td className="px-3 py-2">
                           {m.callsAll.toLocaleString("ru-RU")}
