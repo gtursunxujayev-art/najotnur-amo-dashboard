@@ -72,11 +72,10 @@ export async function POST(req: Request) {
       await sendTelegramText(chatIdBigInt, reply);
     }
 
-    // You can handle other commands here later if needed
-
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[telegram webhook] error", err);
+    // Always answer 200 so Telegram doesn’t see 500
     return NextResponse.json({ ok: true });
   }
 }
