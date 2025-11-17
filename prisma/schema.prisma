@@ -1,0 +1,22 @@
+// prisma/schema.prisma
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model TelegramUser {
+  id            Int      @id @default(autoincrement())
+  chatId        BigInt   @unique
+  username      String? 
+  firstName     String?
+  lastName      String?
+  dailyReport   Boolean  @default(false)
+  weeklyReport  Boolean  @default(false)
+  monthlyReport Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
