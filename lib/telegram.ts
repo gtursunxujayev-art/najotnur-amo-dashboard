@@ -31,7 +31,10 @@ export async function sendTelegramPdf(
   form.append("chat_id", String(chatId));
   form.append("caption", caption);
 
-  const blob = new Blob([pdfBytes], { type: "application/pdf" });
+  // pdfBytes is Uint8Array<ArrayBufferLike> – TS is strict about BlobPart.
+  // We cast to any so it is accepted as a BlobPart at compile time.
+  const bytesForBlob: any = pdfBytes;
+  const blob = new Blob([bytesForBlob], { type: "application/pdf" });
   form.append("document", blob, "dashboard-report.pdf");
 
   const res = await fetch(url, {
