@@ -314,17 +314,18 @@ export default function DashboardPage() {
   cy="50%"
   outerRadius={80}
   labelLine={false}
-  label={({ name, percent = 0 }) =>
-    `${name} ${(percent * 100).toFixed(0)}%`
-  }
+  label={({
+    name,
+    percent,
+  }: {
+    name?: string;
+    percent?: number;
+  }) => `${name ?? ""} ${(((percent ?? 0) * 100).toFixed(0))}%`}
 >
-                      {leadSources.map((_, index) => (
-                        <Cell
-                          key={index}
-                          fill={PIE_COLORS[index % PIE_COLORS.length]}
-                        />
-                      ))}
-                    </Pie>
+  {nonQualifiedReasons.map((_, index) => (
+    <Cell key={index} />
+  ))}
+</Pie>
                     <Tooltip
                       formatter={(value: any, name: any) => [
                         value,
