@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-async function sendTelegramText(chatId: number | bigint, text: string) {
+async function sendTelegramText(chatId: number | bigint | string, text: string) {
   if (!TELEGRAM_BOT_TOKEN) {
     console.error("[telegram webhook] TELEGRAM_BOT_TOKEN is missing");
     return;
@@ -13,18 +13,22 @@ async function sendTelegramText(chatId: number | bigint, text: string) {
 
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
 
-  await fetch(url, {
+  const res = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       chat_id: String(chatId),
       text,
     }),
-  }).catch((err) => {
-    console.error("[telegram webhook] sendMessage error", err);
   });
+
+  const body = await res.text().catch(() => "");
+  console.log(
+    "[telegram webhook] sendMessage result",
+    res.status,
+    res.statusText,
+    body
+  );
 }
 
 export const runtime = "nodejs";
@@ -33,49 +37,54 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   try {
     const update = await req.json().catch(() => null);
+    console.log("[telegram webhook] incoming update:", JSON.stringify(update));
+
     const msg = update?.message;
-
-    if (!msg) {
+    if (!msg || !msg.chat || msg.chat.id == null) {
       return NextResponse.json({ ok: true });
     }
 
-    const chat = msg.chat;
+    const chatId = msg.chat.id;
+    const chatIdBigInt = BigInt(String(chatId));
     const text: string = (msg.text || "").trim();
-
-    if (!chat || !chat.id) {
-      return NextResponse.json({ ok: true });
-    }
-
-    const chatIdBigInt = BigInt(chat.id);
-
-    // Upsert telegram user into DB
     const from = msg.from || {};
-    await prisma.telegramUser.upsert({
-      where: { chatId: chatIdBigInt },
-      create: {
-        chatId: chatIdBigInt,
-        username: from.username ?? null,
-        firstName: from.first_name ?? null,
-        lastName: from.last_name ?? null,
-      },
-      update: {
-        username: from.username ?? null,
-        firstName: from.first_name ?? null,
-        lastName: from.last_name ?? null,
-      },
-    });
 
-    // Handle /start command
+    // 1) Always try to send reply for /start FIRST
     if (/^\/start\b/i.test(text)) {
       const reply =
         "Assalomu alaykum. Najot Nur sotuv bo'limi hisobotlarini sizga kunlik taqdim etaman";
-      await sendTelegramText(chatIdBigInt, reply);
+      await sendTelegramText(chatId, reply);
+    }
+
+    // 2) Then, separately, try to save user in DB (do not break response)
+    try {
+      const user = await prisma.telegramUser.upsert({
+        where: { chatId: chatIdBigInt },
+        create: {
+          chatId: chatIdBigInt,
+          username: from.username ?? null,
+          firstName: from.first_name ?? null,
+          lastName: from.last_name ?? null,
+        },
+        update: {
+          username: from.username ?? null,
+          firstName: from.first_name ?? null,
+          lastName: from.last_name ?? null,
+        },
+      });
+      console.log(
+        "[telegram webhook] upserted TelegramUser",
+        user.id,
+        user.chatId.toString()
+      );
+    } catch (dbErr) {
+      console.error("[telegram webhook] prisma upsert error:", dbErr);
     }
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[telegram webhook] error", err);
-    // Always answer 200 so Telegram doesn’t see 500
+    console.error("[telegram webhook] fatal error:", err);
+    // Always 200 so Telegram doesn't retry forever
     return NextResponse.json({ ok: true });
   }
 }
