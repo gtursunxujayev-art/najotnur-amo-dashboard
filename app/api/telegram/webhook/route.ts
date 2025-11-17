@@ -1,54 +1,82 @@
 // app/api/telegram/webhook/route.ts
+
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-export const runtime = "nodejs";
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
+async function sendTelegramText(chatId: number | bigint, text: string) {
+  if (!TELEGRAM_BOT_TOKEN) {
+    console.error("[telegram webhook] TELEGRAM_BOT_TOKEN is missing");
+    return;
+  }
 
-async function sendTelegramMessage(chatId: number | bigint, text: string) {
-  if (!BOT_TOKEN) return;
-  await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+
+  await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text }),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      chat_id: String(chatId),
+      text,
+    }),
+  }).catch((err) => {
+    console.error("[telegram webhook] sendMessage error", err);
   });
 }
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function POST(req: Request) {
-  const body = await req.json().catch(() => null);
-  if (!body) return NextResponse.json({ ok: true });
+  try {
+    const update = await req.json().catch(() => null);
+    const msg = update?.message;
 
-  const message = body.message;
-  if (!message || !message.chat) return NextResponse.json({ ok: true });
+    if (!msg) {
+      return NextResponse.json({ ok: true });
+    }
 
-  const chat = message.chat;
-  const chatId: bigint = BigInt(chat.id);
+    const chat = msg.chat;
+    const text: string = (msg.text || "").trim();
 
-  await prisma.telegramUser.upsert({
-    where: { chatId },
-    update: {
-      username: chat.username ?? null,
-      firstName: chat.first_name ?? null,
-      lastName: chat.last_name ?? null,
-    },
-    create: {
-      chatId,
-      username: chat.username ?? null,
-      firstName: chat.first_name ?? null,
-      lastName: chat.last_name ?? null,
-    },
-  });
+    if (!chat || !chat.id) {
+      return NextResponse.json({ ok: true });
+    }
 
-  const text: string = message.text || "";
+    const chatIdBigInt = BigInt(chat.id);
 
-  if (text.startsWith("/start")) {
-    await sendTelegramMessage(
-      chatId,
-      "Salom! Siz Najot Nur dashboard botiga ulan dingiz.\n" +
-        "Admin panelida sizni hisobotlar ro'yxatiga qo'shish mumkin."
-    );
+    // Upsert telegram user into DB
+    const from = msg.from || {};
+    await prisma.telegramUser.upsert({
+      where: { chatId: chatIdBigInt },
+      create: {
+        chatId: chatIdBigInt,
+        username: from.username ?? null,
+        firstName: from.first_name ?? null,
+        lastName: from.last_name ?? null,
+      },
+      update: {
+        username: from.username ?? null,
+        firstName: from.first_name ?? null,
+        lastName: from.last_name ?? null,
+      },
+    });
+
+    // Handle /start command
+    if (/^\/start\b/i.test(text)) {
+      const reply =
+        "Assalomu alaykum. Najot Nur sotuv bo'limi hisobotlarini sizga kunlik taqdim etaman";
+      await sendTelegramText(chatIdBigInt, reply);
+    }
+
+    // You can handle other commands here later if needed
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[telegram webhook] error", err);
+    return NextResponse.json({ ok: true });
   }
-
-  return NextResponse.json({ ok: true });
 }
