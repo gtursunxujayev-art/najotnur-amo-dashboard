@@ -11,15 +11,20 @@ export type RevenueSheetsConfig = {
 };
 
 export type DashboardConfig = {
-  // constructor (amoCRM)
+  // --- amoCRM constructor ---
   PIPELINE_IDS: number[];
   QUALIFIED_STATUS_IDS: number[];
   WON_STATUS_IDS: number[];
   LOST_STATUS_IDS: number[];
 
+  // Loss reasons (amo standard)
   QUALIFIED_LOSS_REASON_IDS: number[];
   NOT_QUALIFIED_REASON_IDS: number[];
 
+  // ✅ NEW: custom field for objections (E’tiroz sababi)
+  OBJECTION_FIELD_ID: number | null;
+
+  // custom fields
   LEAD_SOURCE_FIELD_ID: number | null;
   COURSE_TYPE_FIELD_ID: number | null;
 
@@ -29,10 +34,10 @@ export type DashboardConfig = {
   USE_AMO_CALLS: boolean;
   USE_SHEETS_CALLS: boolean;
 
-  // tushum (Sheets)
+  // --- tushum Sheets ---
   REVENUE_SHEETS: RevenueSheetsConfig;
 
-  // BACKWARD COMPAT ALIASES (lib/revenueSheets.ts shu nomlarni ishlatadi)
+  // BACKWARD-COMPAT aliases (lib/revenueSheets.ts ishlatadi)
   REVENUE_SHEETS_URL: string;
   REVENUE_MANAGER_COLUMN: string;
   REVENUE_DATE_COLUMN: string;
@@ -60,6 +65,10 @@ const cfg: DashboardConfig = {
   QUALIFIED_LOSS_REASON_IDS: [],
   NOT_QUALIFIED_REASON_IDS: [],
 
+  // ✅ default: sizning CRM’ga mos field_id qo‘ying
+  // Agar constructor UI orqali tanlatmoqchi bo‘lsangiz, null qoldiring.
+  OBJECTION_FIELD_ID: 1121759,
+
   LEAD_SOURCE_FIELD_ID: null,
   COURSE_TYPE_FIELD_ID: null,
 
@@ -79,7 +88,6 @@ const cfg: DashboardConfig = {
     courseTypeColumn: "",
   },
 
-  // aliases init
   REVENUE_SHEETS_URL: "",
   REVENUE_MANAGER_COLUMN: "",
   REVENUE_DATE_COLUMN: "",
@@ -91,7 +99,6 @@ const cfg: DashboardConfig = {
 
 applyRevenueAliases(cfg);
 
-// eksportlar — eski kodlar bilan mos bo‘lishi uchun
 export const dashboardConfig = cfg;
 export const DASHBOARD_CONFIG = cfg;
 export default cfg;
