@@ -6,8 +6,8 @@ type MetaPipeline = { id: number; name: string };
 type MetaStatus = {
   id: number;
   name: string;
-  pipeline_id?: number | null;   // amo default
-  pipelineId?: number | null;    // sometimes custom mapping
+  pipeline_id?: number | null;
+  pipelineId?: number | null;
   pipeline?: { id?: number | null } | null;
 };
 type MetaLossReason = { id: number; name: string };
@@ -25,7 +25,7 @@ type MetaResponse = {
 };
 
 type ConstructorState = {
-  PIPELINE_IDS: number[];
+  PIPELINE_IDS: number[]; // config side still expects array
   QUALIFIED_STATUS_IDS: number[];
   WON_STATUS_IDS: number[];
   LOST_STATUS_IDS: number[];
@@ -69,6 +69,8 @@ export default function AdminPage() {
     USE_SHEETS_CALLS: false,
   });
 
+  const [selectedPipelineId, setSelectedPipelineId] = useState<number | "">("");
+
   const [tushum, setTushum] = useState({
     link: "",
     managerColumn: "",
@@ -79,33 +81,33 @@ export default function AdminPage() {
     courseTypeColumn: "",
   });
 
-  // Load meta when constructor tab opens
+  async function loadMeta() {
+    try {
+      setLoadingMeta(true);
+      setErr(null);
+      const res = await fetch("/api/meta");
+      const data = await res.json();
+      setMeta({
+        pipelines: data.pipelines || [],
+        statuses: data.statuses || [],
+        lossReasons: data.lossReasons || [],
+        customFields: data.customFields || [],
+      });
+    } catch (e: any) {
+      setErr("Meta yuklashda xatolik: " + e.message);
+    } finally {
+      setLoadingMeta(false);
+    }
+  }
+
   useEffect(() => {
     if (tab !== "constructor") return;
-    (async () => {
-      try {
-        setLoadingMeta(true);
-        setErr(null);
-        const res = await fetch("/api/meta");
-        const data = await res.json();
-        setMeta({
-          pipelines: data.pipelines || [],
-          statuses: data.statuses || [],
-          lossReasons: data.lossReasons || [],
-          customFields: data.customFields || [],
-        });
-      } catch (e: any) {
-        setErr("Meta yuklashda xatolik: " + e.message);
-      } finally {
-        setLoadingMeta(false);
-      }
-    })();
+    loadMeta();
   }, [tab]);
 
   const toggleId = (arr: number[], id: number) =>
     arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id];
 
-  // helper: extract pipeline id from any status shape
   function getStatusPipelineId(st: MetaStatus): number | null {
     return (
       (typeof st.pipeline_id === "number" ? st.pipeline_id : null) ??
@@ -114,25 +116,17 @@ export default function AdminPage() {
     );
   }
 
-  // ✅ Smarter status filtering:
-  // - if no pipeline ids in meta => show all
-  // - else filter by selected pipelines
   const filteredStatuses = useMemo(() => {
     if (!meta) return [];
 
     const allStatuses = meta.statuses || [];
     const selectedPipes = constructorData.PIPELINE_IDS;
 
-    // if user didn't select pipeline => show all
     if (!selectedPipes.length) return allStatuses;
 
-    // check if statuses even have pipeline ids
     const hasAnyPipelineId = allStatuses.some((s) => getStatusPipelineId(s) != null);
-
-    // if meta doesn't provide pipeline id => don't filter
     if (!hasAnyPipelineId) return allStatuses;
 
-    // normal filter
     return allStatuses.filter((s) => {
       const pid = getStatusPipelineId(s);
       return pid != null && selectedPipes.includes(pid);
@@ -143,6 +137,20 @@ export default function AdminPage() {
     if (!meta || !constructorData.COURSE_TYPE_FIELD_ID) return null;
     return meta.customFields.find((f) => f.id === constructorData.COURSE_TYPE_FIELD_ID) || null;
   }, [meta, constructorData.COURSE_TYPE_FIELD_ID]);
+
+  // dropdown change handler
+  function onPipelineChange(val: string) {
+    const id = val ? Number(val) : "";
+    setSelectedPipelineId(id);
+
+    setConstructorData((s) => ({
+      ...s,
+      PIPELINE_IDS: id === "" ? [] : [id], // keep array in config
+      QUALIFIED_STATUS_IDS: [],
+      WON_STATUS_IDS: [],
+      LOST_STATUS_IDS: [],
+    }));
+  }
 
   async function saveConstructor() {
     try {
@@ -231,7 +239,16 @@ export default function AdminPage() {
 
       {tab === "constructor" && (
         <div className="space-y-5 rounded-xl bg-slate-900/60 p-6">
-          <h2 className="text-xl font-bold">⚙️ Status Constructor</h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-xl font-bold">⚙️ Status Constructor</h2>
+            <button
+              onClick={loadMeta}
+              className="rounded bg-slate-800 px-3 py-1 text-xs hover:bg-slate-700"
+              disabled={loadingMeta}
+            >
+              {loadingMeta ? "Reload..." : "Reload meta"}
+            </button>
+          </div>
 
           {loadingMeta ? (
             <p className="text-sm text-slate-300">Meta yuklanyapti...</p>
@@ -239,35 +256,25 @@ export default function AdminPage() {
             <p className="text-sm text-slate-300">Meta topilmadi. /api/meta ni tekshiring.</p>
           ) : (
             <>
-              {/* Pipelines */}
+              {/* ✅ Pipeline dropdown */}
               <div>
-                <label className="mb-2 block text-sm text-slate-300">Pipeline(lar)</label>
-                <div className="grid grid-cols-2 gap-2">
+                <label className="mb-2 block text-sm text-slate-300">Pipeline (bitta tanlanadi)</label>
+                <select
+                  className="w-full rounded bg-slate-800 px-3 py-2 text-sm"
+                  value={selectedPipelineId}
+                  onChange={(e) => onPipelineChange(e.target.value)}
+                >
+                  <option value="">-- Pipeline tanlanmagan --</option>
                   {meta.pipelines.map((p) => (
-                    <label
-                      key={p.id}
-                      className="flex items-center gap-2 rounded bg-slate-800 px-3 py-2 text-sm"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={constructorData.PIPELINE_IDS.includes(p.id)}
-                        onChange={() =>
-                          setConstructorData((s) => ({
-                            ...s,
-                            PIPELINE_IDS: toggleId(s.PIPELINE_IDS, p.id),
-                            QUALIFIED_STATUS_IDS: [],
-                            WON_STATUS_IDS: [],
-                            LOST_STATUS_IDS: [],
-                          }))
-                        }
-                      />
+                    <option key={p.id} value={p.id}>
                       {p.name} (#{p.id})
-                    </label>
+                    </option>
                   ))}
-                </div>
+                </select>
+
                 {!!constructorData.PIPELINE_IDS.length && (
                   <p className="mt-1 text-xs text-slate-400">
-                    Statuslar tanlangan pipeline’lardan ko‘rsatiladi (agar meta’da pipeline_id bo‘lsa).
+                    Statuslar shu pipeline bo‘yicha ko‘rsatiladi (agar meta’da pipeline_id bo‘lsa).
                   </p>
                 )}
               </div>
@@ -294,7 +301,7 @@ export default function AdminPage() {
                     ))}
                     {!filteredStatuses.length && (
                       <p className="text-xs text-slate-400 px-2 py-2">
-                        Statuslar topilmadi. Pipeline filterini olib tashlab ko‘ring yoki meta formatini tekshiramiz.
+                        Statuslar topilmadi. Pipeline tanlanmagan yoki meta formatini tekshirish kerak.
                       </p>
                     )}
                   </div>
