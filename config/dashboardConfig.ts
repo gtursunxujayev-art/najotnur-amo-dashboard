@@ -1,13 +1,12 @@
 // config/dashboardConfig.ts
-// MUST stay compatible with current imports in lib/dashboard.ts
+// Must match fields used inside lib/dashboard.ts
 
 export const dashboardConfig = {
   // ------------------------------------------------------------------
   // amoCRM pipeline filter
-  // Your dashboard.ts expects PIPELINE_IDS (array)
   // ------------------------------------------------------------------
-  PIPELINE_IDS: [] as number[], // ✅ used in dashboard.ts
-  PIPELINE_ID: null as number | null, // ✅ kept for old UI/logic (optional)
+  PIPELINE_IDS: [] as number[],         // used in dashboard.ts
+  PIPELINE_ID: null as number | null,   // kept for old UI (optional)
 
   // ------------------------------------------------------------------
   // Status IDs
@@ -23,8 +22,13 @@ export const dashboardConfig = {
   COURSE_TYPE_FIELD_ID: null as number | null, // "Kurs turi"
 
   // ------------------------------------------------------------------
-  // Course type values (strings from Amo custom field)
+  // Course type mapping
+  // Your dashboard.ts uses enum IDs; keep both IDs + string values
   // ------------------------------------------------------------------
+  ONLINE_COURSE_ENUM_IDS: [] as number[],  // ✅ expected in dashboard.ts
+  OFFLINE_COURSE_ENUM_IDS: [] as number[],// ✅ expected in dashboard.ts
+
+  // (backward-compatible string values if somewhere else used)
   ONLINE_TYPES: [] as string[],
   OFFLINE_TYPES: [] as string[],
 
