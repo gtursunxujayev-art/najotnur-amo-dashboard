@@ -21,8 +21,10 @@ export type ManagerSalesRow = {
   qualifiedLeads: number;
   wonLeads: number;
   totalRevenue: number;
+  wonDeals: number;
+  wonAmount: number;
 
-  // new/actual fields
+  // ✅ actual fields (yangi nomlar)
   manager: string;
   leads: number;
   qualified: number;
@@ -53,8 +55,8 @@ export type DashboardData = {
   nonQualifiedReasons: { name: string; count: number }[];
   notQualifiedReasons: { name: string; count: number }[];
 
-  managerSales: ManagerSalesRow[];   // legacy
-  managersSales: ManagerSalesRow[];  // new
+  managerSales: ManagerSalesRow[];   // legacy name
+  managersSales: ManagerSalesRow[];  // new name
 
   leadsTotal: number;
   qualifiedLeads: number;
@@ -112,7 +114,7 @@ function getPeriodRange(period: Period) {
 
   if (period === "thisWeek" || period === "lastWeek") {
     const d = new Date(now);
-    const day = d.getDay();
+    const day = d.getDay(); // 0 sunday
     const mondayOffset = (day + 6) % 7;
     d.setDate(d.getDate() - mondayOffset);
 
@@ -373,11 +375,13 @@ export async function buildDashboardData(
     managerId: slugify(manager),
     managerName: manager,
 
-    // legacy totals
+    // legacy totals (old UI uses these names)
     totalLeads: v.leads,
     qualifiedLeads: v.qualified,
     wonLeads: v.won,
     totalRevenue: v.revenue,
+    wonDeals: v.won,
+    wonAmount: v.revenue,
 
     // new fields
     manager,
