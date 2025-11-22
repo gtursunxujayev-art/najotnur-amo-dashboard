@@ -1,28 +1,36 @@
 // config/dashboardConfig.ts
-// Main config used by lib/dashboard.ts and lib/revenueSheets.ts
-// ✅ MUST export `dashboardConfig` because your code imports it.
+// MUST stay compatible with current imports in lib/dashboard.ts
 
-// ------------------------------------------------------------------
-// amoCRM mapping (filled by Admin → Constructor tab)
-// ------------------------------------------------------------------
 export const dashboardConfig = {
-  // amoCRM base settings
-  PIPELINE_ID: null as number | null,
+  // ------------------------------------------------------------------
+  // amoCRM pipeline filter
+  // Your dashboard.ts expects PIPELINE_IDS (array)
+  // ------------------------------------------------------------------
+  PIPELINE_IDS: [] as number[], // ✅ used in dashboard.ts
+  PIPELINE_ID: null as number | null, // ✅ kept for old UI/logic (optional)
 
+  // ------------------------------------------------------------------
   // Status IDs
+  // ------------------------------------------------------------------
   QUALIFIED_STATUS_IDS: [] as number[],
   WON_STATUS_IDS: [] as number[],
   LOST_STATUS_IDS: [] as number[],
 
-  // Custom field IDs (Amo fields)
+  // ------------------------------------------------------------------
+  // Custom field IDs (amoCRM)
+  // ------------------------------------------------------------------
   LEAD_SOURCE_FIELD_ID: null as number | null, // "Qayerdan"
   COURSE_TYPE_FIELD_ID: null as number | null, // "Kurs turi"
 
-  // Course type values (string values from Amo custom field)
+  // ------------------------------------------------------------------
+  // Course type values (strings from Amo custom field)
+  // ------------------------------------------------------------------
   ONLINE_TYPES: [] as string[],
   OFFLINE_TYPES: [] as string[],
 
+  // ------------------------------------------------------------------
   // Calls sources toggles
+  // ------------------------------------------------------------------
   USE_AMO_CALLS: false,
   USE_SHEETS_CALLS: false,
 
@@ -39,9 +47,6 @@ export const dashboardConfig = {
   },
 };
 
-// ------------------------------------------------------------------
-// ✅ Backward-compatible named exports
-// (some files may import these separately)
-// ------------------------------------------------------------------
+// Backward-compatible named exports
 export const DASHBOARD_CONFIG = dashboardConfig;
 export const REVENUE_SHEETS = dashboardConfig.REVENUE_SHEETS;
