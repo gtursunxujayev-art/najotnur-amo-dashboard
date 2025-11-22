@@ -1,12 +1,12 @@
 // config/dashboardConfig.ts
-// Must match fields used inside lib/dashboard.ts
+// Must match all fields referenced in lib/dashboard.ts
 
 export const dashboardConfig = {
   // ------------------------------------------------------------------
   // amoCRM pipeline filter
   // ------------------------------------------------------------------
-  PIPELINE_IDS: [] as number[],         // used in dashboard.ts
-  PIPELINE_ID: null as number | null,   // kept for old UI (optional)
+  PIPELINE_IDS: [] as number[],
+  PIPELINE_ID: null as number | null,
 
   // ------------------------------------------------------------------
   // Status IDs
@@ -16,19 +16,24 @@ export const dashboardConfig = {
   LOST_STATUS_IDS: [] as number[],
 
   // ------------------------------------------------------------------
+  // Loss reason logic
+  // dashboard.ts expects QUALIFIED_LOSS_REASON_IDS
+  // ------------------------------------------------------------------
+  QUALIFIED_LOSS_REASON_IDS: [] as number[],      // ✅ required
+  NON_QUALIFIED_LOSS_REASON_IDS: [] as number[],  // optional (safe to keep)
+
+  // ------------------------------------------------------------------
   // Custom field IDs (amoCRM)
   // ------------------------------------------------------------------
-  LEAD_SOURCE_FIELD_ID: null as number | null, // "Qayerdan"
-  COURSE_TYPE_FIELD_ID: null as number | null, // "Kurs turi"
+  LEAD_SOURCE_FIELD_ID: null as number | null,
+  COURSE_TYPE_FIELD_ID: null as number | null,
 
   // ------------------------------------------------------------------
-  // Course type mapping
-  // Your dashboard.ts uses enum IDs; keep both IDs + string values
+  // Course type mapping (enum IDs + string values)
   // ------------------------------------------------------------------
-  ONLINE_COURSE_ENUM_IDS: [] as number[],  // ✅ expected in dashboard.ts
-  OFFLINE_COURSE_ENUM_IDS: [] as number[],// ✅ expected in dashboard.ts
+  ONLINE_COURSE_ENUM_IDS: [] as number[],
+  OFFLINE_COURSE_ENUM_IDS: [] as number[],
 
-  // (backward-compatible string values if somewhere else used)
   ONLINE_TYPES: [] as string[],
   OFFLINE_TYPES: [] as string[],
 
@@ -39,15 +44,15 @@ export const dashboardConfig = {
   USE_SHEETS_CALLS: false,
 
   // ------------------------------------------------------------------
-  // ✅ NEW: Google Sheets revenue integration (Admin → Tushum tab)
+  // ✅ Google Sheets revenue integration (Admin → Tushum tab)
   // ------------------------------------------------------------------
   REVENUE_SHEETS: {
     link: "",
-    managerColumn: "",       // example: "Baza!A"
-    dateColumn: "",          // example: "Baza!B"
-    paymentTypeColumn: "",   // example: "Baza!C" (first/middle/last)
-    incomeTypeColumn: "",    // example: "Baza!D" (online/offline)
-    amountColumn: "",        // example: "Baza!E"
+    managerColumn: "",
+    dateColumn: "",
+    paymentTypeColumn: "",
+    incomeTypeColumn: "",
+    amountColumn: "",
   },
 };
 
