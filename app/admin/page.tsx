@@ -1,12 +1,75 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+type MetaPipeline = { id: number; name: string };
+type MetaStatus = { id: number; name: string; pipeline_id?: number | null };
+type MetaLossReason = { id: number; name: string };
+type MetaCustomField = {
+  id: number;
+  name: string;
+  type: string;
+  enums?: { id: number; value: string }[];
+};
+
+type MetaResponse = {
+  pipelines: MetaPipeline[];
+  statuses: MetaStatus[];
+  lossReasons: MetaLossReason[];
+  customFields: MetaCustomField[];
+};
+
+type ConstructorState = {
+  PIPELINE_IDS: number[];
+  QUALIFIED_STATUS_IDS: number[];
+  WON_STATUS_IDS: number[];
+  LOST_STATUS_IDS: number[];
+  QUALIFIED_LOSS_REASON_IDS: number[];
+  NOT_QUALIFIED_REASON_IDS: number[];
+
+  LEAD_SOURCE_FIELD_ID: number | null;
+  COURSE_TYPE_FIELD_ID: number | null;
+
+  ONLINE_COURSE_ENUM_IDS: number[];
+  OFFLINE_COURSE_ENUM_IDS: number[];
+
+  USE_AMO_CALLS: boolean;
+  USE_SHEETS_CALLS: boolean;
+};
 
 export default function AdminPage() {
   const [tab, setTab] = useState<"info" | "constructor" | "tushum">("info");
 
-  // Example placeholders for your existing constructor state
-  const [constructorData, setConstructorData] = useState<any>({});
+  const [meta, setMeta] = useState<MetaResponse | null>(null);
+  const [loadingMeta, setLoadingMeta] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  // =========================
+  // Constructor state
+  // =========================
+  const [constructorData, setConstructorData] = useState<ConstructorState>({
+    PIPELINE_IDS: [],
+    QUALIFIED_STATUS_IDS: [],
+    WON_STATUS_IDS: [],
+    LOST_STATUS_IDS: [],
+    QUALIFIED_LOSS_REASON_IDS: [],
+    NOT_QUALIFIED_REASON_IDS: [],
+
+    LEAD_SOURCE_FIELD_ID: null,
+    COURSE_TYPE_FIELD_ID: null,
+
+    ONLINE_COURSE_ENUM_IDS: [],
+    OFFLINE_COURSE_ENUM_IDS: [],
+
+    USE_AMO_CALLS: false,
+    USE_SHEETS_CALLS: false,
+  });
+
+  // =========================
+  // Tushum state
+  // =========================
   const [tushum, setTushum] = useState({
     link: "",
     managerColumn: "",
@@ -14,23 +77,90 @@ export default function AdminPage() {
     paymentTypeColumn: "",
     incomeTypeColumn: "",
     amountColumn: "",
+    courseTypeColumn: "",
   });
 
-  async function saveTushum() {
+  // =========================
+  // Load meta for constructor
+  // =========================
+  useEffect(() => {
+    if (tab !== "constructor") return;
+    (async () => {
+      try {
+        setLoadingMeta(true);
+        setErr(null);
+        const res = await fetch("/api/meta");
+        const data = await res.json();
+        setMeta({
+          pipelines: data.pipelines || [],
+          statuses: data.statuses || [],
+          lossReasons: data.lossReasons || [],
+          customFields: data.customFields || [],
+        });
+      } catch (e: any) {
+        setErr("Meta yuklashda xatolik: " + e.message);
+      } finally {
+        setLoadingMeta(false);
+      }
+    })();
+  }, [tab]);
+
+  // Helper togglers
+  const toggleId = (arr: number[], id: number) =>
+    arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id];
+
+  const selectedCourseField = useMemo(() => {
+    if (!meta || !constructorData.COURSE_TYPE_FIELD_ID) return null;
+    return meta.customFields.find((f) => f.id === constructorData.COURSE_TYPE_FIELD_ID) || null;
+  }, [meta, constructorData.COURSE_TYPE_FIELD_ID]);
+
+  // =========================
+  // Save constructor
+  // =========================
+  async function saveConstructor() {
     try {
+      setSaving(true);
+      setMsg(null);
+      setErr(null);
+
       const res = await fetch("/api/admin/save-config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "tushum",
-          data: tushum,
-        }),
+        body: JSON.stringify({ type: "constructor", data: constructorData }),
       });
       const data = await res.json();
-      if (!res.ok || data.ok === false) throw new Error(data.error);
-      alert("✅ Tushum konfiguratsiyasi saqlandi!");
-    } catch (err: any) {
-      alert("❌ Xatolik: " + err.message);
+      if (!res.ok || data.ok === false) throw new Error(data.error || "Save failed");
+
+      setMsg("✅ Constructor konfiguratsiyasi saqlandi!");
+    } catch (e: any) {
+      setErr("❌ " + e.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // =========================
+  // Save tushum
+  // =========================
+  async function saveTushum() {
+    try {
+      setSaving(true);
+      setMsg(null);
+      setErr(null);
+
+      const res = await fetch("/api/admin/save-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "tushum", data: tushum }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.ok === false) throw new Error(data.error || "Save failed");
+
+      setMsg("✅ Tushum konfiguratsiyasi saqlandi!");
+    } catch (e: any) {
+      setErr("❌ " + e.message);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -38,6 +168,7 @@ export default function AdminPage() {
     <main className="min-h-screen bg-slate-950 p-6 text-slate-50">
       <h1 className="mb-6 text-3xl font-bold">Admin panel</h1>
 
+      {/* Tabs */}
       <div className="mb-6 flex gap-3">
         <button
           onClick={() => setTab("info")}
@@ -65,158 +196,456 @@ export default function AdminPage() {
         </button>
       </div>
 
-      {/* === INFO TAB === */}
+      {/* Messages */}
+      {msg && (
+        <div className="mb-3 rounded bg-emerald-900/40 px-3 py-2 text-sm text-emerald-200">
+          {msg}
+        </div>
+      )}
+      {err && (
+        <div className="mb-3 rounded bg-red-900/40 px-3 py-2 text-sm text-red-200">
+          {err}
+        </div>
+      )}
+
+      {/* INFO TAB */}
       {tab === "info" && (
         <div className="rounded-xl bg-slate-900/60 p-6">
           <h2 className="text-xl font-semibold text-slate-100">
             ℹ️ Umumiy ma'lumot
           </h2>
           <p className="mt-2 text-sm text-slate-400">
-            Bu bo‘limda siz amoCRM va Google Sheets integratsiyalarini
-            sozlashingiz mumkin.
+            Bu panel orqali amoCRM status/pipeline mapping va Google Sheets tushum integratsiyasini sozlaysiz.
+            Constructor bo‘limini to‘ldirmasangiz Dashboard statistikasi noto‘g‘ri chiqadi.
           </p>
         </div>
       )}
 
-      {/* === CONSTRUCTOR TAB === */}
+      {/* CONSTRUCTOR TAB */}
       {tab === "constructor" && (
-        <div className="rounded-xl bg-slate-900/60 p-6">
-          <h2 className="text-xl font-semibold text-slate-100">
+        <div className="space-y-5 rounded-xl bg-slate-900/60 p-6">
+          <h2 className="text-xl font-bold text-slate-100">
             ⚙️ Status Constructor
           </h2>
-          <p className="mt-2 text-sm text-slate-400">
-            Bu bo‘limda CRM’dagi statuslar, pipeline va boshqa moslamalarni
-            belgilang.
-          </p>
-          {/* Your existing constructor UI goes here */}
+
+          {loadingMeta ? (
+            <p className="text-sm text-slate-300">Meta yuklanyapti...</p>
+          ) : !meta ? (
+            <p className="text-sm text-slate-300">
+              Meta topilmadi. /api/meta ishlayotganini tekshiring.
+            </p>
+          ) : (
+            <>
+              {/* Pipelines */}
+              <div>
+                <label className="mb-2 block text-sm text-slate-300">
+                  Pipeline(lar)
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {meta.pipelines.map((p) => (
+                    <label
+                      key={p.id}
+                      className="flex items-center gap-2 rounded bg-slate-800 px-3 py-2 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={constructorData.PIPELINE_IDS.includes(p.id)}
+                        onChange={() =>
+                          setConstructorData((s) => ({
+                            ...s,
+                            PIPELINE_IDS: toggleId(s.PIPELINE_IDS, p.id),
+                          }))
+                        }
+                      />
+                      {p.name} (#{p.id})
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Status groups */}
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                {/* Qualified */}
+                <div>
+                  <label className="mb-2 block text-sm text-slate-300">
+                    Sifatli lid statuslari
+                  </label>
+                  <div className="max-h-72 space-y-1 overflow-auto rounded bg-slate-800 p-2">
+                    {meta.statuses.map((st) => (
+                      <label key={st.id} className="flex items-center gap-2 px-2 py-1 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={constructorData.QUALIFIED_STATUS_IDS.includes(st.id)}
+                          onChange={() =>
+                            setConstructorData((s) => ({
+                              ...s,
+                              QUALIFIED_STATUS_IDS: toggleId(s.QUALIFIED_STATUS_IDS, st.id),
+                            }))
+                          }
+                        />
+                        {st.name} (#{st.id})
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* WON */}
+                <div>
+                  <label className="mb-2 block text-sm text-slate-300">
+                    Sotib olgan (Won) statuslari
+                  </label>
+                  <div className="max-h-72 space-y-1 overflow-auto rounded bg-slate-800 p-2">
+                    {meta.statuses.map((st) => (
+                      <label key={st.id} className="flex items-center gap-2 px-2 py-1 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={constructorData.WON_STATUS_IDS.includes(st.id)}
+                          onChange={() =>
+                            setConstructorData((s) => ({
+                              ...s,
+                              WON_STATUS_IDS: toggleId(s.WON_STATUS_IDS, st.id),
+                            }))
+                          }
+                        />
+                        {st.name} (#{st.id})
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* LOST */}
+                <div>
+                  <label className="mb-2 block text-sm text-slate-300">
+                    Yo‘qotilgan (Lost) statuslari
+                  </label>
+                  <div className="max-h-72 space-y-1 overflow-auto rounded bg-slate-800 p-2">
+                    {meta.statuses.map((st) => (
+                      <label key={st.id} className="flex items-center gap-2 px-2 py-1 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={constructorData.LOST_STATUS_IDS.includes(st.id)}
+                          onChange={() =>
+                            setConstructorData((s) => ({
+                              ...s,
+                              LOST_STATUS_IDS: toggleId(s.LOST_STATUS_IDS, st.id),
+                            }))
+                          }
+                        />
+                        {st.name} (#{st.id})
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Loss reasons */}
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {/* Qualified loss reasons */}
+                <div>
+                  <label className="mb-2 block text-sm text-slate-300">
+                    “Sifatli” deb hisoblanadigan E’tiroz sabablari
+                  </label>
+                  <div className="max-h-64 space-y-1 overflow-auto rounded bg-slate-800 p-2">
+                    {meta.lossReasons.map((lr) => (
+                      <label key={lr.id} className="flex items-center gap-2 px-2 py-1 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={constructorData.QUALIFIED_LOSS_REASON_IDS.includes(lr.id)}
+                          onChange={() =>
+                            setConstructorData((s) => ({
+                              ...s,
+                              QUALIFIED_LOSS_REASON_IDS: toggleId(s.QUALIFIED_LOSS_REASON_IDS, lr.id),
+                            }))
+                          }
+                        />
+                        {lr.name} (#{lr.id})
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Not qualified reasons */}
+                <div>
+                  <label className="mb-2 block text-sm text-slate-300">
+                    “Sifatsiz” E’tiroz sabablari
+                  </label>
+                  <div className="max-h-64 space-y-1 overflow-auto rounded bg-slate-800 p-2">
+                    {meta.lossReasons.map((lr) => (
+                      <label key={lr.id} className="flex items-center gap-2 px-2 py-1 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={constructorData.NOT_QUALIFIED_REASON_IDS.includes(lr.id)}
+                          onChange={() =>
+                            setConstructorData((s) => ({
+                              ...s,
+                              NOT_QUALIFIED_REASON_IDS: toggleId(s.NOT_QUALIFIED_REASON_IDS, lr.id),
+                            }))
+                          }
+                        />
+                        {lr.name} (#{lr.id})
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Custom fields */}
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm text-slate-300">
+                    Lead Source field (Qayerdan)
+                  </label>
+                  <select
+                    className="w-full rounded bg-slate-800 px-3 py-2 text-sm"
+                    value={constructorData.LEAD_SOURCE_FIELD_ID ?? ""}
+                    onChange={(e) =>
+                      setConstructorData((s) => ({
+                        ...s,
+                        LEAD_SOURCE_FIELD_ID: e.target.value ? Number(e.target.value) : null,
+                      }))
+                    }
+                  >
+                    <option value="">-- Tanlang --</option>
+                    {meta.customFields.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name} (#{f.id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm text-slate-300">
+                    Course Type field (Kurs turi)
+                  </label>
+                  <select
+                    className="w-full rounded bg-slate-800 px-3 py-2 text-sm"
+                    value={constructorData.COURSE_TYPE_FIELD_ID ?? ""}
+                    onChange={(e) =>
+                      setConstructorData((s) => ({
+                        ...s,
+                        COURSE_TYPE_FIELD_ID: e.target.value ? Number(e.target.value) : null,
+                        ONLINE_COURSE_ENUM_IDS: [],
+                        OFFLINE_COURSE_ENUM_IDS: [],
+                      }))
+                    }
+                  >
+                    <option value="">-- Tanlang --</option>
+                    {meta.customFields.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name} (#{f.id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Enum selection */}
+              {selectedCourseField?.enums?.length ? (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm text-slate-300">Online kurs enumlari</label>
+                    <div className="rounded bg-slate-800 p-2">
+                      {selectedCourseField.enums.map((en) => (
+                        <label key={en.id} className="flex items-center gap-2 px-2 py-1 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={constructorData.ONLINE_COURSE_ENUM_IDS.includes(en.id)}
+                            onChange={() =>
+                              setConstructorData((s) => ({
+                                ...s,
+                                ONLINE_COURSE_ENUM_IDS: toggleId(s.ONLINE_COURSE_ENUM_IDS, en.id),
+                              }))
+                            }
+                          />
+                          {en.value} (#{en.id})
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm text-slate-300">Offline kurs enumlari</label>
+                    <div className="rounded bg-slate-800 p-2">
+                      {selectedCourseField.enums.map((en) => (
+                        <label key={en.id} className="flex items-center gap-2 px-2 py-1 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={constructorData.OFFLINE_COURSE_ENUM_IDS.includes(en.id)}
+                            onChange={() =>
+                              setConstructorData((s) => ({
+                                ...s,
+                                OFFLINE_COURSE_ENUM_IDS: toggleId(s.OFFLINE_COURSE_ENUM_IDS, en.id),
+                              }))
+                            }
+                          />
+                          {en.value} (#{en.id})
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                constructorData.COURSE_TYPE_FIELD_ID && (
+                  <p className="text-xs text-slate-400">
+                    Kurs turi fieldida enumlar topilmadi. amoCRM custom fieldini tekshiring.
+                  </p>
+                )
+              )}
+
+              {/* Calls toggles */}
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label className="flex items-center gap-2 rounded bg-slate-800 px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={constructorData.USE_AMO_CALLS}
+                    onChange={(e) =>
+                      setConstructorData((s) => ({ ...s, USE_AMO_CALLS: e.target.checked }))
+                    }
+                  />
+                  amoCRM qo‘ng‘iroqlarini ishlatish
+                </label>
+
+                <label className="flex items-center gap-2 rounded bg-slate-800 px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={constructorData.USE_SHEETS_CALLS}
+                    onChange={(e) =>
+                      setConstructorData((s) => ({ ...s, USE_SHEETS_CALLS: e.target.checked }))
+                    }
+                  />
+                  Google Sheets qo‘ng‘iroqlarini ishlatish
+                </label>
+              </div>
+
+              {/* Save */}
+              <div className="pt-2">
+                <button
+                  onClick={saveConstructor}
+                  disabled={saving}
+                  className="rounded bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
+                >
+                  {saving ? "Saqlanyapti..." : "Constructorni saqlash"}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
-      {/* === TUSHUM TAB === */}
+      {/* TUSHUM TAB */}
       {tab === "tushum" && (
         <div className="space-y-4 rounded-xl bg-slate-900/60 p-6">
           <h2 className="text-xl font-bold text-slate-100">
             💵 Tushum (Sheets integratsiya)
           </h2>
           <p className="text-sm text-slate-400">
-            Google Sheets faylini ulangan holda tushum ma’lumotlarini
-            avtomatik tarzda Dashboard’ga kiritish mumkin.
+            Google Sheets orqali tushum ma’lumotlarini Dashboard’ga ulash.
           </p>
 
           <div className="space-y-3">
-            {/* Google Sheet Link */}
             <div>
-              <label className="block text-sm text-slate-300">
-                Google Sheets havolasi
-              </label>
+              <label className="block text-sm text-slate-300">Google Sheets havolasi</label>
               <input
                 type="text"
                 placeholder="https://docs.google.com/spreadsheets/d/..."
                 className="w-full rounded bg-slate-800 px-3 py-2 text-slate-100"
                 value={tushum.link}
-                onChange={(e) =>
-                  setTushum({ ...tushum, link: e.target.value })
-                }
+                onChange={(e) => setTushum({ ...tushum, link: e.target.value })}
               />
             </div>
 
-            {/* Manager & Date columns */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm text-slate-300">
-                  Menejer ustuni (masalan Baza!A)
-                </label>
+                <label className="block text-sm text-slate-300">Menejer ustuni (Baza!A)</label>
                 <input
                   type="text"
                   className="w-full rounded bg-slate-800 px-3 py-2 text-slate-100"
                   value={tushum.managerColumn}
                   onChange={(e) =>
-                    setTushum({
-                      ...tushum,
-                      managerColumn: e.target.value,
-                    })
+                    setTushum({ ...tushum, managerColumn: e.target.value })
                   }
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-300">
-                  Sana ustuni (masalan Baza!B)
-                </label>
+                <label className="block text-sm text-slate-300">Sana ustuni (Baza!B)</label>
                 <input
                   type="text"
                   className="w-full rounded bg-slate-800 px-3 py-2 text-slate-100"
                   value={tushum.dateColumn}
                   onChange={(e) =>
-                    setTushum({
-                      ...tushum,
-                      dateColumn: e.target.value,
-                    })
+                    setTushum({ ...tushum, dateColumn: e.target.value })
                   }
                 />
               </div>
             </div>
 
-            {/* Payment type & Income type */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm text-slate-300">
-                  To‘lov turi (first / middle / last) ustuni
+                  To‘lov turi ustuni (first/middle/last)
                 </label>
                 <input
                   type="text"
                   className="w-full rounded bg-slate-800 px-3 py-2 text-slate-100"
                   value={tushum.paymentTypeColumn}
                   onChange={(e) =>
-                    setTushum({
-                      ...tushum,
-                      paymentTypeColumn: e.target.value,
-                    })
+                    setTushum({ ...tushum, paymentTypeColumn: e.target.value })
                   }
                 />
               </div>
               <div>
                 <label className="block text-sm text-slate-300">
-                  Tushum turi (online / offline) ustuni
+                  Tushum turi ustuni (online/offline)
                 </label>
                 <input
                   type="text"
                   className="w-full rounded bg-slate-800 px-3 py-2 text-slate-100"
                   value={tushum.incomeTypeColumn}
                   onChange={(e) =>
-                    setTushum({
-                      ...tushum,
-                      incomeTypeColumn: e.target.value,
-                    })
+                    setTushum({ ...tushum, incomeTypeColumn: e.target.value })
                   }
                 />
               </div>
             </div>
 
-            {/* Amount column */}
-            <div>
-              <label className="block text-sm text-slate-300">
-                Summasi ustuni (masalan Baza!E)
-              </label>
-              <input
-                type="text"
-                className="w-full rounded bg-slate-800 px-3 py-2 text-slate-100"
-                value={tushum.amountColumn}
-                onChange={(e) =>
-                  setTushum({
-                    ...tushum,
-                    amountColumn: e.target.value,
-                  })
-                }
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm text-slate-300">
+                  Summasi ustuni (Baza!E)
+                </label>
+                <input
+                  type="text"
+                  className="w-full rounded bg-slate-800 px-3 py-2 text-slate-100"
+                  value={tushum.amountColumn}
+                  onChange={(e) =>
+                    setTushum({ ...tushum, amountColumn: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-300">
+                  Kurs turi ustuni (agar bo‘lsa)
+                </label>
+                <input
+                  type="text"
+                  className="w-full rounded bg-slate-800 px-3 py-2 text-slate-100"
+                  value={tushum.courseTypeColumn}
+                  onChange={(e) =>
+                    setTushum({ ...tushum, courseTypeColumn: e.target.value })
+                  }
+                />
+              </div>
             </div>
           </div>
 
-          <div className="pt-4">
+          <div className="pt-2">
             <button
               onClick={saveTushum}
-              className="rounded bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-500"
+              disabled={saving}
+              className="rounded bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
             >
-              Saqlash
+              {saving ? "Saqlanyapti..." : "Tushumni saqlash"}
             </button>
           </div>
         </div>
