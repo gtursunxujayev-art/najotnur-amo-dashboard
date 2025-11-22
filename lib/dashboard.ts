@@ -23,8 +23,10 @@ export type DashboardData = {
   leadsCount: number;
   qualifiedLeadsCount: number;
   notQualifiedLeadsCount: number;
-  nonQualifiedLeadsCount: number; // ✅ NEW alias needed by UI
+  nonQualifiedLeadsCount: number;
   wonLeadsCount: number;
+
+  conversionFromQualified: number; // ✅ NEW legacy ratio [0..1]
 
   // main stats (new names)
   leadsTotal: number;
@@ -33,7 +35,7 @@ export type DashboardData = {
   wonLeads: number;
   onlineWonCount: number;
   offlineWonCount: number;
-  conversionQualifiedToWon: number;
+  conversionQualifiedToWon: number; // percentage [0..100]
 
   notQualifiedReasons: { name: string; count: number }[];
   leadSources: { name: string; count: number }[];
@@ -294,6 +296,10 @@ export async function buildDashboardData(
     managersMap.set(manager, m);
   });
 
+  // ✅ conversions
+  const conversionFromQualified =
+    qualifiedCount > 0 ? wonCount / qualifiedCount : 0;
+
   const conversionQualifiedToWon =
     qualifiedCount > 0
       ? Number(((wonCount / qualifiedCount) * 100).toFixed(1))
@@ -362,7 +368,7 @@ export async function buildDashboardData(
   const qualifiedLeadsCount = qualifiedLeads;
   const wonLeadsCount = wonLeads;
   const notQualifiedLeadsCount = notQualifiedLeads;
-  const nonQualifiedLeadsCount = notQualifiedLeads; // ✅ NEW alias
+  const nonQualifiedLeadsCount = notQualifiedLeads;
 
   return {
     periodLabel: periodLabel(period),
@@ -375,6 +381,8 @@ export async function buildDashboardData(
     wonLeadsCount,
     notQualifiedLeadsCount,
     nonQualifiedLeadsCount,
+
+    conversionFromQualified,
 
     leadsTotal,
     qualifiedLeads,
