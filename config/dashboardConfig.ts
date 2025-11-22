@@ -17,10 +17,10 @@ export const dashboardConfig = {
 
   // ------------------------------------------------------------------
   // Loss reason logic
-  // dashboard.ts expects QUALIFIED_LOSS_REASON_IDS
   // ------------------------------------------------------------------
-  QUALIFIED_LOSS_REASON_IDS: [] as number[],      // ✅ required
-  NON_QUALIFIED_LOSS_REASON_IDS: [] as number[],  // optional (safe to keep)
+  QUALIFIED_LOSS_REASON_IDS: [] as number[], // lost reasons that still count as qualified
+  NOT_QUALIFIED_REASON_IDS: [] as number[],  // ✅ required by dashboard.ts
+  NON_QUALIFIED_LOSS_REASON_IDS: [] as number[], // optional alias/safety
 
   // ------------------------------------------------------------------
   // Custom field IDs (amoCRM)
