@@ -1,151 +1,109 @@
+// app/api/admin/save-config/route.ts
 import { NextResponse } from "next/server";
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-
-const GH_TOKEN = process.env.GITHUB_TOKEN!;
-const GH_OWNER = process.env.GITHUB_OWNER!;
-const GH_REPO = process.env.GITHUB_REPO!;
-const GH_BRANCH = process.env.GITHUB_BRANCH || "main";
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN!;
+const GITHUB_OWNER = process.env.GITHUB_OWNER!;
+const GITHUB_REPO = process.env.GITHUB_REPO!;
+const GITHUB_BRANCH = process.env.GITHUB_BRANCH || "main";
 
 const FILE_PATH = "config/dashboardConfig.ts";
 
-function b64encode(str: string) {
-  return Buffer.from(str, "utf8").toString("base64");
-}
-
-function b64decode(str: string) {
-  return Buffer.from(str, "base64").toString("utf8");
-}
-
-// Convert object to TS object literal string
-function toTsObject(obj: any) {
-  return JSON.stringify(obj, null, 2)
-    .replace(/"([^"]+)":/g, "$1:") // remove quotes from keys
-    .replace(/null/g, "null")
-    .replace(/true|false/g, (m) => m);
-}
+type SaveBody =
+  | { type: "constructor"; data: any }
+  | { type: "tushum"; data: any };
 
 async function githubGetFile() {
-  const url = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${FILE_PATH}?ref=${GH_BRANCH}`;
+  const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${FILE_PATH}?ref=${GITHUB_BRANCH}`;
   const res = await fetch(url, {
     headers: {
-      Authorization: `Bearer ${GH_TOKEN}`,
+      Authorization: `Bearer ${GITHUB_TOKEN}`,
       Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
     },
+    cache: "no-store",
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error("GitHub GET failed: " + text);
-  }
-  return res.json() as Promise<{ content: string; sha: string }>;
+  if (!res.ok) throw new Error("GitHub file read failed");
+  return res.json();
 }
 
-async function githubPutFile(newContent: string, sha: string, message: string) {
-  const url = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${FILE_PATH}`;
+async function githubUpdateFile(content: string, sha: string, message: string) {
+  const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${FILE_PATH}`;
   const res = await fetch(url, {
     method: "PUT",
     headers: {
-      Authorization: `Bearer ${GH_TOKEN}`,
+      Authorization: `Bearer ${GITHUB_TOKEN}`,
       Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
       message,
-      content: b64encode(newContent),
+      content: Buffer.from(content).toString("base64"),
       sha,
-      branch: GH_BRANCH,
+      branch: GITHUB_BRANCH,
     }),
   });
+
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error("GitHub PUT failed: " + text);
+    const txt = await res.text();
+    throw new Error("GitHub update failed: " + txt);
   }
   return res.json();
 }
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    if (!body?.type) {
-      return NextResponse.json({ ok: false, error: "type is required" }, { status: 400 });
-    }
+    const body = (await req.json()) as SaveBody;
 
-    // 1) read file from GitHub
-    const { content, sha } = await githubGetFile();
-    let text = b64decode(content);
+    const file = await githubGetFile();
+    const sha = file.sha;
+    const raw = Buffer.from(file.content, "base64").toString("utf8");
 
-    // 2) parse current dashboardConfig block (best-effort)
-    const match = text.match(/export const dashboardConfig = ({[\s\S]*?});/m);
-    let current: any = {};
+    // cfg objectni regex bilan topib olamiz
+    const match = raw.match(/const cfg: DashboardConfig = (\{[\s\S]*?\});/);
+    if (!match) throw new Error("cfg not found in dashboardConfig.ts");
 
-    if (match) {
-      try {
-        const tsObj = match[1];
-        const jsonish = tsObj
-          .replace(/(\w+)\s*:/g, '"$1":')
-          .replace(/'/g, '"')
-          .replace(/,\s*}/g, "}")
-          .replace(/,\s*]/g, "]");
-        current = JSON.parse(jsonish);
-      } catch {
-        current = {};
-      }
-    }
+    const cfgText = match[1];
 
-    // 3) apply updates
+    // eslint-disable-next-line no-eval
+    const currentCfg = eval("(" + cfgText + ")");
+
+    let newCfg = { ...currentCfg };
+
     if (body.type === "constructor") {
-      current = { ...current, ...body.data };
-    }
-
-    if (body.type === "tushum") {
-      current.REVENUE_SHEETS = {
-        ...(current.REVENUE_SHEETS || {}),
+      newCfg = {
+        ...newCfg,
         ...body.data,
       };
     }
 
-    // 4) keep backward-compatible aliases
-    current.REVENUE_SHEETS_URL = current.REVENUE_SHEETS?.link || "";
-    current.REVENUE_MANAGER_COLUMN = current.REVENUE_SHEETS?.managerColumn || "";
-    current.REVENUE_DATE_COLUMN = current.REVENUE_SHEETS?.dateColumn || "";
-    current.REVENUE_PAYMENT_TYPE_COLUMN = current.REVENUE_SHEETS?.paymentTypeColumn || "";
-    current.REVENUE_INCOME_TYPE_COLUMN = current.REVENUE_SHEETS?.incomeTypeColumn || "";
-    current.REVENUE_AMOUNT_COLUMN = current.REVENUE_SHEETS?.amountColumn || "";
-    current.REVENUE_COURSE_TYPE_COLUMN = current.REVENUE_SHEETS?.courseTypeColumn || "";
-
-    // 5) rebuild dashboardConfig.ts block
-    const newBlock =
-`export const dashboardConfig = ${toTsObject(current)};
-
-dashboardConfig.REVENUE_SHEETS_URL = dashboardConfig.REVENUE_SHEETS.link;
-dashboardConfig.REVENUE_MANAGER_COLUMN = dashboardConfig.REVENUE_SHEETS.managerColumn;
-dashboardConfig.REVENUE_DATE_COLUMN = dashboardConfig.REVENUE_SHEETS.dateColumn;
-dashboardConfig.REVENUE_PAYMENT_TYPE_COLUMN = dashboardConfig.REVENUE_SHEETS.paymentTypeColumn;
-dashboardConfig.REVENUE_INCOME_TYPE_COLUMN = dashboardConfig.REVENUE_SHEETS.incomeTypeColumn;
-dashboardConfig.REVENUE_AMOUNT_COLUMN = dashboardConfig.REVENUE_SHEETS.amountColumn;
-dashboardConfig.REVENUE_COURSE_TYPE_COLUMN = dashboardConfig.REVENUE_SHEETS.courseTypeColumn;
-
-export const DASHBOARD_CONFIG = dashboardConfig;
-export const REVENUE_SHEETS = dashboardConfig.REVENUE_SHEETS;
-`;
-
-    if (text.includes("export const dashboardConfig =")) {
-      text = text.replace(/export const dashboardConfig = {[\s\S]*?};[\s\S]*?export const REVENUE_SHEETS =[\s\S]*?;/m, newBlock);
-    } else {
-      text += "\n\n" + newBlock;
+    if (body.type === "tushum") {
+      newCfg = {
+        ...newCfg,
+        REVENUE_SHEETS: {
+          ...(newCfg.REVENUE_SHEETS || {}),
+          ...body.data,
+        },
+      };
     }
 
-    // 6) push to GitHub (triggers redeploy)
-    await githubPutFile(text, sha, `Update dashboardConfig (${body.type})`);
+    const updatedCfgText = JSON.stringify(newCfg, null, 2);
+
+    const updatedFile =
+      raw.replace(
+        /const cfg: DashboardConfig = (\{[\s\S]*?\});/,
+        `const cfg: DashboardConfig = ${updatedCfgText};`
+      );
+
+    const commitMsg =
+      body.type === "constructor"
+        ? "Update constructor dashboard config"
+        : "Update revenue sheets config";
+
+    await githubUpdateFile(updatedFile, sha, commitMsg);
 
     return NextResponse.json({ ok: true });
-  } catch (err: any) {
-    console.error("[save-config] error", err);
+  } catch (e: any) {
     return NextResponse.json(
-      { ok: false, error: err?.message || "Unknown error" },
+      { ok: false, error: e.message },
       { status: 500 }
     );
   }
