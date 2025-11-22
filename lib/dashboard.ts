@@ -14,6 +14,11 @@ export type Period =
   | "lastMonth";
 
 export type ManagerSalesRow = {
+  // ✅ legacy fields expected by UI
+  managerId: string;
+  managerName: string;
+
+  // new/actual fields
   manager: string;
   leads: number;
   qualified: number;
@@ -22,7 +27,6 @@ export type ManagerSalesRow = {
 };
 
 export type DashboardData = {
-  // ✅ legacy fields for current UI (aliases)
   periodLabel: string;
 
   kelishuvSummasi: number;
@@ -37,21 +41,17 @@ export type DashboardData = {
 
   conversionFromQualified: number; // ratio [0..1]
 
-  // ✅ Revenue legacy + new universal field
-  tushum: number;           // universal "tushum" (periodga qarab)
-  haftalikTushum: number;  // legacy
-  kunlikTushum: number;    // legacy
-  oylikTushum: number;     // legacy
+  tushum: number;
+  haftalikTushum: number;
+  kunlikTushum: number;
+  oylikTushum: number;
 
-  // ✅ legacy array alias
-  nonQualifiedReasons: { name: string; count: number }[]; // UI uses this
-  notQualifiedReasons: { name: string; count: number }[]; // new name
+  nonQualifiedReasons: { name: string; count: number }[];
+  notQualifiedReasons: { name: string; count: number }[];
 
-  // ✅ legacy managers sales alias
-  managerSales: ManagerSalesRow[];   // UI uses this
-  managersSales: ManagerSalesRow[];  // new name
+  managerSales: ManagerSalesRow[];   // legacy
+  managersSales: ManagerSalesRow[];  // new
 
-  // main stats (new names)
   leadsTotal: number;
   qualifiedLeads: number;
   notQualifiedLeads: number;
@@ -82,6 +82,14 @@ function inRange(d: Date, from: Date, to: Date) {
   return d >= from && d <= to;
 }
 
+function slugify(str: string) {
+  return String(str || "unknown")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9\-_.]/g, "");
+}
+
 function getPeriodRange(period: Period) {
   const now = new Date();
 
@@ -100,7 +108,7 @@ function getPeriodRange(period: Period) {
 
   if (period === "thisWeek" || period === "lastWeek") {
     const d = new Date(now);
-    const day = d.getDay(); // 0 sunday
+    const day = d.getDay();
     const mondayOffset = (day + 6) % 7;
     d.setDate(d.getDate() - mondayOffset);
 
@@ -185,7 +193,6 @@ function isLost(lead: AmoLead) {
   return dashboardConfig.LOST_STATUS_IDS.includes(lead.status_id || -1);
 }
 
-// amo lead.custom_fields_values helper
 function getCustomField(lead: any, fieldId: number) {
   const arr = lead?.custom_fields_values || [];
   return arr.find((f: any) => f.field_id === fieldId);
@@ -213,7 +220,6 @@ function getObjectionKey(lead: AmoLead): number | null {
     );
     if (enumId != null) return enumId;
   }
-
   if (lead.loss_reason_id != null) return lead.loss_reason_id;
   return null;
 }
@@ -309,7 +315,6 @@ export async function buildDashboardData(
     managersMap.set(manager, m);
   });
 
-  // conversions
   const conversionFromQualified =
     qualifiedCount > 0 ? wonCount / qualifiedCount : 0;
 
@@ -354,20 +359,20 @@ export async function buildDashboardData(
     name: `Reason #${id}`,
     count,
   }));
-
   const nonQualifiedReasons = notQualifiedReasons;
 
   const managersSales: ManagerSalesRow[] = Array.from(
     managersMap.entries()
   ).map(([manager, v]) => ({
-    manager,
+    managerId: slugify(manager),   // ✅ legacy
+    managerName: manager,         // ✅ legacy
+    manager,                      // new
     leads: v.leads,
     qualified: v.qualified,
     won: v.won,
     revenue: v.revenue,
   }));
-
-  const managerSales = managersSales; // ✅ legacy alias
+  const managerSales = managersSales;
 
   // new names
   const leadsTotal = leads.length;
@@ -380,13 +385,13 @@ export async function buildDashboardData(
   const onlineSummasi = revenueOnline;
   const offlineSummasi = revenueOffline;
 
-  // universal + legacy tushum fields
+  // tushum fields
   const tushum = revenueTotal;
   const haftalikTushum = revenueTotal;
   const kunlikTushum = revenueTotal;
   const oylikTushum = revenueTotal;
 
-  // legacy count aliases
+  // legacy counts
   const leadsCount = leadsTotal;
   const qualifiedLeadsCount = qualifiedLeads;
   const wonLeadsCount = wonLeads;
