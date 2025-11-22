@@ -14,13 +14,18 @@ export type Period =
   | "lastMonth";
 
 export type DashboardData = {
-  // ✅ legacy fields for current UI (DO NOT BREAK UI)
+  // ✅ legacy fields for current UI (aliases)
   periodLabel: string;
   kelishuvSummasi: number;
   onlineSummasi: number;
   offlineSummasi: number;
 
-  // main stats
+  leadsCount: number;
+  qualifiedLeadsCount: number;
+  notQualifiedLeadsCount: number;
+  wonLeadsCount: number;
+
+  // main stats (new names)
   leadsTotal: number;
   qualifiedLeads: number;
   notQualifiedLeads: number;
@@ -345,16 +350,32 @@ export async function buildDashboardData(
   const onlineSummasi = revenueOnline;
   const offlineSummasi = revenueOffline;
 
+  const leadsTotal = leads.length;
+  const qualifiedLeads = qualifiedCount;
+  const wonLeads = wonCount;
+  const notQualifiedLeads = leadsTotal - qualifiedLeads;
+
+  // ✅ aliases
+  const leadsCount = leadsTotal;
+  const qualifiedLeadsCount = qualifiedLeads;
+  const wonLeadsCount = wonLeads;
+  const notQualifiedLeadsCount = notQualifiedLeads;
+
   return {
     periodLabel: periodLabel(period),
     kelishuvSummasi,
     onlineSummasi,
     offlineSummasi,
 
-    leadsTotal: leads.length,
-    qualifiedLeads: qualifiedCount,
-    notQualifiedLeads: leads.length - qualifiedCount,
-    wonLeads: wonCount,
+    leadsCount,
+    qualifiedLeadsCount,
+    wonLeadsCount,
+    notQualifiedLeadsCount,
+
+    leadsTotal,
+    qualifiedLeads,
+    notQualifiedLeads,
+    wonLeads,
     onlineWonCount,
     offlineWonCount,
     conversionQualifiedToWon,
