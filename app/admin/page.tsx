@@ -11,7 +11,6 @@ type MetaCustomField = {
   type: string;
   enums?: { id: number; value: string }[];
 };
-
 type MetaResponse = {
   pipelines: MetaPipeline[];
   statuses: MetaStatus[];
@@ -46,9 +45,6 @@ export default function AdminPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  // =========================
-  // Constructor state
-  // =========================
   const [constructorData, setConstructorData] = useState<ConstructorState>({
     PIPELINE_IDS: [],
     QUALIFIED_STATUS_IDS: [],
@@ -67,9 +63,6 @@ export default function AdminPage() {
     USE_SHEETS_CALLS: false,
   });
 
-  // =========================
-  // Tushum state
-  // =========================
   const [tushum, setTushum] = useState({
     link: "",
     managerColumn: "",
@@ -80,9 +73,6 @@ export default function AdminPage() {
     courseTypeColumn: "",
   });
 
-  // =========================
-  // Load meta for constructor
-  // =========================
   useEffect(() => {
     if (tab !== "constructor") return;
     (async () => {
@@ -105,24 +95,28 @@ export default function AdminPage() {
     })();
   }, [tab]);
 
-  // Helper togglers
   const toggleId = (arr: number[], id: number) =>
     arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id];
+
+  // ✅ Filter statuses by selected pipelines
+  const filteredStatuses = useMemo(() => {
+    if (!meta) return [];
+    if (!constructorData.PIPELINE_IDS.length) return meta.statuses;
+    return meta.statuses.filter((st) =>
+      st.pipeline_id ? constructorData.PIPELINE_IDS.includes(st.pipeline_id) : false
+    );
+  }, [meta, constructorData.PIPELINE_IDS]);
 
   const selectedCourseField = useMemo(() => {
     if (!meta || !constructorData.COURSE_TYPE_FIELD_ID) return null;
     return meta.customFields.find((f) => f.id === constructorData.COURSE_TYPE_FIELD_ID) || null;
   }, [meta, constructorData.COURSE_TYPE_FIELD_ID]);
 
-  // =========================
-  // Save constructor
-  // =========================
   async function saveConstructor() {
     try {
       setSaving(true);
       setMsg(null);
       setErr(null);
-
       const res = await fetch("/api/admin/save-config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -130,8 +124,7 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (!res.ok || data.ok === false) throw new Error(data.error || "Save failed");
-
-      setMsg("✅ Constructor konfiguratsiyasi saqlandi!");
+      setMsg("✅ Constructor konfiguratsiyasi GitHub’ga saqlandi (redeploy bo‘ladi)!");
     } catch (e: any) {
       setErr("❌ " + e.message);
     } finally {
@@ -139,15 +132,11 @@ export default function AdminPage() {
     }
   }
 
-  // =========================
-  // Save tushum
-  // =========================
   async function saveTushum() {
     try {
       setSaving(true);
       setMsg(null);
       setErr(null);
-
       const res = await fetch("/api/admin/save-config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -155,8 +144,7 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (!res.ok || data.ok === false) throw new Error(data.error || "Save failed");
-
-      setMsg("✅ Tushum konfiguratsiyasi saqlandi!");
+      setMsg("✅ Tushum konfiguratsiyasi GitHub’ga saqlandi (redeploy bo‘ladi)!");
     } catch (e: any) {
       setErr("❌ " + e.message);
     } finally {
@@ -168,85 +156,51 @@ export default function AdminPage() {
     <main className="min-h-screen bg-slate-950 p-6 text-slate-50">
       <h1 className="mb-6 text-3xl font-bold">Admin panel</h1>
 
-      {/* Tabs */}
       <div className="mb-6 flex gap-3">
-        <button
-          onClick={() => setTab("info")}
-          className={`rounded px-3 py-1 ${
-            tab === "info" ? "bg-emerald-600" : "bg-slate-800"
-          }`}
-        >
+        <button onClick={() => setTab("info")}
+          className={`rounded px-3 py-1 ${tab === "info" ? "bg-emerald-600" : "bg-slate-800"}`}>
           Info
         </button>
-        <button
-          onClick={() => setTab("constructor")}
-          className={`rounded px-3 py-1 ${
-            tab === "constructor" ? "bg-emerald-600" : "bg-slate-800"
-          }`}
-        >
+        <button onClick={() => setTab("constructor")}
+          className={`rounded px-3 py-1 ${tab === "constructor" ? "bg-emerald-600" : "bg-slate-800"}`}>
           Constructor
         </button>
-        <button
-          onClick={() => setTab("tushum")}
-          className={`rounded px-3 py-1 ${
-            tab === "tushum" ? "bg-emerald-600" : "bg-slate-800"
-          }`}
-        >
+        <button onClick={() => setTab("tushum")}
+          className={`rounded px-3 py-1 ${tab === "tushum" ? "bg-emerald-600" : "bg-slate-800"}`}>
           Tushum
         </button>
       </div>
 
-      {/* Messages */}
-      {msg && (
-        <div className="mb-3 rounded bg-emerald-900/40 px-3 py-2 text-sm text-emerald-200">
-          {msg}
-        </div>
-      )}
-      {err && (
-        <div className="mb-3 rounded bg-red-900/40 px-3 py-2 text-sm text-red-200">
-          {err}
-        </div>
-      )}
+      {msg && <div className="mb-3 rounded bg-emerald-900/40 px-3 py-2 text-sm text-emerald-200">{msg}</div>}
+      {err && <div className="mb-3 rounded bg-red-900/40 px-3 py-2 text-sm text-red-200">{err}</div>}
 
-      {/* INFO TAB */}
       {tab === "info" && (
         <div className="rounded-xl bg-slate-900/60 p-6">
-          <h2 className="text-xl font-semibold text-slate-100">
-            ℹ️ Umumiy ma'lumot
-          </h2>
+          <h2 className="text-xl font-semibold">ℹ️ Umumiy ma'lumot</h2>
           <p className="mt-2 text-sm text-slate-400">
-            Bu panel orqali amoCRM status/pipeline mapping va Google Sheets tushum integratsiyasini sozlaysiz.
-            Constructor bo‘limini to‘ldirmasangiz Dashboard statistikasi noto‘g‘ri chiqadi.
+            Constructor bo‘limini to‘ldirib saqlasangiz, Dashboard hisoblashlari to‘g‘ri ishlaydi.
+            Saqlash GitHub’ga yozadi va Vercel qayta deploy bo‘ladi.
           </p>
         </div>
       )}
 
-      {/* CONSTRUCTOR TAB */}
       {tab === "constructor" && (
         <div className="space-y-5 rounded-xl bg-slate-900/60 p-6">
-          <h2 className="text-xl font-bold text-slate-100">
-            ⚙️ Status Constructor
-          </h2>
+          <h2 className="text-xl font-bold">⚙️ Status Constructor</h2>
 
           {loadingMeta ? (
             <p className="text-sm text-slate-300">Meta yuklanyapti...</p>
           ) : !meta ? (
-            <p className="text-sm text-slate-300">
-              Meta topilmadi. /api/meta ishlayotganini tekshiring.
-            </p>
+            <p className="text-sm text-slate-300">Meta topilmadi. /api/meta ni tekshiring.</p>
           ) : (
             <>
               {/* Pipelines */}
               <div>
-                <label className="mb-2 block text-sm text-slate-300">
-                  Pipeline(lar)
-                </label>
+                <label className="mb-2 block text-sm text-slate-300">Pipeline(lar)</label>
                 <div className="grid grid-cols-2 gap-2">
                   {meta.pipelines.map((p) => (
-                    <label
-                      key={p.id}
-                      className="flex items-center gap-2 rounded bg-slate-800 px-3 py-2 text-sm"
-                    >
+                    <label key={p.id}
+                      className="flex items-center gap-2 rounded bg-slate-800 px-3 py-2 text-sm">
                       <input
                         type="checkbox"
                         checked={constructorData.PIPELINE_IDS.includes(p.id)}
@@ -254,6 +208,10 @@ export default function AdminPage() {
                           setConstructorData((s) => ({
                             ...s,
                             PIPELINE_IDS: toggleId(s.PIPELINE_IDS, p.id),
+                            // ✅ reset statuses when pipeline changes to avoid mixing
+                            QUALIFIED_STATUS_IDS: [],
+                            WON_STATUS_IDS: [],
+                            LOST_STATUS_IDS: [],
                           }))
                         }
                       />
@@ -261,17 +219,19 @@ export default function AdminPage() {
                     </label>
                   ))}
                 </div>
+                {!!constructorData.PIPELINE_IDS.length && (
+                  <p className="mt-1 text-xs text-slate-400">
+                    Statuslar faqat tanlangan pipeline’lardan ko‘rsatiladi.
+                  </p>
+                )}
               </div>
 
               {/* Status groups */}
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                {/* Qualified */}
                 <div>
-                  <label className="mb-2 block text-sm text-slate-300">
-                    Sifatli lid statuslari
-                  </label>
+                  <label className="mb-2 block text-sm text-slate-300">Sifatli lid statuslari</label>
                   <div className="max-h-72 space-y-1 overflow-auto rounded bg-slate-800 p-2">
-                    {meta.statuses.map((st) => (
+                    {filteredStatuses.map((st) => (
                       <label key={st.id} className="flex items-center gap-2 px-2 py-1 text-xs">
                         <input
                           type="checkbox"
@@ -289,13 +249,10 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                {/* WON */}
                 <div>
-                  <label className="mb-2 block text-sm text-slate-300">
-                    Sotib olgan (Won) statuslari
-                  </label>
+                  <label className="mb-2 block text-sm text-slate-300">Sotib olgan (Won) statuslari</label>
                   <div className="max-h-72 space-y-1 overflow-auto rounded bg-slate-800 p-2">
-                    {meta.statuses.map((st) => (
+                    {filteredStatuses.map((st) => (
                       <label key={st.id} className="flex items-center gap-2 px-2 py-1 text-xs">
                         <input
                           type="checkbox"
@@ -313,13 +270,10 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                {/* LOST */}
                 <div>
-                  <label className="mb-2 block text-sm text-slate-300">
-                    Yo‘qotilgan (Lost) statuslari
-                  </label>
+                  <label className="mb-2 block text-sm text-slate-300">Yo‘qotilgan (Lost) statuslari</label>
                   <div className="max-h-72 space-y-1 overflow-auto rounded bg-slate-800 p-2">
-                    {meta.statuses.map((st) => (
+                    {filteredStatuses.map((st) => (
                       <label key={st.id} className="flex items-center gap-2 px-2 py-1 text-xs">
                         <input
                           type="checkbox"
@@ -340,11 +294,8 @@ export default function AdminPage() {
 
               {/* Loss reasons */}
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                {/* Qualified loss reasons */}
                 <div>
-                  <label className="mb-2 block text-sm text-slate-300">
-                    “Sifatli” deb hisoblanadigan E’tiroz sabablari
-                  </label>
+                  <label className="mb-2 block text-sm text-slate-300">“Sifatli” E’tiroz sabablari</label>
                   <div className="max-h-64 space-y-1 overflow-auto rounded bg-slate-800 p-2">
                     {meta.lossReasons.map((lr) => (
                       <label key={lr.id} className="flex items-center gap-2 px-2 py-1 text-xs">
@@ -364,11 +315,8 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                {/* Not qualified reasons */}
                 <div>
-                  <label className="mb-2 block text-sm text-slate-300">
-                    “Sifatsiz” E’tiroz sabablari
-                  </label>
+                  <label className="mb-2 block text-sm text-slate-300">“Sifatsiz” E’tiroz sabablari</label>
                   <div className="max-h-64 space-y-1 overflow-auto rounded bg-slate-800 p-2">
                     {meta.lossReasons.map((lr) => (
                       <label key={lr.id} className="flex items-center gap-2 px-2 py-1 text-xs">
@@ -392,9 +340,7 @@ export default function AdminPage() {
               {/* Custom fields */}
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm text-slate-300">
-                    Lead Source field (Qayerdan)
-                  </label>
+                  <label className="mb-1 block text-sm text-slate-300">Lead Source field (Qayerdan)</label>
                   <select
                     className="w-full rounded bg-slate-800 px-3 py-2 text-sm"
                     value={constructorData.LEAD_SOURCE_FIELD_ID ?? ""}
@@ -415,9 +361,7 @@ export default function AdminPage() {
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm text-slate-300">
-                    Course Type field (Kurs turi)
-                  </label>
+                  <label className="mb-1 block text-sm text-slate-300">Course Type field (Kurs turi)</label>
                   <select
                     className="w-full rounded bg-slate-800 px-3 py-2 text-sm"
                     value={constructorData.COURSE_TYPE_FIELD_ID ?? ""}
@@ -488,7 +432,7 @@ export default function AdminPage() {
               ) : (
                 constructorData.COURSE_TYPE_FIELD_ID && (
                   <p className="text-xs text-slate-400">
-                    Kurs turi fieldida enumlar topilmadi. amoCRM custom fieldini tekshiring.
+                    Kurs turi fieldida enumlar topilmadi.
                   </p>
                 )
               )}
@@ -518,7 +462,6 @@ export default function AdminPage() {
                 </label>
               </div>
 
-              {/* Save */}
               <div className="pt-2">
                 <button
                   onClick={saveConstructor}
@@ -533,23 +476,16 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* TUSHUM TAB */}
       {tab === "tushum" && (
         <div className="space-y-4 rounded-xl bg-slate-900/60 p-6">
-          <h2 className="text-xl font-bold text-slate-100">
-            💵 Tushum (Sheets integratsiya)
-          </h2>
-          <p className="text-sm text-slate-400">
-            Google Sheets orqali tushum ma’lumotlarini Dashboard’ga ulash.
-          </p>
+          <h2 className="text-xl font-bold">💵 Tushum (Sheets integratsiya)</h2>
 
           <div className="space-y-3">
             <div>
               <label className="block text-sm text-slate-300">Google Sheets havolasi</label>
               <input
                 type="text"
-                placeholder="https://docs.google.com/spreadsheets/d/..."
-                className="w-full rounded bg-slate-800 px-3 py-2 text-slate-100"
+                className="w-full rounded bg-slate-800 px-3 py-2"
                 value={tushum.link}
                 onChange={(e) => setTushum({ ...tushum, link: e.target.value })}
               />
@@ -560,94 +496,72 @@ export default function AdminPage() {
                 <label className="block text-sm text-slate-300">Menejer ustuni (Baza!A)</label>
                 <input
                   type="text"
-                  className="w-full rounded bg-slate-800 px-3 py-2 text-slate-100"
+                  className="w-full rounded bg-slate-800 px-3 py-2"
                   value={tushum.managerColumn}
-                  onChange={(e) =>
-                    setTushum({ ...tushum, managerColumn: e.target.value })
-                  }
+                  onChange={(e) => setTushum({ ...tushum, managerColumn: e.target.value })}
                 />
               </div>
               <div>
                 <label className="block text-sm text-slate-300">Sana ustuni (Baza!B)</label>
                 <input
                   type="text"
-                  className="w-full rounded bg-slate-800 px-3 py-2 text-slate-100"
+                  className="w-full rounded bg-slate-800 px-3 py-2"
                   value={tushum.dateColumn}
-                  onChange={(e) =>
-                    setTushum({ ...tushum, dateColumn: e.target.value })
-                  }
+                  onChange={(e) => setTushum({ ...tushum, dateColumn: e.target.value })}
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm text-slate-300">
-                  To‘lov turi ustuni (first/middle/last)
-                </label>
+                <label className="block text-sm text-slate-300">To‘lov turi ustuni</label>
                 <input
                   type="text"
-                  className="w-full rounded bg-slate-800 px-3 py-2 text-slate-100"
+                  className="w-full rounded bg-slate-800 px-3 py-2"
                   value={tushum.paymentTypeColumn}
-                  onChange={(e) =>
-                    setTushum({ ...tushum, paymentTypeColumn: e.target.value })
-                  }
+                  onChange={(e) => setTushum({ ...tushum, paymentTypeColumn: e.target.value })}
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-300">
-                  Tushum turi ustuni (online/offline)
-                </label>
+                <label className="block text-sm text-slate-300">Tushum turi ustuni</label>
                 <input
                   type="text"
-                  className="w-full rounded bg-slate-800 px-3 py-2 text-slate-100"
+                  className="w-full rounded bg-slate-800 px-3 py-2"
                   value={tushum.incomeTypeColumn}
-                  onChange={(e) =>
-                    setTushum({ ...tushum, incomeTypeColumn: e.target.value })
-                  }
+                  onChange={(e) => setTushum({ ...tushum, incomeTypeColumn: e.target.value })}
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm text-slate-300">
-                  Summasi ustuni (Baza!E)
-                </label>
+                <label className="block text-sm text-slate-300">Summasi ustuni</label>
                 <input
                   type="text"
-                  className="w-full rounded bg-slate-800 px-3 py-2 text-slate-100"
+                  className="w-full rounded bg-slate-800 px-3 py-2"
                   value={tushum.amountColumn}
-                  onChange={(e) =>
-                    setTushum({ ...tushum, amountColumn: e.target.value })
-                  }
+                  onChange={(e) => setTushum({ ...tushum, amountColumn: e.target.value })}
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-300">
-                  Kurs turi ustuni (agar bo‘lsa)
-                </label>
+                <label className="block text-sm text-slate-300">Kurs turi ustuni</label>
                 <input
                   type="text"
-                  className="w-full rounded bg-slate-800 px-3 py-2 text-slate-100"
+                  className="w-full rounded bg-slate-800 px-3 py-2"
                   value={tushum.courseTypeColumn}
-                  onChange={(e) =>
-                    setTushum({ ...tushum, courseTypeColumn: e.target.value })
-                  }
+                  onChange={(e) => setTushum({ ...tushum, courseTypeColumn: e.target.value })}
                 />
               </div>
             </div>
           </div>
 
-          <div className="pt-2">
-            <button
-              onClick={saveTushum}
-              disabled={saving}
-              className="rounded bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
-            >
-              {saving ? "Saqlanyapti..." : "Tushumni saqlash"}
-            </button>
-          </div>
+          <button
+            onClick={saveTushum}
+            disabled={saving}
+            className="rounded bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
+          >
+            {saving ? "Saqlanyapti..." : "Tushumni saqlash"}
+          </button>
         </div>
       )}
     </main>
