@@ -23,6 +23,7 @@ export type DashboardData = {
   leadsCount: number;
   qualifiedLeadsCount: number;
   notQualifiedLeadsCount: number;
+  nonQualifiedLeadsCount: number; // ✅ NEW alias needed by UI
   wonLeadsCount: number;
 
   // main stats (new names)
@@ -345,21 +346,23 @@ export async function buildDashboardData(
     })
   );
 
-  // ✅ legacy UI mapping:
-  const kelishuvSummasi = revenueTotal;
-  const onlineSummasi = revenueOnline;
-  const offlineSummasi = revenueOffline;
-
+  // new names
   const leadsTotal = leads.length;
   const qualifiedLeads = qualifiedCount;
   const wonLeads = wonCount;
   const notQualifiedLeads = leadsTotal - qualifiedLeads;
 
-  // ✅ aliases
+  // legacy money fields
+  const kelishuvSummasi = revenueTotal;
+  const onlineSummasi = revenueOnline;
+  const offlineSummasi = revenueOffline;
+
+  // legacy count aliases
   const leadsCount = leadsTotal;
   const qualifiedLeadsCount = qualifiedLeads;
   const wonLeadsCount = wonLeads;
   const notQualifiedLeadsCount = notQualifiedLeads;
+  const nonQualifiedLeadsCount = notQualifiedLeads; // ✅ NEW alias
 
   return {
     periodLabel: periodLabel(period),
@@ -371,6 +374,7 @@ export async function buildDashboardData(
     qualifiedLeadsCount,
     wonLeadsCount,
     notQualifiedLeadsCount,
+    nonQualifiedLeadsCount,
 
     leadsTotal,
     qualifiedLeads,
