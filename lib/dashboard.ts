@@ -17,6 +17,10 @@ export type ManagerSalesRow = {
   // ✅ legacy fields expected by UI
   managerId: string;
   managerName: string;
+  totalLeads: number;
+  qualifiedLeads: number;
+  wonLeads: number;
+  totalRevenue: number;
 
   // new/actual fields
   manager: string;
@@ -270,6 +274,7 @@ export async function buildDashboardData(
       ) ?? -1
     );
 
+  // leads + manager counters
   leads.forEach((lead) => {
     const manager = (lead as any).responsible_user_name || "Unknown";
     const m =
@@ -364,9 +369,18 @@ export async function buildDashboardData(
   const managersSales: ManagerSalesRow[] = Array.from(
     managersMap.entries()
   ).map(([manager, v]) => ({
-    managerId: slugify(manager),   // ✅ legacy
-    managerName: manager,         // ✅ legacy
-    manager,                      // new
+    // legacy ids/names
+    managerId: slugify(manager),
+    managerName: manager,
+
+    // legacy totals
+    totalLeads: v.leads,
+    qualifiedLeads: v.qualified,
+    wonLeads: v.won,
+    totalRevenue: v.revenue,
+
+    // new fields
+    manager,
     leads: v.leads,
     qualified: v.qualified,
     won: v.won,
@@ -374,24 +388,20 @@ export async function buildDashboardData(
   }));
   const managerSales = managersSales;
 
-  // new names
   const leadsTotal = leads.length;
   const qualifiedLeads = qualifiedCount;
   const wonLeads = wonCount;
   const notQualifiedLeads = leadsTotal - qualifiedLeads;
 
-  // legacy money fields
   const kelishuvSummasi = revenueTotal;
   const onlineSummasi = revenueOnline;
   const offlineSummasi = revenueOffline;
 
-  // tushum fields
   const tushum = revenueTotal;
   const haftalikTushum = revenueTotal;
   const kunlikTushum = revenueTotal;
   const oylikTushum = revenueTotal;
 
-  // legacy counts
   const leadsCount = leadsTotal;
   const qualifiedLeadsCount = qualifiedLeads;
   const wonLeadsCount = wonLeads;
