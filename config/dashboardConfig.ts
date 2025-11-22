@@ -1,5 +1,6 @@
 // config/dashboardConfig.ts
-// Must match all fields referenced in lib/dashboard.ts
+// One config object, but grouped + backward compatible aliases.
+// Your code imports { dashboardConfig }.
 
 export const dashboardConfig = {
   // ------------------------------------------------------------------
@@ -18,9 +19,9 @@ export const dashboardConfig = {
   // ------------------------------------------------------------------
   // Loss reason logic
   // ------------------------------------------------------------------
-  QUALIFIED_LOSS_REASON_IDS: [] as number[], // lost reasons that still count as qualified
-  NOT_QUALIFIED_REASON_IDS: [] as number[],  // ✅ required by dashboard.ts
-  NON_QUALIFIED_LOSS_REASON_IDS: [] as number[], // optional alias/safety
+  QUALIFIED_LOSS_REASON_IDS: [] as number[], // lost but still qualified
+  NOT_QUALIFIED_REASON_IDS: [] as number[],  // lost and not qualified
+  NON_QUALIFIED_LOSS_REASON_IDS: [] as number[], // optional alias
 
   // ------------------------------------------------------------------
   // Custom field IDs (amoCRM)
@@ -44,18 +45,49 @@ export const dashboardConfig = {
   USE_SHEETS_CALLS: false,
 
   // ------------------------------------------------------------------
-  // ✅ Google Sheets revenue integration (Admin → Tushum tab)
+  // ✅ NEW grouped revenue config (Admin → Tushum tab)
   // ------------------------------------------------------------------
   REVENUE_SHEETS: {
-    link: "",
-    managerColumn: "",
-    dateColumn: "",
-    paymentTypeColumn: "",
-    incomeTypeColumn: "",
-    amountColumn: "",
+    link: "",                // Google sheets full link
+    managerColumn: "",       // example: "Baza!A"
+    dateColumn: "",          // example: "Baza!B"
+    paymentTypeColumn: "",   // example: "Baza!C"
+    incomeTypeColumn: "",    // example: "Baza!D"
+    amountColumn: "",        // example: "Baza!E"
   },
+
+  // ------------------------------------------------------------------
+  // ✅ BACKWARD-COMPATIBLE ALIASES (old code expects these)
+  // We keep them so lib/revenueSheets.ts and others don’t break.
+  // They always mirror REVENUE_SHEETS above.
+  // ------------------------------------------------------------------
+
+  // old name for link
+  REVENUE_SHEETS_URL: "",
+
+  // old column names (if your revenueSheets.ts uses them)
+  REVENUE_MANAGER_COLUMN: "",
+  REVENUE_DATE_COLUMN: "",
+  REVENUE_PAYMENT_TYPE_COLUMN: "",
+  REVENUE_INCOME_TYPE_COLUMN: "",
+  REVENUE_AMOUNT_COLUMN: "",
 };
 
-// Backward-compatible named exports
+// --------------------------------------------------------------
+// Small helper to sync aliases when Admin saves grouped config.
+// IMPORTANT: save-config route should update BOTH grouped + aliases,
+// but even if it only updates grouped, we can mirror here on import.
+// --------------------------------------------------------------
+dashboardConfig.REVENUE_SHEETS_URL = dashboardConfig.REVENUE_SHEETS.link;
+dashboardConfig.REVENUE_MANAGER_COLUMN = dashboardConfig.REVENUE_SHEETS.managerColumn;
+dashboardConfig.REVENUE_DATE_COLUMN = dashboardConfig.REVENUE_SHEETS.dateColumn;
+dashboardConfig.REVENUE_PAYMENT_TYPE_COLUMN =
+  dashboardConfig.REVENUE_SHEETS.paymentTypeColumn;
+dashboardConfig.REVENUE_INCOME_TYPE_COLUMN =
+  dashboardConfig.REVENUE_SHEETS.incomeTypeColumn;
+dashboardConfig.REVENUE_AMOUNT_COLUMN =
+  dashboardConfig.REVENUE_SHEETS.amountColumn;
+
+// Backward-compatible exports
 export const DASHBOARD_CONFIG = dashboardConfig;
 export const REVENUE_SHEETS = dashboardConfig.REVENUE_SHEETS;
