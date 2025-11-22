@@ -14,6 +14,11 @@ export type Period =
   | "lastMonth";
 
 export type DashboardData = {
+  // ✅ legacy fields for current UI
+  periodLabel: string;
+  kelishuvSummasi: number;
+
+  // main stats
   leadsTotal: number;
   qualifiedLeads: number;
   notQualifiedLeads: number;
@@ -47,20 +52,14 @@ export type DashboardData = {
 };
 
 // -------------------------
-// ✅ helpers (local)
+// helpers
 // -------------------------
-function colLetterToIndex(letter: string) {
-  return letter.toUpperCase().charCodeAt(0) - 65;
-}
-
 function inRange(d: Date, from: Date, to: Date) {
   return d >= from && d <= to;
 }
 
 function getPeriodRange(period: Period) {
   const now = new Date();
-  const start = new Date(now);
-  const end = new Date(now);
 
   const dayStart = (x: Date) =>
     new Date(x.getFullYear(), x.getMonth(), x.getDate(), 0, 0, 0);
@@ -110,6 +109,25 @@ function getPeriodRange(period: Period) {
   return { from: dayStart(now), to: dayEnd(now) };
 }
 
+function periodLabel(period: Period) {
+  switch (period) {
+    case "today":
+      return "Bugun (kunlik hisobot)";
+    case "yesterday":
+      return "Kecha (kunlik hisobot)";
+    case "thisWeek":
+      return "Bu hafta (haftalik hisobot)";
+    case "lastWeek":
+      return "O‘tgan hafta (haftalik hisobot)";
+    case "thisMonth":
+      return "Bu oy (oylik hisobot)";
+    case "lastMonth":
+      return "O‘tgan oy (oylik hisobot)";
+    default:
+      return "Hisobot";
+  }
+}
+
 function leadCreatedAt(lead: AmoLead): Date {
   return new Date((lead.created_at || 0) * 1000);
 }
@@ -123,7 +141,6 @@ function isQualified(lead: AmoLead) {
   const sid = lead.status_id || -1;
   if (dashboardConfig.QUALIFIED_STATUS_IDS.includes(sid)) return true;
 
-  // lost bo‘lsa ham qualified reason bo‘lsa qualified hisoblanadi
   if (dashboardConfig.LOST_STATUS_IDS.includes(sid)) {
     const lr = lead.loss_reason_id;
     if (
@@ -144,10 +161,7 @@ function isLost(lead: AmoLead) {
   return dashboardConfig.LOST_STATUS_IDS.includes(lead.status_id || -1);
 }
 
-/**
- * ✅ Custom field value helper
- * amo lead.custom_fields_values = [{ field_id, values:[{value, enum_id}]}]
- */
+// amo lead.custom_fields_values helper
 function getCustomField(lead: any, fieldId: number) {
   const arr = lead?.custom_fields_values || [];
   return arr.find((f: any) => f.field_id === fieldId);
@@ -167,11 +181,6 @@ function getCustomFieldEnumIdLocal(lead: any, fieldId: number): number | null {
   return typeof e === "number" ? e : null;
 }
 
-/**
- * ✅ E’tiroz key:
- * 1) custom field (OBJECTION_FIELD_ID)
- * 2) fallback loss_reason_id
- */
 function getObjectionKey(lead: AmoLead): number | null {
   if (dashboardConfig.OBJECTION_FIELD_ID) {
     const enumId = getCustomFieldEnumIdLocal(
@@ -193,8 +202,6 @@ export async function buildDashboardData(
 ): Promise<DashboardData> {
   const { from, to } = getPeriodRange(period);
 
-  // ✅ sizdagi real fetch:
-  // getLeadsByCreatedAt(from,to) sizda bor deb vercel aytyapti
   const allLeads = await getLeadsByCreatedAt(from, to);
 
   const leads = allLeads
@@ -257,7 +264,6 @@ export async function buildDashboardData(
       if (isOfflineDeal(lead)) offlineWonCount += 1;
     }
 
-    // Lead source (Qayerdan)
     if (dashboardConfig.LEAD_SOURCE_FIELD_ID) {
       const source =
         getCustomFieldStringLocal(
@@ -267,7 +273,6 @@ export async function buildDashboardData(
       leadSourcesCount.set(source, (leadSourcesCount.get(source) || 0) + 1);
     }
 
-    // Not qualified reasons (lost + NOT qualified)
     if (isLost(lead) && !q) {
       const key = getObjectionKey(lead);
       if (key != null) {
@@ -282,7 +287,9 @@ export async function buildDashboardData(
   });
 
   const conversionQualifiedToWon =
-    qualifiedCount > 0 ? Number(((wonCount / qualifiedCount) * 100).toFixed(1)) : 0;
+    qualifiedCount > 0
+      ? Number(((wonCount / qualifiedCount) * 100).toFixed(1))
+      : 0;
 
   // Calls
   let callsByManagers: DashboardData["callsByManagers"] = [];
@@ -292,7 +299,7 @@ export async function buildDashboardData(
     callsByManagers = await getSheetCalls(from, to);
   }
 
-  // Revenue
+  // Revenue (Sheets)
   const revenueRows = await getSheetRevenue(from, to);
   let revenueTotal = 0;
   let revenueOnline = 0;
@@ -317,7 +324,7 @@ export async function buildDashboardData(
   const notQualifiedReasons = Array.from(
     notQualifiedReasonsCount.entries()
   ).map(([id, count]) => ({
-    name: `Reason #${id}`, // keyinchalik meta’dan nomini bog‘laymiz
+    name: `Reason #${id}`,
     count,
   }));
 
@@ -331,7 +338,14 @@ export async function buildDashboardData(
     })
   );
 
+  // ✅ legacy mapping for UI:
+  // "Kelishuv summasi" hozircha Sheets’dan kelgan umumiy revenueTotal’ga teng bo‘ladi
+  const kelishuvSummasi = revenueTotal;
+
   return {
+    periodLabel: periodLabel(period),
+    kelishuvSummasi,
+
     leadsTotal: leads.length,
     qualifiedLeads: qualifiedCount,
     notQualifiedLeads: leads.length - qualifiedCount,
