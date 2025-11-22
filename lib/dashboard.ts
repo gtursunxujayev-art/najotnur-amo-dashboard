@@ -14,9 +14,11 @@ export type Period =
   | "lastMonth";
 
 export type DashboardData = {
-  // ✅ legacy fields for current UI
+  // ✅ legacy fields for current UI (DO NOT BREAK UI)
   periodLabel: string;
   kelishuvSummasi: number;
+  onlineSummasi: number;
+  offlineSummasi: number;
 
   // main stats
   leadsTotal: number;
@@ -338,13 +340,16 @@ export async function buildDashboardData(
     })
   );
 
-  // ✅ legacy mapping for UI:
-  // "Kelishuv summasi" hozircha Sheets’dan kelgan umumiy revenueTotal’ga teng bo‘ladi
+  // ✅ legacy UI mapping:
   const kelishuvSummasi = revenueTotal;
+  const onlineSummasi = revenueOnline;
+  const offlineSummasi = revenueOffline;
 
   return {
     periodLabel: periodLabel(period),
     kelishuvSummasi,
+    onlineSummasi,
+    offlineSummasi,
 
     leadsTotal: leads.length,
     qualifiedLeads: qualifiedCount,
