@@ -16,6 +16,7 @@ export type Period =
 export type DashboardData = {
   // ✅ legacy fields for current UI (aliases)
   periodLabel: string;
+
   kelishuvSummasi: number;
   onlineSummasi: number;
   offlineSummasi: number;
@@ -26,7 +27,13 @@ export type DashboardData = {
   nonQualifiedLeadsCount: number;
   wonLeadsCount: number;
 
-  conversionFromQualified: number; // ✅ NEW legacy ratio [0..1]
+  conversionFromQualified: number; // ratio [0..1]
+
+  // ✅ Revenue legacy + new universal field
+  tushum: number;           // universal "tushum" (periodga qarab)
+  haftalikTushum: number;  // legacy (UI hozir shuni so‘rayapti)
+  kunlikTushum: number;    // legacy fallback
+  oylikTushum: number;     // legacy fallback
 
   // main stats (new names)
   leadsTotal: number;
@@ -225,7 +232,6 @@ export async function buildDashboardData(
 
   const notQualifiedReasonsCount = new Map<number, number>();
   const leadSourcesCount = new Map<string, number>();
-
   const managersMap = new Map<
     string,
     { leads: number; qualified: number; won: number; revenue: number }
@@ -296,7 +302,7 @@ export async function buildDashboardData(
     managersMap.set(manager, m);
   });
 
-  // ✅ conversions
+  // conversions
   const conversionFromQualified =
     qualifiedCount > 0 ? wonCount / qualifiedCount : 0;
 
@@ -313,7 +319,7 @@ export async function buildDashboardData(
     callsByManagers = await getSheetCalls(from, to);
   }
 
-  // Revenue (Sheets)
+  // Revenue (Sheets) — period bo‘yicha tushum shu yerda hisoblanadi
   const revenueRows = await getSheetRevenue(from, to);
   let revenueTotal = 0;
   let revenueOnline = 0;
@@ -363,6 +369,12 @@ export async function buildDashboardData(
   const onlineSummasi = revenueOnline;
   const offlineSummasi = revenueOffline;
 
+  // ✅ universal + legacy tushum fields (Sheets’dan!)
+  const tushum = revenueTotal;
+  const haftalikTushum = revenueTotal;
+  const kunlikTushum = revenueTotal;
+  const oylikTushum = revenueTotal;
+
   // legacy count aliases
   const leadsCount = leadsTotal;
   const qualifiedLeadsCount = qualifiedLeads;
@@ -372,6 +384,7 @@ export async function buildDashboardData(
 
   return {
     periodLabel: periodLabel(period),
+
     kelishuvSummasi,
     onlineSummasi,
     offlineSummasi,
@@ -383,6 +396,11 @@ export async function buildDashboardData(
     nonQualifiedLeadsCount,
 
     conversionFromQualified,
+
+    tushum,
+    haftalikTushum,
+    kunlikTushum,
+    oylikTushum,
 
     leadsTotal,
     qualifiedLeads,
