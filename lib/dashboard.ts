@@ -13,6 +13,14 @@ export type Period =
   | "thisMonth"
   | "lastMonth";
 
+export type ManagerSalesRow = {
+  manager: string;
+  leads: number;
+  qualified: number;
+  won: number;
+  revenue: number;
+};
+
 export type DashboardData = {
   // ✅ legacy fields for current UI (aliases)
   periodLabel: string;
@@ -39,6 +47,10 @@ export type DashboardData = {
   nonQualifiedReasons: { name: string; count: number }[]; // UI uses this
   notQualifiedReasons: { name: string; count: number }[]; // new name
 
+  // ✅ legacy managers sales alias
+  managerSales: ManagerSalesRow[];   // UI uses this
+  managersSales: ManagerSalesRow[];  // new name
+
   // main stats (new names)
   leadsTotal: number;
   qualifiedLeads: number;
@@ -49,14 +61,6 @@ export type DashboardData = {
   conversionQualifiedToWon: number; // percentage [0..100]
 
   leadSources: { name: string; count: number }[];
-
-  managersSales: {
-    manager: string;
-    leads: number;
-    qualified: number;
-    won: number;
-    revenue: number;
-  }[];
 
   callsByManagers: {
     manager: string;
@@ -322,7 +326,7 @@ export async function buildDashboardData(
     callsByManagers = await getSheetCalls(from, to);
   }
 
-  // Revenue (Sheets) — period bo‘yicha tushum shu yerda hisoblanadi
+  // Revenue (Sheets)
   const revenueRows = await getSheetRevenue(from, to);
   let revenueTotal = 0;
   let revenueOnline = 0;
@@ -351,18 +355,19 @@ export async function buildDashboardData(
     count,
   }));
 
-  // ✅ legacy alias for UI
   const nonQualifiedReasons = notQualifiedReasons;
 
-  const managersSales = Array.from(managersMap.entries()).map(
-    ([manager, v]) => ({
-      manager,
-      leads: v.leads,
-      qualified: v.qualified,
-      won: v.won,
-      revenue: v.revenue,
-    })
-  );
+  const managersSales: ManagerSalesRow[] = Array.from(
+    managersMap.entries()
+  ).map(([manager, v]) => ({
+    manager,
+    leads: v.leads,
+    qualified: v.qualified,
+    won: v.won,
+    revenue: v.revenue,
+  }));
+
+  const managerSales = managersSales; // ✅ legacy alias
 
   // new names
   const leadsTotal = leads.length;
@@ -375,7 +380,7 @@ export async function buildDashboardData(
   const onlineSummasi = revenueOnline;
   const offlineSummasi = revenueOffline;
 
-  // universal + legacy tushum fields (Sheets’dan!)
+  // universal + legacy tushum fields
   const tushum = revenueTotal;
   const haftalikTushum = revenueTotal;
   const kunlikTushum = revenueTotal;
@@ -412,6 +417,9 @@ export async function buildDashboardData(
     notQualifiedReasons,
     leadSources,
 
+    managerSales,
+    managersSales,
+
     leadsTotal,
     qualifiedLeads,
     notQualifiedLeads,
@@ -420,7 +428,6 @@ export async function buildDashboardData(
     offlineWonCount,
     conversionQualifiedToWon,
 
-    managersSales,
     callsByManagers,
 
     revenueTotal,
