@@ -3,7 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 
 type MetaPipeline = { id: number; name: string };
-type MetaStatus = { id: number; name: string; pipeline_id?: number | null };
+type MetaStatus = {
+  id: number;
+  name: string;
+  pipeline_id?: number | null;   // amo default
+  pipelineId?: number | null;    // sometimes custom mapping
+  pipeline?: { id?: number | null } | null;
+};
 type MetaLossReason = { id: number; name: string };
 type MetaCustomField = {
   id: number;
@@ -73,6 +79,7 @@ export default function AdminPage() {
     courseTypeColumn: "",
   });
 
+  // Load meta when constructor tab opens
   useEffect(() => {
     if (tab !== "constructor") return;
     (async () => {
@@ -98,13 +105,38 @@ export default function AdminPage() {
   const toggleId = (arr: number[], id: number) =>
     arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id];
 
-  // ✅ Filter statuses by selected pipelines
+  // helper: extract pipeline id from any status shape
+  function getStatusPipelineId(st: MetaStatus): number | null {
+    return (
+      (typeof st.pipeline_id === "number" ? st.pipeline_id : null) ??
+      (typeof st.pipelineId === "number" ? st.pipelineId : null) ??
+      (typeof st.pipeline?.id === "number" ? st.pipeline!.id! : null)
+    );
+  }
+
+  // ✅ Smarter status filtering:
+  // - if no pipeline ids in meta => show all
+  // - else filter by selected pipelines
   const filteredStatuses = useMemo(() => {
     if (!meta) return [];
-    if (!constructorData.PIPELINE_IDS.length) return meta.statuses;
-    return meta.statuses.filter((st) =>
-      st.pipeline_id ? constructorData.PIPELINE_IDS.includes(st.pipeline_id) : false
-    );
+
+    const allStatuses = meta.statuses || [];
+    const selectedPipes = constructorData.PIPELINE_IDS;
+
+    // if user didn't select pipeline => show all
+    if (!selectedPipes.length) return allStatuses;
+
+    // check if statuses even have pipeline ids
+    const hasAnyPipelineId = allStatuses.some((s) => getStatusPipelineId(s) != null);
+
+    // if meta doesn't provide pipeline id => don't filter
+    if (!hasAnyPipelineId) return allStatuses;
+
+    // normal filter
+    return allStatuses.filter((s) => {
+      const pid = getStatusPipelineId(s);
+      return pid != null && selectedPipes.includes(pid);
+    });
   }, [meta, constructorData.PIPELINE_IDS]);
 
   const selectedCourseField = useMemo(() => {
@@ -157,29 +189,42 @@ export default function AdminPage() {
       <h1 className="mb-6 text-3xl font-bold">Admin panel</h1>
 
       <div className="mb-6 flex gap-3">
-        <button onClick={() => setTab("info")}
-          className={`rounded px-3 py-1 ${tab === "info" ? "bg-emerald-600" : "bg-slate-800"}`}>
+        <button
+          onClick={() => setTab("info")}
+          className={`rounded px-3 py-1 ${tab === "info" ? "bg-emerald-600" : "bg-slate-800"}`}
+        >
           Info
         </button>
-        <button onClick={() => setTab("constructor")}
-          className={`rounded px-3 py-1 ${tab === "constructor" ? "bg-emerald-600" : "bg-slate-800"}`}>
+        <button
+          onClick={() => setTab("constructor")}
+          className={`rounded px-3 py-1 ${tab === "constructor" ? "bg-emerald-600" : "bg-slate-800"}`}
+        >
           Constructor
         </button>
-        <button onClick={() => setTab("tushum")}
-          className={`rounded px-3 py-1 ${tab === "tushum" ? "bg-emerald-600" : "bg-slate-800"}`}>
+        <button
+          onClick={() => setTab("tushum")}
+          className={`rounded px-3 py-1 ${tab === "tushum" ? "bg-emerald-600" : "bg-slate-800"}`}
+        >
           Tushum
         </button>
       </div>
 
-      {msg && <div className="mb-3 rounded bg-emerald-900/40 px-3 py-2 text-sm text-emerald-200">{msg}</div>}
-      {err && <div className="mb-3 rounded bg-red-900/40 px-3 py-2 text-sm text-red-200">{err}</div>}
+      {msg && (
+        <div className="mb-3 rounded bg-emerald-900/40 px-3 py-2 text-sm text-emerald-200">
+          {msg}
+        </div>
+      )}
+      {err && (
+        <div className="mb-3 rounded bg-red-900/40 px-3 py-2 text-sm text-red-200">
+          {err}
+        </div>
+      )}
 
       {tab === "info" && (
         <div className="rounded-xl bg-slate-900/60 p-6">
           <h2 className="text-xl font-semibold">ℹ️ Umumiy ma'lumot</h2>
           <p className="mt-2 text-sm text-slate-400">
-            Constructor bo‘limini to‘ldirib saqlasangiz, Dashboard hisoblashlari to‘g‘ri ishlaydi.
-            Saqlash GitHub’ga yozadi va Vercel qayta deploy bo‘ladi.
+            Constructorni to‘ldirib saqlasangiz Dashboard hisoblashlari to‘g‘ri ishlaydi.
           </p>
         </div>
       )}
@@ -199,8 +244,10 @@ export default function AdminPage() {
                 <label className="mb-2 block text-sm text-slate-300">Pipeline(lar)</label>
                 <div className="grid grid-cols-2 gap-2">
                   {meta.pipelines.map((p) => (
-                    <label key={p.id}
-                      className="flex items-center gap-2 rounded bg-slate-800 px-3 py-2 text-sm">
+                    <label
+                      key={p.id}
+                      className="flex items-center gap-2 rounded bg-slate-800 px-3 py-2 text-sm"
+                    >
                       <input
                         type="checkbox"
                         checked={constructorData.PIPELINE_IDS.includes(p.id)}
@@ -208,7 +255,6 @@ export default function AdminPage() {
                           setConstructorData((s) => ({
                             ...s,
                             PIPELINE_IDS: toggleId(s.PIPELINE_IDS, p.id),
-                            // ✅ reset statuses when pipeline changes to avoid mixing
                             QUALIFIED_STATUS_IDS: [],
                             WON_STATUS_IDS: [],
                             LOST_STATUS_IDS: [],
@@ -221,7 +267,7 @@ export default function AdminPage() {
                 </div>
                 {!!constructorData.PIPELINE_IDS.length && (
                   <p className="mt-1 text-xs text-slate-400">
-                    Statuslar faqat tanlangan pipeline’lardan ko‘rsatiladi.
+                    Statuslar tanlangan pipeline’lardan ko‘rsatiladi (agar meta’da pipeline_id bo‘lsa).
                   </p>
                 )}
               </div>
@@ -246,6 +292,11 @@ export default function AdminPage() {
                         {st.name} (#{st.id})
                       </label>
                     ))}
+                    {!filteredStatuses.length && (
+                      <p className="text-xs text-slate-400 px-2 py-2">
+                        Statuslar topilmadi. Pipeline filterini olib tashlab ko‘ring yoki meta formatini tekshiramiz.
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -305,7 +356,10 @@ export default function AdminPage() {
                           onChange={() =>
                             setConstructorData((s) => ({
                               ...s,
-                              QUALIFIED_LOSS_REASON_IDS: toggleId(s.QUALIFIED_LOSS_REASON_IDS, lr.id),
+                              QUALIFIED_LOSS_REASON_IDS: toggleId(
+                                s.QUALIFIED_LOSS_REASON_IDS,
+                                lr.id
+                              ),
                             }))
                           }
                         />
@@ -326,7 +380,10 @@ export default function AdminPage() {
                           onChange={() =>
                             setConstructorData((s) => ({
                               ...s,
-                              NOT_QUALIFIED_REASON_IDS: toggleId(s.NOT_QUALIFIED_REASON_IDS, lr.id),
+                              NOT_QUALIFIED_REASON_IDS: toggleId(
+                                s.NOT_QUALIFIED_REASON_IDS,
+                                lr.id
+                              ),
                             }))
                           }
                         />
@@ -431,13 +488,10 @@ export default function AdminPage() {
                 </div>
               ) : (
                 constructorData.COURSE_TYPE_FIELD_ID && (
-                  <p className="text-xs text-slate-400">
-                    Kurs turi fieldida enumlar topilmadi.
-                  </p>
+                  <p className="text-xs text-slate-400">Kurs turi fieldida enumlar topilmadi.</p>
                 )
               )}
 
-              {/* Calls toggles */}
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <label className="flex items-center gap-2 rounded bg-slate-800 px-3 py-2 text-sm">
                   <input
@@ -493,7 +547,7 @@ export default function AdminPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm text-slate-300">Menejer ustuni (Baza!A)</label>
+                <label className="block text-sm text-slate-300">Menejer ustuni</label>
                 <input
                   type="text"
                   className="w-full rounded bg-slate-800 px-3 py-2"
@@ -502,7 +556,7 @@ export default function AdminPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-300">Sana ustuni (Baza!B)</label>
+                <label className="block text-sm text-slate-300">Sana ustuni</label>
                 <input
                   type="text"
                   className="w-full rounded bg-slate-800 px-3 py-2"
