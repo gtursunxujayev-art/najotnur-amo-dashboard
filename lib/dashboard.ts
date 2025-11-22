@@ -31,9 +31,13 @@ export type DashboardData = {
 
   // ✅ Revenue legacy + new universal field
   tushum: number;           // universal "tushum" (periodga qarab)
-  haftalikTushum: number;  // legacy (UI hozir shuni so‘rayapti)
-  kunlikTushum: number;    // legacy fallback
-  oylikTushum: number;     // legacy fallback
+  haftalikTushum: number;  // legacy
+  kunlikTushum: number;    // legacy
+  oylikTushum: number;     // legacy
+
+  // ✅ legacy array alias
+  nonQualifiedReasons: { name: string; count: number }[]; // UI uses this
+  notQualifiedReasons: { name: string; count: number }[]; // new name
 
   // main stats (new names)
   leadsTotal: number;
@@ -44,7 +48,6 @@ export type DashboardData = {
   offlineWonCount: number;
   conversionQualifiedToWon: number; // percentage [0..100]
 
-  notQualifiedReasons: { name: string; count: number }[];
   leadSources: { name: string; count: number }[];
 
   managersSales: {
@@ -348,6 +351,9 @@ export async function buildDashboardData(
     count,
   }));
 
+  // ✅ legacy alias for UI
+  const nonQualifiedReasons = notQualifiedReasons;
+
   const managersSales = Array.from(managersMap.entries()).map(
     ([manager, v]) => ({
       manager,
@@ -369,7 +375,7 @@ export async function buildDashboardData(
   const onlineSummasi = revenueOnline;
   const offlineSummasi = revenueOffline;
 
-  // ✅ universal + legacy tushum fields (Sheets’dan!)
+  // universal + legacy tushum fields (Sheets’dan!)
   const tushum = revenueTotal;
   const haftalikTushum = revenueTotal;
   const kunlikTushum = revenueTotal;
@@ -402,6 +408,10 @@ export async function buildDashboardData(
     kunlikTushum,
     oylikTushum,
 
+    nonQualifiedReasons,
+    notQualifiedReasons,
+    leadSources,
+
     leadsTotal,
     qualifiedLeads,
     notQualifiedLeads,
@@ -409,9 +419,6 @@ export async function buildDashboardData(
     onlineWonCount,
     offlineWonCount,
     conversionQualifiedToWon,
-
-    notQualifiedReasons,
-    leadSources,
 
     managersSales,
     callsByManagers,
