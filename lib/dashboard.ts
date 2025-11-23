@@ -367,7 +367,7 @@ export async function buildDashboardData(
       : 0;
 
   // ------------- Calls (amo / sheets) -------------
-  let rawCalls: any[] = []; // <— bu yerda type'ni bo'sh qildik
+  let rawCalls: any[] = [];
 
   if (dashboardConfig.USE_AMO_CALLS) {
     rawCalls = await getAmoCalls(from, to);
@@ -438,7 +438,7 @@ export async function buildDashboardData(
   const managerCalls = callsByManagers; // ✅ legacy alias
 
   // ------------- Revenue (Sheets) ------------------
-  const revenueRows = await getSheetRevenue(from, to);
+  const revenueRows: any[] = await getSheetRevenue(from, to);
   let revenueTotal = 0;
   let revenueOnline = 0;
   let revenueOffline = 0;
@@ -448,7 +448,7 @@ export async function buildDashboardData(
     if (r.incomeType === "online") revenueOnline += r.amount;
     if (r.incomeType === "offline") revenueOffline += r.amount;
 
-    const manager = r.manager || "Unknown";
+    const manager = r.manager || r.managerName || "Unknown";
     const m =
       managersMap.get(manager) || { leads: 0, qualified: 0, won: 0, revenue: 0 };
     m.revenue += r.amount;
