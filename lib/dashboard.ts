@@ -13,6 +13,7 @@ export type Period =
   | "thisMonth"
   | "lastMonth";
 
+// ---------------- Manager sales row ----------------
 export type ManagerSalesRow = {
   // ✅ legacy fields expected by UI
   managerId: string;
@@ -24,6 +25,11 @@ export type ManagerSalesRow = {
   wonDeals: number;
   wonAmount: number;
 
+  // 🔮 possible extra legacy fields (optional)
+  conversionPercent?: number;
+  onlineRevenue?: number;
+  offlineRevenue?: number;
+
   // ✅ actual fields (yangi nomlar)
   manager: string;
   leads: number;
@@ -32,6 +38,25 @@ export type ManagerSalesRow = {
   revenue: number;
 };
 
+// ---------------- Manager calls row ----------------
+export type ManagerCallsRow = {
+  // ✅ legacy fields expected by UI
+  managerId: string;
+  managerName: string;
+  totalCalls: number;
+  successCalls: number;
+  totalDurationMin: number;
+  avgDurationSec: number;
+
+  // 🔮 possible extra legacy fields (optional)
+  totalDurationMinutes?: number;
+  avgDurationSeconds?: number;
+
+  // ✅ actual field
+  manager: string;
+};
+
+// ---------------- Dashboard data -------------------
 export type DashboardData = {
   periodLabel: string;
 
@@ -58,6 +83,10 @@ export type DashboardData = {
   managerSales: ManagerSalesRow[];   // legacy name
   managersSales: ManagerSalesRow[];  // new name
 
+  // ✅ calls aliases
+  managerCalls: ManagerCallsRow[];   // legacy
+  callsByManagers: ManagerCallsRow[]; // new name
+
   leadsTotal: number;
   qualifiedLeads: number;
   notQualifiedLeads: number;
@@ -67,14 +96,6 @@ export type DashboardData = {
   conversionQualifiedToWon: number; // percentage [0..100]
 
   leadSources: { name: string; count: number }[];
-
-  callsByManagers: {
-    manager: string;
-    totalCalls: number;
-    successCalls: number;
-    totalDurationMin: number;
-    avgDurationSec: number;
-  }[];
 
   revenueTotal: number;
   revenueOnline: number;
@@ -114,7 +135,7 @@ function getPeriodRange(period: Period) {
 
   if (period === "thisWeek" || period === "lastWeek") {
     const d = new Date(now);
-    const day = d.getDay(); // 0 sunday
+    const day = d.getDay();
     const mondayOffset = (day + 6) % 7;
     d.setDate(d.getDate() - mondayOffset);
 
@@ -330,15 +351,37 @@ export async function buildDashboardData(
       ? Number(((wonCount / qualifiedCount) * 100).toFixed(1))
       : 0;
 
-  // Calls
-  let callsByManagers: DashboardData["callsByManagers"] = [];
+  // ------------- Calls (amo / sheets) -------------
+  let rawCalls:
+    | {
+        manager: string;
+        totalCalls: number;
+        successCalls: number;
+        totalDurationMin: number;
+        avgDurationSec: number;
+      }[] = [];
+
   if (dashboardConfig.USE_AMO_CALLS) {
-    callsByManagers = await getAmoCalls(from, to);
+    rawCalls = await getAmoCalls(from, to);
   } else if (dashboardConfig.USE_SHEETS_CALLS) {
-    callsByManagers = await getSheetCalls(from, to);
+    rawCalls = await getSheetCalls(from, to);
   }
 
-  // Revenue (Sheets)
+  const callsByManagers: ManagerCallsRow[] = rawCalls.map((c) => ({
+    managerId: slugify(c.manager),
+    managerName: c.manager,
+    manager: c.manager,
+    totalCalls: c.totalCalls,
+    successCalls: c.successCalls,
+    totalDurationMin: c.totalDurationMin,
+    avgDurationSec: c.avgDurationSec,
+    totalDurationMinutes: c.totalDurationMin,
+    avgDurationSeconds: c.avgDurationSec,
+  }));
+
+  const managerCalls = callsByManagers; // ✅ legacy alias
+
+  // ------------- Revenue (Sheets) ------------------
   const revenueRows = await getSheetRevenue(from, to);
   let revenueTotal = 0;
   let revenueOnline = 0;
@@ -375,7 +418,7 @@ export async function buildDashboardData(
     managerId: slugify(manager),
     managerName: manager,
 
-    // legacy totals (old UI uses these names)
+    // legacy totals
     totalLeads: v.leads,
     qualifiedLeads: v.qualified,
     wonLeads: v.won,
@@ -439,6 +482,9 @@ export async function buildDashboardData(
     managerSales,
     managersSales,
 
+    managerCalls,
+    callsByManagers,
+
     leadsTotal,
     qualifiedLeads,
     notQualifiedLeads,
@@ -446,8 +492,6 @@ export async function buildDashboardData(
     onlineWonCount,
     offlineWonCount,
     conversionQualifiedToWon,
-
-    callsByManagers,
 
     revenueTotal,
     revenueOnline,
