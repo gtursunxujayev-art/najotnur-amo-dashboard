@@ -1,7 +1,7 @@
 // app/api/dashboard/route.ts
 import { NextResponse } from "next/server";
 import { getPeriodDates, PeriodKey } from "@/lib/period";
-import { buildDashboardData } from "@/lib/dashboard";
+import { buildDashboardData, Period } from "@/lib/dashboard";
 
 const ALLOWED_PERIODS: PeriodKey[] = [
   "today",
@@ -10,7 +10,6 @@ const ALLOWED_PERIODS: PeriodKey[] = [
   "last_week",
   "this_month",
   "last_month",
-  "custom",
 ];
 
 export async function GET(req: Request) {
@@ -18,14 +17,14 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const raw = searchParams.get("period") || "today";
 
-    // ✅ force correct type + fallback
-    const period: PeriodKey = ALLOWED_PERIODS.includes(raw as PeriodKey)
+    const periodKey: PeriodKey = ALLOWED_PERIODS.includes(raw as PeriodKey)
       ? (raw as PeriodKey)
       : "today";
 
-    const { from, to, label } = getPeriodDates(period);
+    const { label } = getPeriodDates(periodKey);
 
-    const data = await buildDashboardData({ from, to });
+    // ✅ buildDashboardData expects Period (string), not {from,to}
+    const data = await buildDashboardData(periodKey as unknown as Period);
 
     return NextResponse.json({
       success: true,
