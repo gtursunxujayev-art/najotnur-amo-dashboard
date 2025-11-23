@@ -6,7 +6,9 @@ import { buildDashboardData } from "@/lib/dashboard";
 export async function GET(req: Request) {
   try {
     const { from, to, label } = getPeriodFromQuery(req);
-    const data = await buildDashboardData({ from, to }, label);
+
+    // ✅ Only one argument now
+    const data = await buildDashboardData({ from, to });
 
     return NextResponse.json({ success: true, data });
   } catch (e: any) {
