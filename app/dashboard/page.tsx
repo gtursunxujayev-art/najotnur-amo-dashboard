@@ -1,222 +1,418 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import type { DashboardData } from "@/lib/dashboard";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 
-// If you already import types from somewhere, keep it.
-// Otherwise this is safe:
-type DashboardData = any;
+type PeriodKey = "today" | "week" | "month";
 
-type FetchDebug = {
-  url: string;
-  status?: number;
-  statusText?: string;
-  rawText?: string;
-  jsonError?: string;
-  networkError?: string;
+type UiState = {
+  loading: boolean;
+  error: string | null;
+  data: DashboardData | null;
+  period: PeriodKey;
 };
 
-async function safeFetchJson(url: string): Promise<{ data?: any; debug: FetchDebug }> {
-  const debug: FetchDebug = { url };
+const COLORS = ["#22c55e", "#3b82f6", "#a855f7", "#f97316", "#ef4444", "#eab308"];
 
-  try {
-    const res = await fetch(url, { cache: "no-store" });
-    debug.status = res.status;
-    debug.statusText = res.statusText;
+// Safe label helpers for pie charts
+function pieLabelLossReason(props: { name?: string; percent?: number }) {
+  const { name, percent } = props;
+  const p = typeof percent === "number" ? percent : 0;
+  return `${name ?? ""} ${(p * 100).toFixed(0)}%`;
+}
 
-    const rawText = await res.text();
-    debug.rawText = rawText?.slice(0, 2000) || ""; // preview limit
-
-    if (!rawText) {
-      debug.jsonError = "Response body is empty";
-      return { debug };
-    }
-
-    try {
-      const json = JSON.parse(rawText);
-      return { data: json, debug };
-    } catch (e: any) {
-      debug.jsonError = e?.message || "JSON parse error";
-      return { debug };
-    }
-  } catch (e: any) {
-    debug.networkError = e?.message || "Network error";
-    return { debug };
-  }
+function pieLabelSource(props: { name?: string; percent?: number }) {
+  const { name, percent } = props;
+  const p = typeof percent === "number" ? percent : 0;
+  return `${name ?? ""} ${(p * 100).toFixed(0)}%`;
 }
 
 export default function DashboardPage() {
-  const [period, setPeriod] = useState<string>("today");
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [error, setError] = useState<string>("");
-  const [debug, setDebug] = useState<FetchDebug | null>(null);
+  const [state, setState] = useState<UiState>({
+    loading: true,
+    error: null,
+    data: null,
+    period: "week",
+  });
 
-  const debugMode = useMemo(() => {
-    if (typeof window === "undefined") return false;
-    const sp = new URLSearchParams(window.location.search);
-    return sp.get("debug") === "1";
-  }, []);
+  async function load(periodKey: PeriodKey) {
+    try {
+      setState((s) => ({ ...s, loading: true, error: null, period: periodKey }));
+
+      const res = await fetch(`/api/dashboard?period=${periodKey}`, {
+        cache: "no-store",
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const msg = body.error || res.statusText || "Failed to load data";
+        throw new Error(msg);
+      }
+
+      const json = await res.json();
+      const data: DashboardData = json.data;
+
+      setState((s) => ({
+        ...s,
+        loading: false,
+        error: null,
+        data,
+      }));
+    } catch (err: any) {
+      console.error("Dashboard load error", err);
+      setState((s) => ({
+        ...s,
+        loading: false,
+        error: err?.message || "Failed to load dashboard data",
+        data: null,
+      }));
+    }
+  }
 
   useEffect(() => {
-    let alive = true;
+    load(state.period);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    async function load() {
-      setLoading(true);
-      setError("");
-      setDebug(null);
+  const { data, loading, error, period } = state;
 
-      const url = `/api/dashboard?period=${encodeURIComponent(period)}`;
-      const { data: json, debug } = await safeFetchJson(url);
-
-      if (!alive) return;
-
-      // Backend should return { success: true, data }
-      if (!json) {
-        setError("Dashboard API JSON qaytarmadi.");
-        setDebug(debug);
-        setLoading(false);
-        return;
-      }
-
-      if (json.success === false) {
-        setError(json.error || "Dashboard API error");
-        setDebug(debug);
-        setLoading(false);
-        return;
-      }
-
-      // If backend returns {data}
-      const payload = json.data ?? json;
-
-      setData(payload);
-      setLoading(false);
-
-      // Save debug only if debugMode enabled
-      if (debugMode) setDebug(debug);
-    }
-
-    load();
-
-    return () => {
-      alive = false;
-    };
-  }, [period, debugMode]);
+  const handleChangePeriod = (p: PeriodKey) => {
+    if (p === period) return;
+    load(p);
+  };
 
   return (
-    <main className="min-h-screen bg-[#050816] text-white">
-      <div className="mx-auto max-w-6xl px-4 py-6">
-        <header className="mb-6">
-          <h1 className="text-2xl font-semibold">Najot Nur – Dashboard</h1>
+    <main className="min-h-screen bg-slate-950 px-4 py-6 text-slate-50">
+      <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold">Najot Nur – Dashboard</h1>
           <p className="text-sm text-slate-400">
             amoCRM + optional Google Sheets statistikasi
           </p>
-        </header>
+        </div>
 
-        {/* PERIOD PICKER — keep your existing UI if you had one */}
-        <section className="mb-4 flex flex-wrap gap-2">
-          {[
-            { key: "today", label: "Bugun" },
-            { key: "yesterday", label: "Kecha" },
-            { key: "thisWeek", label: "Shu hafta" },
-            { key: "lastWeek", label: "O‘tgan hafta" },
-            { key: "thisMonth", label: "Shu oy" },
-            { key: "lastMonth", label: "O‘tgan oy" },
-          ].map((p) => (
-            <button
-              key={p.key}
-              onClick={() => setPeriod(p.key)}
-              className={`rounded-md px-3 py-1 text-sm transition ${
-                period === p.key
-                  ? "bg-emerald-600 text-white"
-                  : "bg-slate-800 text-slate-200 hover:bg-slate-700"
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
-        </section>
+        <div className="inline-flex rounded-lg bg-slate-800 p-1 text-xs font-semibold">
+          <PeriodButton
+            label="Bugun"
+            active={period === "today"}
+            onClick={() => handleChangePeriod("today")}
+          />
+          <PeriodButton
+            label="Bu hafta"
+            active={period === "week"}
+            onClick={() => handleChangePeriod("week")}
+          />
+          <PeriodButton
+            label="Bu oy"
+            active={period === "month"}
+            onClick={() => handleChangePeriod("month")}
+          />
+        </div>
+      </header>
 
-        {/* ERROR BOX */}
-        {error && (
-          <section className="mb-4 rounded-md border border-red-500/40 bg-red-950/40 p-3">
-            <div className="text-sm font-semibold text-red-200">
-              {error}
+      {loading && (
+        <div className="rounded-lg border border-slate-700 bg-slate-900 p-4 text-sm text-slate-300">
+          Loading dashboard data…
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-lg border border-red-600 bg-red-950 p-4 text-sm text-red-100">
+          {error}
+        </div>
+      )}
+
+      {!loading && !error && data && (
+        <div className="space-y-6">
+          {/* Top metrics */}
+          <section className="grid gap-4 md:grid-cols-3 lg:grid-cols-4">
+            <MetricCard
+              title="Kelishuv summasi"
+              value={`${data.kelishuvSummasi.toLocaleString("ru-RU")} so'm`}
+              subtitle={data.periodLabel}
+            />
+            <MetricCard
+              title="Sotuv – Online"
+              value={`${data.onlineSummasi.toLocaleString("ru-RU")} so'm`}
+              subtitle="Online kelishuvlar"
+            />
+            <MetricCard
+              title="Sotuv – Offline"
+              value={`${data.offlineSummasi.toLocaleString("ru-RU")} so'm`}
+              subtitle="Offline kelishuvlar"
+            />
+            <MetricCard
+              title="Lidlar (jami)"
+              value={data.leadsCount.toLocaleString("ru-RU")}
+              subtitle="Tanlangan davr"
+            />
+            <MetricCard
+              title="Sifatli lidlar"
+              value={data.qualifiedLeadsCount.toLocaleString("ru-RU")}
+              subtitle="Qualified"
+            />
+            <MetricCard
+              title="Sifatsiz lidlar"
+              value={data.nonQualifiedLeadsCount.toLocaleString("ru-RU")}
+              subtitle="NOT qualified reasons"
+            />
+            <MetricCard
+              title="Konversiya (sifatli → sotuv)"
+              value={`${(data.conversionFromQualified * 100).toFixed(1)}%`}
+              subtitle="Won from qualified"
+            />
+            <MetricCard
+              title="Haftalik tushum"
+              value={`${data.haftalikTushum.toLocaleString("ru-RU")} so'm`}
+              subtitle="Hozircha = kelishuv summasi"
+            />
+          </section>
+
+          {/* Charts: lost reasons + lead sources */}
+          <section className="grid gap-4 lg:grid-cols-2">
+            {/* Lost reasons */}
+            <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+              <h2 className="mb-2 text-sm font-semibold text-slate-200">
+                Sifatsiz lid sabablari (Muvaffaqiyatsiz E&apos;tiroz sababi)
+              </h2>
+              <p className="mb-2 text-xs text-slate-400">
+                Barcha yo&apos;qotilgan lidlar “E&apos;tiroz sababi” bo&apos;yicha.
+              </p>
+              <div className="h-64">
+                {data.nonQualifiedReasons.length === 0 ? (
+                  <div className="flex h-full items-center justify-center text-xs text-slate-500">
+                    Hali yo&apos;qotilgan lidlar yo&apos;q.
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={data.nonQualifiedReasons}
+                        dataKey="value"
+                        nameKey="label"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={80}
+                        labelLine={false}
+                        label={pieLabelLossReason}
+                      >
+                        {data.nonQualifiedReasons.map((_, index) => (
+                          <Cell
+                            key={index}
+                            fill={COLORS[index % COLORS.length]}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#020617",
+                          border: "1px solid #1e293b",
+                          borderRadius: 8,
+                          fontSize: 12,
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
             </div>
 
-            {/* DEBUG DROPDOWN (shows only on error or debug=1) */}
-            {(debug || debugMode) && (
-              <details className="mt-2 cursor-pointer select-text text-xs text-red-100/90">
-                <summary className="mb-2 font-medium">
-                  Debug maʼlumotlarini ko‘rsatish
-                </summary>
-
-                <div className="space-y-2 rounded bg-black/40 p-2">
-                  <div><b>URL:</b> {debug?.url}</div>
-                  <div>
-                    <b>Status:</b> {debug?.status} {debug?.statusText}
+            {/* Lead sources */}
+            <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+              <h2 className="mb-2 text-sm font-semibold text-slate-200">
+                Lid manbalari (Qayerdan)
+              </h2>
+              <p className="mb-2 text-xs text-slate-400">
+                Lidlar soni {`"Qayerdan"`} maydoni bo&apos;yicha taqsimoti.
+              </p>
+              <div className="h-64">
+                {data.leadSources.length === 0 ? (
+                  <div className="flex h-full items-center justify-center text-xs text-slate-500">
+                    Lead manbalari topilmadi.
                   </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={data.leadSources}
+                        dataKey="value"
+                        nameKey="label"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={80}
+                        labelLine={false}
+                        label={pieLabelSource}
+                      >
+                        {data.leadSources.map((_, index) => (
+                          <Cell
+                            key={index}
+                            fill={COLORS[index % COLORS.length]}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#020617",
+                          border: "1px solid #1e293b",
+                          borderRadius: 8,
+                          fontSize: 12,
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+          </section>
 
-                  {debug?.networkError && (
-                    <div><b>Network error:</b> {debug.networkError}</div>
-                  )}
-                  {debug?.jsonError && (
-                    <div><b>JSON error:</b> {debug.jsonError}</div>
-                  )}
-
-                  <div>
-                    <b>Raw response preview:</b>
-                    <pre className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-black/60 p-2 text-[11px] leading-4">
-                      {debug?.rawText || "(empty)"}
-                    </pre>
-                  </div>
-                </div>
-              </details>
+          {/* Manager sales */}
+          <section className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+            <h2 className="mb-3 text-sm font-semibold text-slate-200">
+              Sotuv bo&apos;yicha menejerlar
+            </h2>
+            {data.managerSales.length === 0 ? (
+              <div className="text-xs text-slate-500">
+                Tanlangan davrda sotuvlar topilmadi.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-left text-xs text-slate-200">
+                  <thead>
+                    <tr className="border-b border-slate-700 bg-slate-800/60">
+                      <th className="px-3 py-2">Menejer</th>
+                      <th className="px-3 py-2">Lidlar</th>
+                      <th className="px-3 py-2">Sifatli lidlar</th>
+                      <th className="px-3 py-2">Sotuvlar soni</th>
+                      <th className="px-3 py-2">Sotuv summasi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.managerSales.map((m) => (
+                      <tr
+                        key={m.managerId}
+                        className="border-b border-slate-800 last:border-0"
+                      >
+                        <td className="px-3 py-2">{m.managerName}</td>
+                        <td className="px-3 py-2">
+                          {m.totalLeads.toLocaleString("ru-RU")}
+                        </td>
+                        <td className="px-3 py-2">
+                          {m.qualifiedLeads.toLocaleString("ru-RU")}
+                        </td>
+                        <td className="px-3 py-2">
+                          {m.wonDeals.toLocaleString("ru-RU")}
+                        </td>
+                        <td className="px-3 py-2">
+                          {m.wonAmount.toLocaleString("ru-RU")} so&apos;m
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </section>
-        )}
 
-        {/* LOADING */}
-        {loading && (
-          <div className="rounded-md bg-slate-900/50 p-4 text-sm text-slate-300">
-            Yuklanmoqda...
-          </div>
-        )}
-
-        {/* MAIN DASHBOARD UI — keep your existing render below */}
-        {!loading && data && (
-          <div className="space-y-6">
-            {/* Keep your cards/charts exactly as before.
-                Here is just a safe example of rendering: */}
-            <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <div className="rounded-xl bg-slate-900/60 p-4">
-                <div className="text-xs text-slate-400">Kelishuv summasi</div>
-                <div className="text-xl font-semibold">
-                  {(data.kelishuvSummasi ?? 0).toLocaleString("ru-RU")} so'm
-                </div>
-                <div className="text-xs text-slate-500">
-                  {data.periodLabel}
-                </div>
+          {/* Manager calls */}
+          <section className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+            <h2 className="mb-3 text-sm font-semibold text-slate-200">
+              Qo&apos;ng&apos;iroqlar bo&apos;yicha menejerlar
+            </h2>
+            {data.managerCalls.length === 0 ? (
+              <div className="text-xs text-slate-500">
+                Qo&apos;ng&apos;iroqlar statistikasi topilmadi (amoCRM yoki Google
+                Sheets).
               </div>
-
-              <div className="rounded-xl bg-slate-900/60 p-4">
-                <div className="text-xs text-slate-400">Sotuv – Online</div>
-                <div className="text-xl font-semibold">
-                  {(data.onlineSummasi ?? 0).toLocaleString("ru-RU")} so'm
-                </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-left text-xs text-slate-200">
+                  <thead>
+                    <tr className="border-b border-slate-700 bg-slate-800/60">
+                      <th className="px-3 py-2">Menejer</th>
+                      <th className="px-3 py-2">Jami qo&apos;ng&apos;iroqlar</th>
+                      <th className="px-3 py-2">Muvaffaqiyatli qo&apos;ng&apos;iroqlar</th>
+                      <th className="px-3 py-2">Jami vaqt (daq.)</th>
+                      <th className="px-3 py-2">O&apos;rtacha vaqt (sek.)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.managerCalls.map((m) => (
+                      <tr
+                        key={m.managerName}
+                        className="border-b border-slate-800 last:border-0"
+                      >
+                        <td className="px-3 py-2">{m.managerName}</td>
+                        <td className="px-3 py-2">
+                          {m.callsAll.toLocaleString("ru-RU")}
+                        </td>
+                        <td className="px-3 py-2">
+                          {m.callsSuccess.toLocaleString("ru-RU")}
+                        </td>
+                        <td className="px-3 py-2">
+                          {(m.callSecondsAll / 60).toFixed(1)}
+                        </td>
+                        <td className="px-3 py-2">
+                          {m.avgCallSeconds.toLocaleString("ru-RU")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-
-              <div className="rounded-xl bg-slate-900/60 p-4">
-                <div className="text-xs text-slate-400">Sotuv – Offline</div>
-                <div className="text-xl font-semibold">
-                  {(data.offlineSummasi ?? 0).toLocaleString("ru-RU")} so'm
-                </div>
-              </div>
-            </section>
-
-            {/* Put the rest of your existing UI here unchanged */}
-          </div>
-        )}
-      </div>
+            )}
+          </section>
+        </div>
+      )}
     </main>
+  );
+}
+
+function PeriodButton({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-md px-3 py-1 transition-colors ${
+        active
+          ? "bg-slate-100 text-slate-900"
+          : "text-slate-200 hover:bg-slate-700"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function MetricCard({
+  title,
+  value,
+  subtitle,
+}: {
+  title: string;
+  value: string;
+  subtitle?: string;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-700 bg-slate-900 p-3">
+      <div className="text-xs font-medium text-slate-400">{title}</div>
+      <div className="mt-1 text-lg font-bold text-slate-50">{value}</div>
+      {subtitle && (
+        <div className="mt-1 text-[11px] text-slate-500">{subtitle}</div>
+      )}
+    </div>
   );
 }
