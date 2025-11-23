@@ -1,86 +1,171 @@
 // lib/amocrm.ts
+import { dashboardConfig } from "@/config/dashboardConfig";
 
 const AMO_BASE_URL = process.env.AMO_BASE_URL;
-const AMO_LONG_LIVED_TOKEN = process.env.AMO_LONG_LIVED_TOKEN;
+const AMO_TOKEN = process.env.AMO_LONG_LIVED_TOKEN;
 
-/**
- * Generic request to amoCRM v4 API using long-lived token.
- */
-export async function amoRequest(
-  path: string,
-  options: RequestInit = {}
-): Promise<any> {
-  if (!AMO_BASE_URL || !AMO_LONG_LIVED_TOKEN) {
-    throw new Error("AMO_BASE_URL or AMO_LONG_LIVED_TOKEN is not set");
-  }
+if (!AMO_BASE_URL || !AMO_TOKEN) {
+  console.warn(
+    "AMO_BASE_URL yoki AMO_LONG_LIVED_TOKEN topilmadi. amoCRM chaqiriqlari ishlamasligi mumkin."
+  );
+}
 
-  const url = path.startsWith("http")
-    ? path
-    : `${AMO_BASE_URL}${path.startsWith("/") ? "" : "/"}${path}`;
+export type AmoCustomFieldValueCommon = {
+  field_id: number;
+  field_name: string;
+  field_code?: string;
+};
+
+export type AmoCustomFieldValueString = AmoCustomFieldValueCommon & {
+  values: { value: string }[];
+};
+
+export type AmoCustomFieldValueEnum = AmoCustomFieldValueCommon & {
+  values: { enum_id: number; value: string }[];
+};
+
+export type AmoLead = {
+  id: number;
+  created_at?: number;
+  updated_at?: number;
+  status_id?: number;
+  pipeline_id?: number;
+  responsible_user_id?: number;
+  custom_fields_values?: (AmoCustomFieldValueString | AmoCustomFieldValueEnum)[];
+};
+
+export type AmoPipeline = {
+  id: number;
+  name: string;
+  statuses?: { id: number; name: string }[];
+};
+
+export type AmoUser = {
+  id: number;
+  name: string;
+};
+
+type AmoListResponse<T> = {
+  _embedded?: { [key: string]: T[] };
+  _links?: { next?: { href: string } };
+};
+
+async function amoRequest<T>(pathOrUrl: string): Promise<T> {
+  const url = pathOrUrl.startsWith("http")
+    ? pathOrUrl
+    : `${AMO_BASE_URL}${pathOrUrl}`;
 
   const res = await fetch(url, {
-    ...options,
     headers: {
-      Authorization: `Bearer ${AMO_LONG_LIVED_TOKEN}`,
+      Authorization: `Bearer ${AMO_TOKEN}`,
       "Content-Type": "application/json",
-      ...(options.headers || {}),
     },
-    // Vercel edge can reuse connection better with no cache
     cache: "no-store",
   });
 
   if (!res.ok) {
-    const txt = await res.text();
-    console.error("amoRequest error", res.status, txt);
+    const txt = await res.text().catch(() => "");
     throw new Error(`amoCRM error ${res.status}: ${txt}`);
   }
 
-  return res.json();
+  return (await res.json()) as T;
 }
 
-export type AmoLead = {
-  id: number;
-  name?: string;
-  price?: number;
-  status_id?: number;
-  pipeline_id?: number;
-  created_at?: number; // unix seconds
-  closed_at?: number | null;
-  loss_reason_id?: number | null;
-  responsible_user_id?: number;
-};
+async function amoPaginate<T>(
+  firstPath: string,
+  embeddedKey: string
+): Promise<T[]> {
+  let url = firstPath;
+  const out: T[] = [];
 
-/**
- * Get leads created within [from, to] in unix seconds.
- */
+  while (url) {
+    const data = await amoRequest<AmoListResponse<T>>(url);
+    const items = data._embedded?.[embeddedKey] || [];
+    out.push(...items);
+
+    const nextHref = data._links?.next?.href;
+    url = nextHref || "";
+  }
+  return out;
+}
+
 export async function getLeadsByCreatedAt(
   fromUnix: number,
   toUnix: number
 ): Promise<AmoLead[]> {
-  // amoCRM supports filters: filter[created_at][from], [to]
-  const url = `/api/v4/leads?limit=250&filter[created_at][from]=${fromUnix}&filter[created_at][to]=${toUnix}`;
-  const data = await amoRequest(url);
-  return data?._embedded?.leads || [];
+  const limit = 250;
+  const path =
+    `/api/v4/leads?limit=${limit}` +
+    `&filter[created_at][from]=${fromUnix}` +
+    `&filter[created_at][to]=${toUnix}` +
+    `&with=contacts,custom_fields`;
+
+  return amoPaginate<AmoLead>(path, "leads");
 }
 
-/**
- * Get users (managers) for name mapping.
- */
-export async function getUsers(): Promise<{ id: number; name: string }[]> {
-  const data = await amoRequest("/api/v4/users");
-  const users = data?._embedded?.users || [];
-  return users.map((u: any) => ({ id: u.id, name: u.name }));
+export async function getPipelines(
+  pipelineIds?: number[]
+): Promise<AmoPipeline[]> {
+  const ids = pipelineIds?.length
+    ? pipelineIds
+    : dashboardConfig.PIPELINE_IDS;
+
+  const pipelines: AmoPipeline[] = [];
+
+  for (const id of ids) {
+    try {
+      const p = await amoRequest<AmoPipeline>(
+        `/api/v4/leads/pipelines/${id}?with=statuses`
+      );
+      pipelines.push(p);
+    } catch (e) {
+      console.error("getPipelines error:", e);
+    }
+  }
+
+  return pipelines;
 }
 
-/**
- * Get loss reasons for nicer labels in pie chart.
- */
-export async function getLossReasons(): Promise<Record<number, string>> {
-  const data = await amoRequest("/api/v4/leads/loss_reasons");
-  const reasons = data?._embedded?.loss_reasons || [];
-  const map: Record<number, string> = {};
-  reasons.forEach((r: any) => {
-    map[r.id] = r.name;
-  });
-  return map;
+type AmoCustomField = {
+  id: number;
+  name: string;
+  field_type: string;
+  enums?: { id: number; value: string }[];
+};
+
+export async function getLeadCustomFields(
+  fieldIds: number[] = []
+): Promise<AmoCustomField[]> {
+  const all = await amoPaginate<AmoCustomField>(
+    "/api/v4/leads/custom_fields?limit=250",
+    "custom_fields"
+  );
+
+  if (!fieldIds.length) return all;
+  return all.filter((f) => fieldIds.includes(f.id));
+}
+
+export async function getUsers(): Promise<AmoUser[]> {
+  return amoPaginate<AmoUser>("/api/v4/users?limit=250", "users");
+}
+
+// helpers used in dashboard.ts
+export function getCustomFieldString(
+  lead: AmoLead,
+  fieldId: number
+): string | null {
+  const cf = lead.custom_fields_values?.find((c) => c.field_id === fieldId);
+  if (!cf) return null;
+  const v = (cf as AmoCustomFieldValueString).values?.[0]?.value;
+  return v ?? null;
+}
+
+export function getCustomFieldEnumId(
+  lead: AmoLead,
+  fieldId: number
+): number | null {
+  const cf = lead.custom_fields_values?.find((c) => c.field_id === fieldId);
+  if (!cf) return null;
+  const v = (cf as AmoCustomFieldValueEnum).values?.[0]?.enum_id;
+  return v ?? null;
 }
