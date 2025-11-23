@@ -72,13 +72,13 @@ const cfg: DashboardConfig = {
   "USE_AMO_CALLS": false,
   "USE_SHEETS_CALLS": false,
   "REVENUE_SHEETS": {
-    "link": "https://docs.google.com/spreadsheets/d/1DeC3MmCNgs-un-yu8XLaHLyHYcuECSDbnwa3gVdi8Kg",
-    "managerColumn": "Baza!B",
-    "dateColumn": "Baza!A",
-    "paymentTypeColumn": "Baza!D",
-    "incomeTypeColumn": "Baza!C",
-    "amountColumn": "Baza!E",
-    "courseTypeColumn": "Baza!C"
+    "link": "https://docs.google.com/spreadsheets/d/1WmYVOW6surq2eG03WBE8mJGn2CnTaB-cgeQTrsqJnZo",
+    "managerColumn": "Asosiy!B",
+    "dateColumn": "Asosiy!A",
+    "paymentTypeColumn": "Asosiy!B",
+    "incomeTypeColumn": "Asosiy!B",
+    "amountColumn": "Asosiy!E",
+    "courseTypeColumn": "Asosiy!C"
   },
   "REVENUE_SHEETS_URL": "",
   "REVENUE_MANAGER_COLUMN": "",
