@@ -1,12 +1,15 @@
 // app/api/admin/save-config/route.ts
 import { NextResponse } from "next/server";
+import { readFile, writeFile } from "fs/promises";
+import { join } from "path";
 
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN!;
-const GITHUB_OWNER = process.env.GITHUB_OWNER!;
-const GITHUB_REPO = process.env.GITHUB_REPO!;
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+const GITHUB_OWNER = process.env.GITHUB_OWNER;
+const GITHUB_REPO = process.env.GITHUB_REPO;
 const GITHUB_BRANCH = process.env.GITHUB_BRANCH || "main";
 
 const FILE_PATH = "config/dashboardConfig.ts";
+const LOCAL_FILE_PATH = join(process.cwd(), FILE_PATH);
 
 type SaveBody =
   | { type: "constructor"; data: any }
@@ -53,9 +56,21 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as SaveBody;
 
-    const file = await githubGetFile();
-    const sha = file.sha;
-    const raw = Buffer.from(file.content, "base64").toString("utf8");
+    // Check if we should use GitHub or local file system
+    const useGithub = GITHUB_TOKEN && GITHUB_OWNER && GITHUB_REPO;
+    
+    let raw: string;
+    let sha: string | undefined;
+
+    if (useGithub) {
+      // Use GitHub API
+      const file = await githubGetFile();
+      sha = file.sha;
+      raw = Buffer.from(file.content, "base64").toString("utf8");
+    } else {
+      // Use local file system
+      raw = await readFile(LOCAL_FILE_PATH, "utf8");
+    }
 
     // cfg objectni regex bilan topib olamiz
     const match = raw.match(/const cfg: DashboardConfig = (\{[\s\S]*?\});/);
@@ -87,20 +102,24 @@ export async function POST(req: Request) {
 
     const updatedCfgText = JSON.stringify(newCfg, null, 2);
 
-    const updatedFile =
-      raw.replace(
-        /const cfg: DashboardConfig = (\{[\s\S]*?\});/,
-        `const cfg: DashboardConfig = ${updatedCfgText};`
-      );
+    const updatedFile = raw.replace(
+      /const cfg: DashboardConfig = (\{[\s\S]*?\});/,
+      `const cfg: DashboardConfig = ${updatedCfgText};`
+    );
 
-    const commitMsg =
-      body.type === "constructor"
-        ? "Update constructor dashboard config"
-        : "Update revenue sheets config";
+    if (useGithub) {
+      // Save to GitHub
+      const commitMsg =
+        body.type === "constructor"
+          ? "Update constructor dashboard config"
+          : "Update revenue sheets config";
+      await githubUpdateFile(updatedFile, sha!, commitMsg);
+    } else {
+      // Save to local file system
+      await writeFile(LOCAL_FILE_PATH, updatedFile, "utf8");
+    }
 
-    await githubUpdateFile(updatedFile, sha, commitMsg);
-
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, savedTo: useGithub ? "github" : "local" });
   } catch (e: any) {
     return NextResponse.json(
       { ok: false, error: e.message },
