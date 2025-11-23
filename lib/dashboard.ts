@@ -40,17 +40,24 @@ export type ManagerSalesRow = {
 
 // ---------------- Manager calls row ----------------
 export type ManagerCallsRow = {
-  // ✅ legacy fields expected by UI
+  // ✅ legacy fields expected by UI (hozirgi UI)
   managerId: string;
   managerName: string;
+
+  // asosiy raqamlar
   totalCalls: number;
   successCalls: number;
-  totalDurationMin: number;
-  avgDurationSec: number;
+  totalDurationMin: number; // umumiy daqiqa
+  avgDurationSec: number;   // o‘rtacha soniya
 
-  // 🔮 possible extra legacy fields (optional)
+  // 🔁 qo‘shimcha legacy aliaslar
   totalDurationMinutes?: number;
   avgDurationSeconds?: number;
+
+  callsAll: number;          // = totalCalls
+  callsSuccess: number;      // = successCalls
+  durationTotalMin: number;  // = totalDurationMin
+  durationAvgSec: number;    // = avgDurationSec
 
   // ✅ actual field
   manager: string;
@@ -84,7 +91,7 @@ export type DashboardData = {
   managersSales: ManagerSalesRow[];  // new name
 
   // ✅ calls aliases
-  managerCalls: ManagerCallsRow[];   // legacy
+  managerCalls: ManagerCallsRow[];    // legacy
   callsByManagers: ManagerCallsRow[]; // new name
 
   leadsTotal: number;
@@ -371,12 +378,19 @@ export async function buildDashboardData(
     managerId: slugify(c.manager),
     managerName: c.manager,
     manager: c.manager,
+
     totalCalls: c.totalCalls,
     successCalls: c.successCalls,
     totalDurationMin: c.totalDurationMin,
     avgDurationSec: c.avgDurationSec,
+
     totalDurationMinutes: c.totalDurationMin,
     avgDurationSeconds: c.avgDurationSec,
+
+    callsAll: c.totalCalls,
+    callsSuccess: c.successCalls,
+    durationTotalMin: c.totalDurationMin,
+    durationAvgSec: c.avgDurationSec,
   }));
 
   const managerCalls = callsByManagers; // ✅ legacy alias
