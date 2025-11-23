@@ -40,7 +40,7 @@ export type ManagerSalesRow = {
 
 // ---------------- Manager calls row ----------------
 export type ManagerCallsRow = {
-  // ✅ legacy fields expected by UI (hozirgi UI)
+  // ✅ legacy fields expected by UI
   managerId: string;
   managerName: string;
 
@@ -58,6 +58,10 @@ export type ManagerCallsRow = {
   callsSuccess: number;      // = successCalls
   durationTotalMin: number;  // = totalDurationMin
   durationAvgSec: number;    // = avgDurationSec
+
+  // ❗ yangi legacy nomlar (UI dagi)
+  callSecondsAll: number;    // = totalDurationMin * 60
+  avgCallSeconds: number;    // = avgDurationSec
 
   // ✅ actual field
   manager: string;
@@ -91,8 +95,8 @@ export type DashboardData = {
   managersSales: ManagerSalesRow[];  // new name
 
   // ✅ calls aliases
-  managerCalls: ManagerCallsRow[];    // legacy
-  callsByManagers: ManagerCallsRow[]; // new name
+  managerCalls: ManagerCallsRow[];     // legacy
+  callsByManagers: ManagerCallsRow[];  // new name
 
   leadsTotal: number;
   qualifiedLeads: number;
@@ -391,6 +395,9 @@ export async function buildDashboardData(
     callsSuccess: c.successCalls,
     durationTotalMin: c.totalDurationMin,
     durationAvgSec: c.avgDurationSec,
+
+    callSecondsAll: c.totalDurationMin * 60,
+    avgCallSeconds: c.avgDurationSec,
   }));
 
   const managerCalls = callsByManagers; // ✅ legacy alias
