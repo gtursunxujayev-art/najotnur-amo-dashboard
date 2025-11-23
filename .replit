@@ -41,3 +41,8 @@ externalPort = 3000
 deploymentTarget = "autoscale"
 run = ["npm", "start"]
 build = ["npm", "run", "build"]
+
+[userenv]
+
+[userenv.shared]
+AMO_BASE_URL = "https://najotnur01.amocrm.ru"
