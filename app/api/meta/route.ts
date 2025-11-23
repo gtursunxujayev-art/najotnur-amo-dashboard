@@ -49,23 +49,15 @@ export async function GET() {
       }));
     });
 
-    // 2) Loss reasons
-    let lossReasons: any[] = [];
-    try {
-      const lossRes = await amoFetch("/api/v4/leads/loss_reasons?limit=250");
-      lossReasons = (lossRes?._embedded?.loss_reasons ?? []).map((lr: any) => ({
-        id: lr.id,
-        name: lr.name,
-      }));
-    } catch {
-      lossReasons = [];
-    }
-
-    // 3) Custom fields (leads)
+    // 2) Custom fields (leads) - fetch first to extract E'tiroz sababi
     let customFields: any[] = [];
+    let lossReasons: any[] = [];
+    
     try {
       const fieldsRes = await amoFetch("/api/v4/leads/custom_fields?limit=250");
-      customFields = (fieldsRes?._embedded?.custom_fields ?? []).map((f: any) => ({
+      const allFields = fieldsRes?._embedded?.custom_fields ?? [];
+      
+      customFields = allFields.map((f: any) => ({
         id: f.id,
         name: f.name,
         type: f.type,
@@ -74,8 +66,38 @@ export async function GET() {
           value: en.value,
         })),
       }));
+      
+      // Extract E'tiroz sababi field enums as lossReasons
+      // Look for field ID 1121759 or field name containing "E'tiroz sababi"
+      const objectionField = allFields.find((f: any) => {
+        const name = String(f.name || "").toLowerCase();
+        return f.id === 1121759 || 
+               name.includes("e'tiroz sababi") || 
+               name.includes("eʼtiroz sababi") ||
+               name.includes("e'tiroz");
+      });
+      
+      if (objectionField && objectionField.enums) {
+        lossReasons = objectionField.enums.map((en: any) => ({
+          id: en.id,
+          name: en.value,
+        }));
+      }
     } catch {
       customFields = [];
+    }
+    
+    // Fallback: if no objection field found, try global loss reasons
+    if (lossReasons.length === 0) {
+      try {
+        const lossRes = await amoFetch("/api/v4/leads/loss_reasons?limit=250");
+        lossReasons = (lossRes?._embedded?.loss_reasons ?? []).map((lr: any) => ({
+          id: lr.id,
+          name: lr.name,
+        }));
+      } catch {
+        lossReasons = [];
+      }
     }
 
     return NextResponse.json({
