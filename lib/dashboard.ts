@@ -1,177 +1,316 @@
 // lib/dashboard.ts
+import {
+  getLeadsByCreatedAt,
+  getUsers,
+  getLossReasons,
+  AmoLead,
+} from "@/lib/amocrm";
 import { dashboardConfig } from "@/config/dashboardConfig";
-import { getAmoLeads } from "@/lib/amoLeads";
+import { getSheetCalls } from "@/lib/googleSheets";
 import { getAmoCalls } from "@/lib/amoCalls";
-import { getSheetRevenue } from "@/lib/sheetsRevenue";
-import { getSheetCalls } from "@/lib/sheetsCalls";
+import { getSheetRevenue } from "@/lib/revenueSheets";
 
 export type Period = {
   from: Date;
   to: Date;
 };
 
-// Utility
-function inRange(date: Date, from: Date, to: Date): boolean {
-  return date >= from && date <= to;
+export type ManagerSalesStats = {
+  managerId: number;
+  managerName: string;
+  totalLeads: number;
+  qualifiedLeads: number;
+  wonDeals: number;
+  wonAmount: number;
+};
+
+export type ManagerCallsStats = {
+  managerName: string;
+  callsAll: number;
+  callsSuccess: number;
+  callSecondsAll: number;
+  callSecondsSuccess: number;
+  avgCallSeconds: number;
+};
+
+export type Slice = {
+  label: string;
+  value: number;
+};
+
+export type DashboardData = {
+  periodLabel: string;
+  kelishuvSummasi: number;
+  onlineSummasi: number;
+  offlineSummasi: number;
+  oylikTushum: number;    // from Google Sheets
+  haftalikTushum: number; // from Google Sheets
+  leadsCount: number;
+  qualifiedLeadsCount: number;
+  nonQualifiedLeadsCount: number;
+  conversionFromQualified: number; // 0–1
+  nonQualifiedReasons: Slice[];    // ALL lost leads by loss reason
+  leadSources: Slice[];
+  managerSales: ManagerSalesStats[];
+  managerCalls: ManagerCallsStats[];
+};
+
+function toUnixSeconds(d: Date): number {
+  return Math.floor(d.getTime() / 1000);
 }
 
-export async function buildDashboardData(period: Period) {
-  const { from, to } = period;
+function getCustomFieldString(lead: AmoLead, fieldId: number): string | null {
+  const cf = (lead as any).custom_fields_values as
+    | Array<{
+        field_id: number;
+        values?: { value?: any }[];
+      }>
+    | undefined;
 
-  // ---------------------------
-  // 1) LEADS
-  // ---------------------------
-  const leads = await getAmoLeads(from, to);
-  const leadsCount = leads.length;
+  if (!cf) return null;
+  const f = cf.find((x) => x.field_id === fieldId);
+  if (!f || !f.values || !f.values[0]) return null;
+  const v = f.values[0].value;
+  if (v == null) return null;
+  return String(v);
+}
 
-  const qualifiedLeads = leads.filter((l) =>
-    dashboardConfig.QUALIFIED_STATUS_IDS.includes(l.statusId)
-  );
-  const qualifiedLeadsCount = qualifiedLeads.length;
+export async function buildDashboardData(
+  period: Period,
+  periodLabel: string
+): Promise<DashboardData> {
+  const [users, reasonsMap, leads, sheetCalls, amoCalls, revenueRows] =
+    await Promise.all([
+      getUsers(),
+      getLossReasons(), // { [id]: name }
+      getLeadsByCreatedAt(toUnixSeconds(period.from), toUnixSeconds(period.to)),
+      dashboardConfig.USE_SHEETS_CALLS
+        ? getSheetCalls(period.from, period.to)
+        : Promise.resolve([]),
+      dashboardConfig.USE_AMO_CALLS
+        ? getAmoCalls(period.from, period.to)
+        : Promise.resolve([]),
+      getSheetRevenue(period.from, period.to),
+    ]);
 
-  const notQualifiedLeads = leads.filter((l) =>
-    dashboardConfig.NOT_QUALIFIED_REASON_IDS.includes(l.lossReasonId || 0)
-  );
-  const notQualifiedLeadsCount = notQualifiedLeads.length;
+  const usersMap = new Map<number, string>();
+  users.forEach((u) => usersMap.set(u.id, u.name));
 
-  const wonLeads = leads.filter((l) =>
-    dashboardConfig.WON_STATUS_IDS.includes(l.statusId)
-  );
-  const wonLeadsCount = wonLeads.length;
-
-  // ---------------------------
-  // 2) REVENUE
-  // ---------------------------
-  let revenueRows = [];
-  try {
-    revenueRows = await getSheetRevenue(from, to);
-  } catch (e) {
-    revenueRows = [];
-  }
+  const managerSalesMap = new Map<number, ManagerSalesStats>();
+  const lostReasonMap = new Map<number, number>();
+  const leadSourcesMap = new Map<string, number>();
 
   let kelishuvSummasi = 0;
   let onlineSummasi = 0;
   let offlineSummasi = 0;
+  let leadsCount = 0;
+  let qualifiedLeadsCount = 0;
+  let nonQualifiedLeadsCount = 0;
+  let wonFromQualifiedCount = 0;
 
-  revenueRows.forEach((r) => {
-    kelishuvSummasi += r.amount;
+  const hasPipelineFilter = dashboardConfig.PIPELINE_IDS.length > 0;
 
-    if (r.type === "online") onlineSummasi += r.amount;
-    if (r.type === "offline") offlineSummasi += r.amount;
-  });
+  const isWon = (lead: AmoLead) =>
+    dashboardConfig.WON_STATUS_IDS.includes(lead.status_id || -1);
 
-  // ---------------------------
-  // 3) NON QUALIFIED REASONS
-  // ---------------------------
-  const reasonMap: Record<number, number> = {};
+  const isOnlineDeal = (lead: AmoLead) =>
+    dashboardConfig.ONLINE_COURSE_ENUM_IDS.length > 0 &&
+    (() => {
+      if (!dashboardConfig.COURSE_TYPE_FIELD_ID) return false;
+      const val = getCustomFieldString(lead, dashboardConfig.COURSE_TYPE_FIELD_ID);
+      if (!val) return false;
+      // For dropdown CFs, amoCRM stores enum ID in "enum_id" – but we
+      // get it via API in custom_fields_values; here we assume value is string enum_id
+      const num = Number(val);
+      return dashboardConfig.ONLINE_COURSE_ENUM_IDS.includes(num);
+    })();
 
-  notQualifiedLeads.forEach((l) => {
-    if (!l.lossReasonId) return;
-    reasonMap[l.lossReasonId] = (reasonMap[l.lossReasonId] || 0) + 1;
-  });
+  const isOfflineDeal = (lead: AmoLead) =>
+    dashboardConfig.OFFLINE_COURSE_ENUM_IDS.length > 0 &&
+    (() => {
+      if (!dashboardConfig.COURSE_TYPE_FIELD_ID) return false;
+      const val = getCustomFieldString(lead, dashboardConfig.COURSE_TYPE_FIELD_ID);
+      if (!val) return false;
+      const num = Number(val);
+      return dashboardConfig.OFFLINE_COURSE_ENUM_IDS.includes(num);
+    })();
 
-  const notQualifiedReasons = Object.entries(reasonMap).map(([id, count]) => ({
-    id: Number(id),
-    name: dashboardConfig.ALL_LOSS_REASONS[id] || `Sabab ${id}`,
-    count,
-  }));
+  const isLost = (lead: AmoLead) => lead.loss_reason_id != null;
 
-  // ---------------------------
-  // 4) MANAGER SALES
-  // ---------------------------
-  const mgrMap: Record<string, any> = {};
+  const isQualified = (lead: AmoLead) => {
+    const statusId = lead.status_id || -1;
+    const lossReasonId = lead.loss_reason_id ?? null;
 
-  leads.forEach((l) => {
-    const manager = l.manager || "Unknown";
+    if (dashboardConfig.QUALIFIED_STATUS_IDS.includes(statusId)) {
+      return true;
+    }
+    if (
+      lossReasonId != null &&
+      dashboardConfig.QUALIFIED_LOSS_REASON_IDS.includes(lossReasonId)
+    ) {
+      // Lost lead but with a "qualified" reason → still counted as qualified
+      return true;
+    }
+    return false;
+  };
 
-    if (!mgrMap[manager]) {
-      mgrMap[manager] = {
-        managerName: manager,
+  const isNotQualified = (lead: AmoLead) => {
+    if (!isLost(lead)) return false;
+    const reasonId = lead.loss_reason_id!;
+    return dashboardConfig.NOT_QUALIFIED_REASON_IDS.includes(reasonId);
+  };
+
+  leads.forEach((lead) => {
+    const pipelineId = lead.pipeline_id || -1;
+
+    if (hasPipelineFilter && !dashboardConfig.PIPELINE_IDS.includes(pipelineId)) {
+      // skip leads from other pipelines
+      return;
+    }
+
+    leadsCount++;
+
+    const managerId = lead.responsible_user_id || 0;
+    const managerName = usersMap.get(managerId) || `User ${managerId}`;
+    const price = lead.price || 0;
+
+    if (!managerSalesMap.has(managerId)) {
+      managerSalesMap.set(managerId, {
+        managerId,
+        managerName,
         totalLeads: 0,
         qualifiedLeads: 0,
         wonDeals: 0,
         wonAmount: 0,
-      };
+      });
+    }
+    const ms = managerSalesMap.get(managerId)!;
+    ms.totalLeads++;
+
+    // Lost reason map (for pie chart)
+    if (isLost(lead) && lead.loss_reason_id != null) {
+      const rId = lead.loss_reason_id;
+      lostReasonMap.set(rId, (lostReasonMap.get(rId) || 0) + 1);
     }
 
-    mgrMap[manager].totalLeads++;
-
-    if (dashboardConfig.QUALIFIED_STATUS_IDS.includes(l.statusId)) {
-      mgrMap[manager].qualifiedLeads++;
+    // Qualified / Not qualified counters
+    if (isQualified(lead)) {
+      qualifiedLeadsCount++;
+      ms.qualifiedLeads++;
     }
 
-    if (dashboardConfig.WON_STATUS_IDS.includes(l.statusId)) {
-      mgrMap[manager].wonDeals++;
-      mgrMap[manager].wonAmount += l.price || 0;
+    if (isNotQualified(lead)) {
+      nonQualifiedLeadsCount++;
+    }
+
+    // Won / deals
+    if (isWon(lead)) {
+      kelishuvSummasi += price;
+      ms.wonDeals++;
+      ms.wonAmount += price;
+
+      if (isQualified(lead)) {
+        wonFromQualifiedCount++;
+      }
+
+      if (isOnlineDeal(lead)) {
+        onlineSummasi += price;
+      }
+      if (isOfflineDeal(lead)) {
+        offlineSummasi += price;
+      }
+    }
+
+    // Lead sources ("Qayerdan")
+    if (dashboardConfig.LEAD_SOURCE_FIELD_ID != null) {
+      const srcVal = getCustomFieldString(
+        lead,
+        dashboardConfig.LEAD_SOURCE_FIELD_ID
+      );
+      const label =
+        srcVal && srcVal.trim().length > 0 ? srcVal.trim() : "Unknown source";
+      leadSourcesMap.set(label, (leadSourcesMap.get(label) || 0) + 1);
     }
   });
 
-  const managersSales = Object.values(mgrMap);
+  // Revenue from Google Sheets for selected period
+  const revenueSum = revenueRows.reduce((sum, r) => sum + r.amount, 0);
 
-  // ---------------------------
-  // 5) MANAGER CALLS (optional)
-  // ---------------------------
-  let managerCalls: any[] = [];
-  let callsRaw: any[] = [];
+  const oylikTushum = revenueSum;
+  const haftalikTushum = revenueSum;
 
-  try {
-    if (dashboardConfig.USE_AMO_CALLS) {
-      callsRaw = await getAmoCalls(from, to);
-    } else if (dashboardConfig.USE_SHEETS_CALLS) {
-      callsRaw = await getSheetCalls(from, to);
-    }
-  } catch (e) {
-    callsRaw = [];
-  }
+  const nonQualifiedReasons: Slice[] = Array.from(lostReasonMap.entries()).map(
+    ([reasonId, count]) => ({
+      label: reasonsMap[reasonId] || `Reason ${reasonId}`,
+      value: count,
+    })
+  );
 
-  const callMap: Record<string, any> = {};
+  const conversionFromQualified =
+    qualifiedLeadsCount > 0 ? wonFromQualifiedCount / qualifiedLeadsCount : 0;
 
-  callsRaw.forEach((c) => {
-    const manager = c.manager || "Unknown";
+  const leadSources: Slice[] = Array.from(leadSourcesMap.entries()).map(
+    ([label, value]) => ({ label, value })
+  );
 
-    if (!callMap[manager]) {
-      callMap[manager] = {
-        managerName: manager,
+  // Calls per manager
+  const callsPerManager = new Map<string, ManagerCallsStats>();
+
+  const ensureManagerCalls = (managerName: string): ManagerCallsStats => {
+    if (!callsPerManager.has(managerName)) {
+      callsPerManager.set(managerName, {
+        managerName,
         callsAll: 0,
         callsSuccess: 0,
         callSecondsAll: 0,
+        callSecondsSuccess: 0,
         avgCallSeconds: 0,
-      };
+      });
     }
+    return callsPerManager.get(managerName)!;
+  };
 
-    const row = callMap[manager];
-    row.callsAll++;
-    if (c.success) row.callsSuccess++;
-    row.callSecondsAll += c.duration;
+  // 1) amoCRM calls (all calls)
+  if (dashboardConfig.USE_AMO_CALLS) {
+    amoCalls.forEach((c) => {
+      const managerName = usersMap.get(c.managerId) || `User ${c.managerId}`;
+      const cs = ensureManagerCalls(managerName);
+      cs.callsAll++;
+      cs.callSecondsAll += c.durationSec;
+    });
+  }
+
+  // 2) Google Sheets calls (successful)
+  if (dashboardConfig.USE_SHEETS_CALLS) {
+    sheetCalls.forEach((c) => {
+      const cs = ensureManagerCalls(c.managerName);
+      if (c.isSuccess) {
+        cs.callsSuccess++;
+        cs.callSecondsSuccess += c.durationSec;
+      }
+    });
+  }
+
+  // 3) Average call length
+  callsPerManager.forEach((cs) => {
+    cs.avgCallSeconds =
+      cs.callsAll > 0 ? Math.round(cs.callSecondsAll / cs.callsAll) : 0;
   });
 
-  managerCalls = Object.values(callMap).map((m: any) => ({
-    ...m,
-    avgCallSeconds:
-      m.callsAll > 0 ? Math.round(m.callSecondsAll / m.callsAll) : 0,
-  }));
-
-  // ---------------------------
-  // 6) CONVERSION
-  // ---------------------------
-  const conversionFromQualified =
-    qualifiedLeadsCount > 0 ? wonLeadsCount / qualifiedLeadsCount : 0;
-
-  // ---------------------------
-  // FINAL RETURN
-  // ---------------------------
   return {
-    periodLabel: "",
+    periodLabel,
     kelishuvSummasi,
     onlineSummasi,
     offlineSummasi,
+    oylikTushum,
+    haftalikTushum,
     leadsCount,
     qualifiedLeadsCount,
-    notQualifiedLeadsCount,
-    wonLeadsCount,
+    nonQualifiedLeadsCount,
     conversionFromQualified,
-    notQualifiedReasons,
-    managersSales,
-    managerCalls,
+    nonQualifiedReasons,
+    leadSources,
+    managerSales: Array.from(managerSalesMap.values()),
+    managerCalls: Array.from(callsPerManager.values()),
   };
 }
