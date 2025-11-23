@@ -1,6 +1,8 @@
 // lib/reportPdf.ts
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { buildDashboardData, Period } from "@/lib/dashboard";
+import { buildDashboardData } from "@/lib/dashboard";
+import { getPeriodDates } from "@/lib/period";
+import type { Period } from "@/lib/dashboard";
 
 function formatMoney(num: number): string {
   return new Intl.NumberFormat("uz-UZ", {
@@ -10,159 +12,116 @@ function formatMoney(num: number): string {
 
 export async function generateDashboardPdf(
   period: Period,
-  periodLabel?: string
+  periodLabelOverride?: string
 ): Promise<Uint8Array> {
-  const data = await buildDashboardData(period);
-  const label = periodLabel || data.periodLabel;
+  // Convert period → { from, to, label }
+  const { from, to, label } = getPeriodDates(period);
+
+  // IMPORTANT: buildDashboardData takes { from, to }
+  const data = await buildDashboardData({ from, to });
+
+  const periodLabel = periodLabelOverride || label;
 
   const pdfDoc = await PDFDocument.create();
-  // A4 size in points: 595 x 842
-  const page = pdfDoc.addPage([595, 842]);
+  const page = pdfDoc.addPage([595, 842]); // A4
   const { width, height } = page.getSize();
 
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
   let y = height - 40;
 
-  // Title
-  page.drawText("Najot Nur sotuv bolimi - hisobot", {
+  // --------------------
+  // HEADER
+  // --------------------
+  page.drawText("Najot Nur — Sotuv bo‘limi hisobot", {
     x: 40,
     y,
     size: 16,
-    font: fontBold,
+    font: bold,
     color: rgb(0.1, 0.1, 0.1),
   });
-  y -= 22;
+  y -= 26;
 
-  // Period and date
   const now = new Date();
-  page.drawText(`Davr: ${label}`, {
+
+  page.drawText(`Davr: ${periodLabel}`, {
+    x: 40,
+    y,
+    size: 11,
+    font,
+    color: rgb(0.1, 0.1, 0.1),
+  });
+  y -= 16;
+
+  page.drawText(`Generatsiya: ${now.toLocaleString("ru-RU")}`, {
     x: 40,
     y,
     size: 10,
     font,
-    color: rgb(0.15, 0.15, 0.15),
+    color: rgb(0.25, 0.25, 0.25),
   });
-  y -= 14;
+  y -= 28;
 
-  page.drawText(
-    `Hisobot generatsiya qilingan sana: ${now.toLocaleString("ru-RU")}`,
-    {
-      x: 40,
-      y,
-      size: 9,
-      font,
-      color: rgb(0.2, 0.2, 0.2),
-    }
-  );
-  y -= 24;
-
-  // 1. Umumiy ko'rsatkichlar
-  page.drawText("1. Umumiy korsatkichlar", {
+  // --------------------
+  // BLOCK 1 – GENERAL METRICS
+  // --------------------
+  page.drawText("1. Umumiy ko‘rsatkichlar", {
     x: 40,
     y,
-    size: 12,
-    font: fontBold,
-    color: rgb(0, 0, 0),
+    size: 13,
+    font: bold,
   });
-  y -= 16;
+  y -= 20;
 
-  const lines: string[] = [];
+  const lines = [
+    `Kelishuv summasi: ${formatMoney(data.kelishuvSummasi)} so'm`,
+    `Sotuv — Online: ${formatMoney(data.onlineSummasi)} so'm`,
+    `Sotuv — Offline: ${formatMoney(data.offlineSummasi)} so'm`,
+    `Lidlar jami: ${data.leadsCount}`,
+    `Sifatli lidlar: ${data.qualifiedLeadsCount}`,
+    `Sifatsiz lidlar: ${data.notQualifiedLeadsCount}`,
+    `Sotib olganlar (Won): ${data.wonLeadsCount}`,
+    `Konversiya (sifatli → sotuv): ${(data.conversionFromQualified * 100).toFixed(1)}%`,
+  ];
 
-  lines.push(
-    `Kelishuv summasi: ${formatMoney(data.kelishuvSummasi)} so'm (tushum)`
-  );
-  lines.push(
-    `Sotuv - online: ${formatMoney(data.onlineSummasi)} so'm`
-  );
-  lines.push(
-    `Sotuv - offline: ${formatMoney(data.offlineSummasi)} so'm`
-  );
-  lines.push(
-    `Lidlar jami: ${data.leadsCount.toLocaleString("ru-RU")}`
-  );
-  lines.push(
-    `Sifatli lidlar: ${data.qualifiedLeadsCount.toLocaleString("ru-RU")}`
-  );
-  lines.push(
-    `Sifatsiz lidlar: ${data.notQualifiedLeadsCount.toLocaleString("ru-RU")}`
-  );
-  lines.push(
-    `Sotib olganlar (won): ${data.wonLeadsCount.toLocaleString("ru-RU")}`
-  );
-
-  const convPercent =
-    data.conversionFromQualified > 0
-      ? Math.round(data.conversionFromQualified * 1000) / 10
-      : 0;
-
-  lines.push(
-    `Konversiya (sifatli dan sotuvga): ${convPercent.toFixed(1)}%`
-  );
-
-  lines.forEach((text) => {
-    if (y < 80) {
-      y = height - 60;
-      page.drawText("Davom etadi...", {
-        x: 40,
-        y,
-        size: 9,
-        font,
-      });
-      y -= 20;
-    }
-    page.drawText(text, {
-      x: 50,
-      y,
-      size: 10,
-      font,
-      color: rgb(0.1, 0.1, 0.1),
-    });
+  for (const t of lines) {
+    page.drawText(t, { x: 50, y, size: 10, font });
     y -= 14;
-  });
+  }
 
-  y -= 10;
+  y -= 20;
 
-  // 2. Sifatsiz lidlar sabablari
+  // --------------------
+  // BLOCK 2 – NOT QUALIFIED REASONS
+  // --------------------
   page.drawText("2. Sifatsiz lidlar sabablari", {
     x: 40,
     y,
-    size: 12,
-    font: fontBold,
+    size: 13,
+    font: bold,
   });
-  y -= 16;
+  y -= 20;
 
   const reasons = data.nonQualifiedReasons || data.notQualifiedReasons || [];
 
   if (!reasons.length) {
-    page.drawText("Sifatsiz lidlar sabablari haqida malumot yoq.", {
+    page.drawText("Sifatsiz lidlar sabablari mavjud emas.", {
       x: 50,
       y,
       size: 10,
       font,
     });
-    y -= 14;
+    y -= 16;
   } else {
-    // Table header
-    page.drawText("Sabab", {
-      x: 50,
-      y,
-      size: 10,
-      font: fontBold,
-    });
-    page.drawText("Soni", {
-      x: 350,
-      y,
-      size: 10,
-      font: fontBold,
-    });
-    y -= 12;
+    page.drawText("Sabab", { x: 50, y, size: 10, font: bold });
+    page.drawText("Soni", { x: 350, y, size: 10, font: bold });
+    y -= 14;
 
-    reasons.forEach((r) => {
-      if (y < 80) {
+    for (const r of reasons) {
+      if (y < 60) {
         y = height - 60;
-        page.drawText("Davom etadi...", {
+        page.drawText("Davom etadi…", {
           x: 40,
           y,
           size: 9,
@@ -170,32 +129,26 @@ export async function generateDashboardPdf(
         });
         y -= 20;
       }
-      page.drawText(String(r.name), {
-        x: 50,
-        y,
-        size: 9,
-        font,
-      });
-      page.drawText(String(r.count), {
-        x: 350,
-        y,
-        size: 9,
-        font,
-      });
-      y -= 11;
-    });
+
+      page.drawText(String(r.name), { x: 50, y, size: 9, font });
+      page.drawText(String(r.count), { x: 350, y, size: 9, font });
+
+      y -= 12;
+    }
   }
 
-  y -= 14;
+  y -= 20;
 
-  // 3. Menejerlar bo'yicha sotuvlar (TOP 5)
-  page.drawText("3. Menejerlar boyicha sotuvlar (TOP 5)", {
+  // --------------------
+  // BLOCK 3 – TOP 5 SALES MANAGERS
+  // --------------------
+  page.drawText("3. Menejerlar bo‘yicha sotuvlar (TOP 5)", {
     x: 40,
     y,
-    size: 12,
-    font: fontBold,
+    size: 13,
+    font: bold,
   });
-  y -= 16;
+  y -= 18;
 
   const managerSales = (data.managerSales || data.managersSales || []).slice(
     0,
@@ -211,40 +164,22 @@ export async function generateDashboardPdf(
     });
     y -= 14;
   } else {
-    // Table header
-    const colXs = [50, 220, 320, 400, 480];
+    const cols = [50, 220, 320, 400, 480];
+    const headers = ["Menejer", "Lidlar", "Sifatli", "Sotuv", "Tushum"];
 
-    const headers = [
-      "Menejer",
-      "Lidlar",
-      "Sifatli",
-      "Sotuvlar",
-      "Tushum",
-    ];
+    headers.forEach((h, i) =>
+      page.drawText(h, { x: cols[i], y, size: 9, font: bold })
+    );
+    y -= 14;
 
-    headers.forEach((h, i) => {
-      page.drawText(h, {
-        x: colXs[i],
-        y,
-        size: 9,
-        font: fontBold,
-      });
-    });
-    y -= 12;
-
-    managerSales.forEach((m) => {
-      if (y < 80) {
+    for (const m of managerSales) {
+      if (y < 60) {
         y = height - 60;
-        page.drawText("Davom etadi...", {
-          x: 40,
-          y,
-          size: 9,
-          font,
-        });
+        page.drawText("Davom etadi…", { x: 40, y, size: 9, font });
         y -= 20;
       }
 
-      const vals = [
+      const row = [
         m.managerName || m.manager,
         String(m.totalLeads ?? m.leads ?? 0),
         String(m.qualifiedLeads ?? m.qualified ?? 0),
@@ -252,19 +187,13 @@ export async function generateDashboardPdf(
         formatMoney(m.wonAmount ?? m.revenue ?? 0),
       ];
 
-      vals.forEach((v, i) => {
-        page.drawText(v, {
-          x: colXs[i],
-          y,
-          size: 8,
-          font,
-        });
-      });
+      row.forEach((v, i) =>
+        page.drawText(v, { x: cols[i], y, size: 8, font })
+      );
 
-      y -= 11;
-    });
+      y -= 12;
+    }
   }
 
-  const pdfBytes = await pdfDoc.save();
-  return pdfBytes;
+  return await pdfDoc.save();
 }
