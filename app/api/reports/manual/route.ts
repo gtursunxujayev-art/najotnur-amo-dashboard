@@ -1,8 +1,23 @@
 // app/api/reports/manual/route.ts
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { generateDashboardPdf } from "@/lib/reportPdf";
+import { sendTelegramPdf } from "@/lib/telegram";
+import { resolveReportPeriod } from "@/lib/reportPeriod";
 import type { Period } from "@/lib/dashboard";
 
-const ALLOWED_PERIODS: Period[] = [
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+type ManualPeriodKey =
+  | "today"
+  | "yesterday"
+  | "thisWeek"
+  | "lastWeek"
+  | "thisMonth"
+  | "lastMonth";
+
+const VALID_KEYS: ManualPeriodKey[] = [
   "today",
   "yesterday",
   "thisWeek",
@@ -11,118 +26,132 @@ const ALLOWED_PERIODS: Period[] = [
   "lastMonth",
 ];
 
-function periodLabel(p: Period) {
-  switch (p) {
-    case "today":
-      return "Bugun (kunlik hisobot)";
-    case "yesterday":
-      return "Kecha (kunlik hisobot)";
-    case "thisWeek":
-      return "Bu hafta (haftalik hisobot)";
-    case "lastWeek":
-      return "O‘tgan hafta (haftalik hisobot)";
-    case "thisMonth":
-      return "Bu oy (oylik hisobot)";
-    case "lastMonth":
-      return "O‘tgan oy (oylik hisobot)";
-    default:
-      return "Hisobot";
-  }
-}
+function resolveManualPeriod(
+  key: ManualPeriodKey
+): { period: Period; label: string } {
+  const now = new Date();
 
-async function buildPdfBytes(period: Period, label: string) {
-  // reportPdf ichida export nomlari sizda biroz boshqacha bo‘lishi mumkin
-  const mod: any = await import("@/lib/reportPdf");
+  // Helper to clone date cleanly
+  const start = new Date(now);
+  const end = new Date(now);
 
-  const buildFn =
-    mod.buildReportPdf ||
-    mod.buildDashboardPdf ||
-    mod.buildReportPDF ||
-    mod.default;
-
-  if (typeof buildFn !== "function") {
-    throw new Error(
-      "lib/reportPdf.ts ichidan PDF builder topilmadi. buildReportPdf/buildDashboardPdf exportini tekshiring."
-    );
-  }
-
-  // agar funksiya 2 argument qabul qilsa (period, label) yuboramiz, bo‘lmasa faqat period
-  if (buildFn.length >= 2) {
-    return await buildFn(period, label);
-  }
-
-  return await buildFn(period);
-}
-
-async function sendPdfToTelegram(chatId: number, pdfBytes: Uint8Array, caption: string) {
-  // Avval helper bo‘lsa ishlatamiz
-  try {
-    const tmod: any = await import("@/lib/telegram");
-    const sendFn =
-      tmod.sendPdfToTelegram ||
-      tmod.sendPdf ||
-      tmod.sendTelegramPdfReport;
-
-    if (typeof sendFn === "function") {
-      return await sendFn(chatId, pdfBytes, caption);
+  switch (key) {
+    case "today": {
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
+      return {
+        period: { from: start, to: end },
+        label: "Bugun (kunlik hisobot)",
+      };
     }
-  } catch (_) {
-    // helper topilmasa pastdagi raw Telegram API ishlaydi
+
+    case "yesterday": {
+      // reuse existing logic for "daily" which is yesterday
+      return resolveReportPeriod("daily");
+    }
+
+    case "thisWeek": {
+      // Monday of current week → Sunday of current week
+      const day = now.getDay(); // 0-6 (Sun=0)
+      const diffToMonday = (day + 6) % 7; // 0 for Mon, 1 for Tue, ...
+      start.setDate(now.getDate() - diffToMonday);
+      start.setHours(0, 0, 0, 0);
+
+      end.setTime(start.getTime());
+      end.setDate(start.getDate() + 6);
+      end.setHours(23, 59, 59, 999);
+
+      return {
+        period: { from: start, to: end },
+        label: "Joriy hafta (dushanba-yakshanba)",
+      };
+    }
+
+    case "lastWeek": {
+      // reuse existing "weekly" (last full week)
+      return resolveReportPeriod("weekly");
+    }
+
+    case "thisMonth": {
+      // first → last day of current month
+      start.setDate(1);
+      start.setHours(0, 0, 0, 0);
+
+      end.setMonth(start.getMonth() + 1);
+      end.setDate(0); // last day of current month
+      end.setHours(23, 59, 59, 999);
+
+      return {
+        period: { from: start, to: end },
+        label: "Joriy oy (oylik hisobot)",
+      };
+    }
+
+    case "lastMonth": {
+      // reuse existing "monthly" (previous month)
+      return resolveReportPeriod("monthly");
+    }
+
+    default: {
+      // fallback – yesterday
+      return resolveReportPeriod("daily");
+    }
   }
-
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token) throw new Error("TELEGRAM_BOT_TOKEN env topilmadi");
-
-  const url = `https://api.telegram.org/bot${token}/sendDocument`;
-
-  // pdfBytes -> Buffer -> Blob muammosini oldini olish uchun Buffer ishlatamiz
-  const form = new FormData();
-  form.append("chat_id", String(chatId));
-  form.append("caption", caption);
-  form.append(
-    "document",
-    new Blob([Buffer.from(pdfBytes)], { type: "application/pdf" }),
-    "dashboard-report.pdf"
-  );
-
-  const res = await fetch(url, { method: "POST", body: form });
-  const json = await res.json();
-  if (!json.ok) {
-    throw new Error(json.description || "Telegram sendDocument failed");
-  }
-  return json;
 }
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => null);
 
-    // Users page’dan keladigan payload:
-    // { chatId: number, period: "today" | "yesterday" | ... }
-    const chatId = Number(body.chatId);
-    const periodParam = (body.period || "today") as Period;
-
-    if (!chatId || Number.isNaN(chatId)) {
+    if (!body || !body.chatId || !body.periodKey) {
       return NextResponse.json(
-        { ok: false, error: "chatId required" },
+        { ok: false, error: "chatId and periodKey are required" },
         { status: 400 }
       );
     }
 
-    const period: Period = ALLOWED_PERIODS.includes(periodParam)
-      ? periodParam
-      : "today";
+    const chatIdRaw = body.chatId;
+    const periodKey: ManualPeriodKey = body.periodKey;
 
-    const label = periodLabel(period);
+    if (!VALID_KEYS.includes(periodKey)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Invalid periodKey. Allowed: today, yesterday, thisWeek, lastWeek, thisMonth, lastMonth",
+        },
+        { status: 400 }
+      );
+    }
 
-    const pdfBytes = await buildPdfBytes(period, label);
-    await sendPdfToTelegram(chatId, pdfBytes, label);
+    const chatIdBigInt = BigInt(String(chatIdRaw));
+
+    const user = await prisma.telegramUser.findUnique({
+      where: { chatId: chatIdBigInt },
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { ok: false, error: "User not found for this chatId" },
+        { status: 404 }
+      );
+    }
+
+    const { period, label } = resolveManualPeriod(periodKey);
+    const pdfBytes = await generateDashboardPdf(period, label);
+
+    const caption = `Najot Nur sotuv hisobot (${label})`;
+
+    await sendTelegramPdf(chatIdBigInt, pdfBytes, caption);
 
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    console.error("POST /api/reports/manual error:", e);
+  } catch (err: any) {
+    console.error("[reports/manual] error", err);
     return NextResponse.json(
-      { ok: false, error: e?.message || "Internal Server Error" },
+      {
+        ok: false,
+        error: err?.message || "Unknown error",
+      },
       { status: 500 }
     );
   }
