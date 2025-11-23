@@ -10,7 +10,8 @@ export async function GET(req: Request) {
 
     const { from, to, label } = getPeriodDates(periodKey);
 
-    const data = await buildDashboardData({ from, to }, label);
+    // ✅ buildDashboardData now takes only one argument
+    const data = await buildDashboardData({ from, to });
 
     return NextResponse.json({
       success: true,
