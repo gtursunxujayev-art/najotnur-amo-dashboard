@@ -59,7 +59,7 @@ export type ManagerCallsRow = {
   durationTotalMin: number;  // = totalDurationMin
   durationAvgSec: number;    // = avgDurationSec
 
-  // ❗ yangi legacy nomlar (UI dagi)
+  // ❗ eski UI nomlari
   callSecondsAll: number;    // = totalDurationMin * 60
   avgCallSeconds: number;    // = avgDurationSec
 
@@ -270,7 +270,7 @@ export async function buildDashboardData(
 ): Promise<DashboardData> {
   const { from, to } = getPeriodRange(period);
 
-  // 🔧 getLeadsByCreatedAt son kutadi, shuning uchun Date → unix timestamp (sec)
+  // getLeadsByCreatedAt → unix timestamp (sec)
   const allLeads = await getLeadsByCreatedAt(
     Math.floor(from.getTime() / 1000),
     Math.floor(to.getTime() / 1000)
@@ -367,14 +367,7 @@ export async function buildDashboardData(
       : 0;
 
   // ------------- Calls (amo / sheets) -------------
-  let rawCalls:
-    | {
-        manager: string;
-        totalCalls: number;
-        successCalls: number;
-        totalDurationMin: number;
-        avgDurationSec: number;
-      }[] = [];
+  let rawCalls: any[] = []; // <— bu yerda type'ni bo'sh qildik
 
   if (dashboardConfig.USE_AMO_CALLS) {
     rawCalls = await getAmoCalls(from, to);
@@ -382,27 +375,65 @@ export async function buildDashboardData(
     rawCalls = await getSheetCalls(from, to);
   }
 
-  const callsByManagers: ManagerCallsRow[] = rawCalls.map((c) => ({
-    managerId: slugify(c.manager),
-    managerName: c.manager,
-    manager: c.manager,
+  const callsByManagers: ManagerCallsRow[] = rawCalls.map((c) => {
+    const managerName: string =
+      c.manager ||
+      c.managerName ||
+      c.user ||
+      c.userName ||
+      c.responsible ||
+      "Unknown";
 
-    totalCalls: c.totalCalls,
-    successCalls: c.successCalls,
-    totalDurationMin: c.totalDurationMin,
-    avgDurationSec: c.avgDurationSec,
+    const totalDurationMinRaw: number =
+      c.totalDurationMin ??
+      c.durationTotalMin ??
+      (typeof c.callSecondsAll === "number"
+        ? c.callSecondsAll / 60
+        : 0);
 
-    totalDurationMinutes: c.totalDurationMin,
-    avgDurationSeconds: c.avgDurationSec,
+    const avgDurationSecRaw: number =
+      c.avgDurationSec ??
+      c.durationAvgSec ??
+      c.avgCallSeconds ??
+      c.avgSeconds ??
+      0;
 
-    callsAll: c.totalCalls,
-    callsSuccess: c.successCalls,
-    durationTotalMin: c.totalDurationMin,
-    durationAvgSec: c.avgDurationSec,
+    const totalCallsRaw: number =
+      c.totalCalls ??
+      c.callsAll ??
+      c.total ??
+      c.count ??
+      0;
 
-    callSecondsAll: c.totalDurationMin * 60,
-    avgCallSeconds: c.avgDurationSec,
-  }));
+    const successCallsRaw: number =
+      c.successCalls ??
+      c.callsSuccess ??
+      c.success ??
+      c.successCount ??
+      0;
+
+    return {
+      managerId: slugify(managerName),
+      managerName,
+      manager: managerName,
+
+      totalCalls: totalCallsRaw,
+      successCalls: successCallsRaw,
+      totalDurationMin: totalDurationMinRaw,
+      avgDurationSec: avgDurationSecRaw,
+
+      totalDurationMinutes: totalDurationMinRaw,
+      avgDurationSeconds: avgDurationSecRaw,
+
+      callsAll: totalCallsRaw,
+      callsSuccess: successCallsRaw,
+      durationTotalMin: totalDurationMinRaw,
+      durationAvgSec: avgDurationSecRaw,
+
+      callSecondsAll: totalDurationMinRaw * 60,
+      avgCallSeconds: avgDurationSecRaw,
+    };
+  });
 
   const managerCalls = callsByManagers; // ✅ legacy alias
 
