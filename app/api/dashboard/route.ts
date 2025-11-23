@@ -1,44 +1,28 @@
 // app/api/dashboard/route.ts
 import { NextResponse } from "next/server";
-import { getPeriodDates, PeriodKey } from "@/lib/period";
-import { buildDashboardData, Period } from "@/lib/dashboard";
-
-const ALLOWED_PERIODS: PeriodKey[] = [
-  "today",
-  "yesterday",
-  "this_week",
-  "last_week",
-  "this_month",
-  "last_month",
-];
+import { getPeriodDates } from "@/lib/period";
+import { buildDashboardData } from "@/lib/dashboard";
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const raw = searchParams.get("period") || "today";
+    const periodKey = searchParams.get("period") || "today";
 
-    const periodKey: PeriodKey = ALLOWED_PERIODS.includes(raw as PeriodKey)
-      ? (raw as PeriodKey)
-      : "today";
+    const { from, to, label } = getPeriodDates(periodKey);
 
-    const { label } = getPeriodDates(periodKey);
-
-    // ✅ buildDashboardData expects Period (string), not {from,to}
-    const data = await buildDashboardData(periodKey as unknown as Period);
+    const data = await buildDashboardData({ from, to }, label);
 
     return NextResponse.json({
       success: true,
-      periodLabel: label,
       data,
     });
   } catch (err: any) {
-    console.error("DASHBOARD ERROR:", err);
-
-    return new NextResponse(
-      JSON.stringify({
+    console.error("dashboard api error:", err);
+    return NextResponse.json(
+      {
         success: false,
-        error: err?.message || "Internal Server Error",
-      }),
+        error: err?.message || "Dashboard API error",
+      },
       { status: 500 }
     );
   }
