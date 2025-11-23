@@ -58,43 +58,35 @@ function applyRevenueAliases(c: DashboardConfig) {
 }
 
 const cfg: DashboardConfig = {
-  PIPELINE_IDS: [],
-  QUALIFIED_STATUS_IDS: [],
-  WON_STATUS_IDS: [],
-  LOST_STATUS_IDS: [],
-  QUALIFIED_LOSS_REASON_IDS: [],
-  NOT_QUALIFIED_REASON_IDS: [],
-
-  // ✅ default: sizning CRM’ga mos field_id qo‘ying
-  // Agar constructor UI orqali tanlatmoqchi bo‘lsangiz, null qoldiring.
-  OBJECTION_FIELD_ID: 1121759,
-
-  LEAD_SOURCE_FIELD_ID: null,
-  COURSE_TYPE_FIELD_ID: null,
-
-  ONLINE_COURSE_ENUM_IDS: [],
-  OFFLINE_COURSE_ENUM_IDS: [],
-
-  USE_AMO_CALLS: false,
-  USE_SHEETS_CALLS: false,
-
-  REVENUE_SHEETS: {
-    link: "",
-    managerColumn: "",
-    dateColumn: "",
-    paymentTypeColumn: "",
-    incomeTypeColumn: "",
-    amountColumn: "",
-    courseTypeColumn: "",
+  "PIPELINE_IDS": [],
+  "QUALIFIED_STATUS_IDS": [],
+  "WON_STATUS_IDS": [],
+  "LOST_STATUS_IDS": [],
+  "QUALIFIED_LOSS_REASON_IDS": [],
+  "NOT_QUALIFIED_REASON_IDS": [],
+  "OBJECTION_FIELD_ID": 1121759,
+  "LEAD_SOURCE_FIELD_ID": null,
+  "COURSE_TYPE_FIELD_ID": null,
+  "ONLINE_COURSE_ENUM_IDS": [],
+  "OFFLINE_COURSE_ENUM_IDS": [],
+  "USE_AMO_CALLS": false,
+  "USE_SHEETS_CALLS": false,
+  "REVENUE_SHEETS": {
+    "link": "https://docs.google.com/spreadsheets/d/1DeC3MmCNgs-un-yu8XLaHLyHYcuECSDbnwa3gVdi8Kg",
+    "managerColumn": "Baza!B",
+    "dateColumn": "Baza!A",
+    "paymentTypeColumn": "Baza!D",
+    "incomeTypeColumn": "Baza!C",
+    "amountColumn": "Baza!E",
+    "courseTypeColumn": "Baza!C"
   },
-
-  REVENUE_SHEETS_URL: "",
-  REVENUE_MANAGER_COLUMN: "",
-  REVENUE_DATE_COLUMN: "",
-  REVENUE_PAYMENT_TYPE_COLUMN: "",
-  REVENUE_INCOME_TYPE_COLUMN: "",
-  REVENUE_AMOUNT_COLUMN: "",
-  REVENUE_COURSE_TYPE_COLUMN: "",
+  "REVENUE_SHEETS_URL": "",
+  "REVENUE_MANAGER_COLUMN": "",
+  "REVENUE_DATE_COLUMN": "",
+  "REVENUE_PAYMENT_TYPE_COLUMN": "",
+  "REVENUE_INCOME_TYPE_COLUMN": "",
+  "REVENUE_AMOUNT_COLUMN": "",
+  "REVENUE_COURSE_TYPE_COLUMN": ""
 };
 
 applyRevenueAliases(cfg);
