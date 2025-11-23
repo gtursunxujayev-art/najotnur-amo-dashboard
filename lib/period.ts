@@ -1,118 +1,122 @@
 // lib/period.ts
-// Centralized period helper functions
-// Works with your buildDashboardData({ from, to }) API
-
 export type PeriodKey =
   | "today"
   | "yesterday"
   | "this_week"
   | "last_week"
   | "this_month"
-  | "last_month"
-  | "custom";
+  | "last_month";
 
-export function getPeriodDates(period: PeriodKey, customFrom?: Date, customTo?: Date) {
+export type Period = { from: Date; to: Date };
+
+export function getPeriodDates(periodKey: PeriodKey | string): {
+  from: Date;
+  to: Date;
+  label: string;
+  key: PeriodKey;
+} {
+  const key = normalizePeriodKey(periodKey);
   const now = new Date();
 
-  let from = new Date();
-  let to = new Date();
-  let label = "";
+  const startOfDay = (d: Date) => {
+    const x = new Date(d);
+    x.setHours(0, 0, 0, 0);
+    return x;
+  };
 
-  switch (period) {
-    case "today":
-      from.setHours(0, 0, 0, 0);
-      to.setHours(23, 59, 59, 999);
-      label = "Bugun";
-      break;
+  const endOfDay = (d: Date) => {
+    const x = new Date(d);
+    x.setHours(23, 59, 59, 999);
+    return x;
+  };
 
-    case "yesterday":
-      from = new Date(now);
-      from.setDate(from.getDate() - 1);
-      from.setHours(0, 0, 0, 0);
-
-      to = new Date(from);
-      to.setHours(23, 59, 59, 999);
-
-      label = "Kecha";
-      break;
-
-    case "this_week": {
-      const day = now.getDay();
-      const diff = day === 0 ? 6 : day - 1; // Monday-based week
-
-      from = new Date(now);
-      from.setDate(now.getDate() - diff);
-      from.setHours(0, 0, 0, 0);
-
-      to = new Date(now);
-      to.setHours(23, 59, 59, 999);
-
-      label = "Joriy hafta";
-      break;
-    }
-
-    case "last_week": {
-      const day = now.getDay();
-      const diff = day === 0 ? 6 : day - 1;
-
-      // last Monday
-      from = new Date(now);
-      from.setDate(now.getDate() - diff - 7);
-      from.setHours(0, 0, 0, 0);
-
-      // last Sunday
-      to = new Date(from);
-      to.setDate(from.getDate() + 6);
-      to.setHours(23, 59, 59, 999);
-
-      label = "O‘tgan hafta";
-      break;
-    }
-
-    case "this_month":
-      from = new Date(now.getFullYear(), now.getMonth(), 1);
-      to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      to.setHours(23, 59, 59, 999);
-      label = "Joriy oy";
-      break;
-
-    case "last_month":
-      from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      to = new Date(now.getFullYear(), now.getMonth(), 0);
-      to.setHours(23, 59, 59, 999);
-      label = "O‘tgan oy";
-      break;
-
-    case "custom":
-      if (!customFrom || !customTo) {
-        throw new Error("Custom period requires from & to");
-      }
-      from = customFrom;
-      to = customTo;
-      label = "Tanlangan davr";
-      break;
-
-    default:
-      throw new Error("Unknown period");
+  if (key === "today") {
+    const from = startOfDay(now);
+    const to = endOfDay(now);
+    return { from, to, label: "Bugun", key };
   }
 
-  return { from, to, label };
+  if (key === "yesterday") {
+    const y = new Date(now);
+    y.setDate(y.getDate() - 1);
+    const from = startOfDay(y);
+    const to = endOfDay(y);
+    return { from, to, label: "Kecha", key };
+  }
+
+  if (key === "this_week") {
+    // week starts Monday
+    const d = new Date(now);
+    const day = d.getDay(); // 0 Sun..6 Sat
+    const diffToMon = (day + 6) % 7;
+    const mon = new Date(d);
+    mon.setDate(d.getDate() - diffToMon);
+    const from = startOfDay(mon);
+    const to = endOfDay(now);
+    return { from, to, label: "Shu hafta", key };
+  }
+
+  if (key === "last_week") {
+    const d = new Date(now);
+    const day = d.getDay();
+    const diffToMon = (day + 6) % 7;
+
+    const lastMon = new Date(d);
+    lastMon.setDate(d.getDate() - diffToMon - 7);
+
+    const lastSun = new Date(lastMon);
+    lastSun.setDate(lastMon.getDate() + 6);
+
+    const from = startOfDay(lastMon);
+    const to = endOfDay(lastSun);
+    return { from, to, label: "O‘tgan hafta", key };
+  }
+
+  if (key === "this_month") {
+    const first = new Date(now.getFullYear(), now.getMonth(), 1);
+    const from = startOfDay(first);
+    const to = endOfDay(now);
+    return { from, to, label: "Shu oy", key };
+  }
+
+  // last_month
+  const firstLast = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const lastLast = new Date(now.getFullYear(), now.getMonth(), 0);
+  const from = startOfDay(firstLast);
+  const to = endOfDay(lastLast);
+  return { from, to, label: "O‘tgan oy", key };
 }
 
-export function getPeriodFromQuery(req: Request) {
-  const url = new URL(req.url);
-  const p = url.searchParams.get("period") as PeriodKey | null;
+export function getPeriodFromQuery(req: Request): {
+  from: Date;
+  to: Date;
+  label: string;
+  key: PeriodKey;
+} {
+  const { searchParams } = new URL(req.url);
+  const period = searchParams.get("period") || "today";
+  return getPeriodDates(period);
+}
 
-  if (!p) return getPeriodDates("today");
+function normalizePeriodKey(p: string): PeriodKey {
+  const v = (p || "").toLowerCase().trim();
 
-  if (p === "custom") {
-    const fromStr = url.searchParams.get("from");
-    const toStr = url.searchParams.get("to");
+  // accept old variants
+  if (v === "thisweek") return "this_week";
+  if (v === "lastweek") return "last_week";
+  if (v === "thismonth") return "this_month";
+  if (v === "lastmonth") return "last_month";
 
-    if (!fromStr || !toStr) return getPeriodDates("today");
-
-    return getPeriodDates("custom", new Date(fromStr), new Date(toStr));
+  if (
+    v === "today" ||
+    v === "yesterday" ||
+    v === "this_week" ||
+    v === "last_week" ||
+    v === "this_month" ||
+    v === "last_month"
+  ) {
+    return v;
   }
 
-  return getPeriodDates(p);
+  return "today";
 }
