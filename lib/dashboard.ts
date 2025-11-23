@@ -270,7 +270,11 @@ export async function buildDashboardData(
 ): Promise<DashboardData> {
   const { from, to } = getPeriodRange(period);
 
-  const allLeads = await getLeadsByCreatedAt(from, to);
+  // 🔧 getLeadsByCreatedAt son kutadi, shuning uchun Date → unix timestamp (sec)
+  const allLeads = await getLeadsByCreatedAt(
+    Math.floor(from.getTime() / 1000),
+    Math.floor(to.getTime() / 1000)
+  );
 
   const leads = allLeads
     .filter((l) => inRange(leadCreatedAt(l), from, to))
