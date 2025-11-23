@@ -1,6 +1,6 @@
 // lib/googleSheets.ts
+import { getGoogleSheetsClient } from "./googleSheetsClient";
 
-const API_KEY = process.env.SHEETS_API_KEY;
 const SPREADSHEET_ID = process.env.SHEETS_SPREADSHEET_ID;
 const CALLS_RANGE = process.env.SHEETS_CALLS_RANGE || "Calls!A:D";
 
@@ -23,37 +23,36 @@ export async function getSheetCalls(
   from: Date,
   to: Date
 ): Promise<SheetCallRow[]> {
-  if (!API_KEY || !SPREADSHEET_ID) {
-    // No config – just return empty, dashboard will show 0
+  if (!SPREADSHEET_ID) {
+    console.log("SHEETS_SPREADSHEET_ID not set, skipping call stats");
     return [];
   }
 
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(
-    CALLS_RANGE
-  )}?key=${API_KEY}`;
+  try {
+    const sheets = await getGoogleSheetsClient();
+    
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: CALLS_RANGE,
+    });
 
-  const res = await fetch(url, { cache: "no-store" });
+    const rows: string[][] = response.data.values || [];
 
-  if (!res.ok) {
-    const txt = await res.text();
-    console.error("Sheets error", txt);
+    return rows
+      .slice(1) // skip header
+      .map((r) => {
+        const [dateStr, mgr, durationStr, result] = r;
+        const dt = new Date(dateStr);
+        return {
+          datetime: dt,
+          managerName: mgr || "Unknown",
+          durationSec: Number(durationStr || 0),
+          isSuccess: (result || "").toLowerCase() === "success",
+        };
+      })
+      .filter((row) => row.datetime >= from && row.datetime <= to);
+  } catch (error) {
+    console.error("Error fetching Google Sheets calls:", error);
     return [];
   }
-
-  const data = await res.json();
-  const rows: string[][] = data.values || [];
-
-  return rows
-    .slice(1) // skip header
-    .map((r) => {
-      const [dateStr, mgr, durationStr, result] = r;
-      const dt = new Date(dateStr);
-      return {
-        datetime: dt,
-        managerName: mgr || "Unknown",
-        durationSec: Number(durationStr || 0),
-        isSuccess: (result || "").toLowerCase() === "success",
-      };
-    })
-    .filter((row) => row.datetime >= from && row.datetime <= to);
 }
