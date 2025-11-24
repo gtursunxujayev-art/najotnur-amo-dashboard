@@ -331,8 +331,24 @@ export async function buildDashboardData(
     .reduce((sum, r) => sum + r.amount, 0);
   
   const offlineRevenue = revenueRows
-    .filter(r => r.courseType.toLowerCase() === 'offline')
+    .filter(r => {
+      const ct = r.courseType.toLowerCase();
+      return ct === 'offline' || ct === 'ofline'; // Handle typo in sheet
+    })
     .reduce((sum, r) => sum + r.amount, 0);
+  
+  // Debug: show course type distribution
+  const courseTypeMap = new Map<string, { count: number; sum: number }>();
+  revenueRows.forEach(r => {
+    const ct = r.courseType.toLowerCase() || '(empty)';
+    if (!courseTypeMap.has(ct)) {
+      courseTypeMap.set(ct, { count: 0, sum: 0 });
+    }
+    const entry = courseTypeMap.get(ct)!;
+    entry.count++;
+    entry.sum += r.amount;
+  });
+  console.log(`[Dashboard] Revenue by course type:`, Array.from(courseTypeMap.entries()).map(([type, data]) => ({ type, count: data.count, revenue: data.sum })));
 
   const oylikTushum = revenueSum;
   const haftalikTushum = revenueSum;
