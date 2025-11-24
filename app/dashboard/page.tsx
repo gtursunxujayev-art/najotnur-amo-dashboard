@@ -273,15 +273,15 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
+                    <PieChart margin={{ top: 0, right: 100, bottom: 0, left: 100 }}>
                       <Pie
                         data={data.nonQualifiedReasons}
                         dataKey="value"
                         nameKey="label"
-                        cx="50%"
+                        cx="40%"
                         cy="50%"
-                        outerRadius={80}
-                        labelLine={false}
+                        outerRadius={60}
+                        labelLine={true}
                         label={pieLabelLossReason}
                       >
                         {data.nonQualifiedReasons.map((_, index) => (
@@ -320,15 +320,15 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
+                    <PieChart margin={{ top: 0, right: 100, bottom: 0, left: 100 }}>
                       <Pie
                         data={data.leadSources}
                         dataKey="value"
                         nameKey="label"
-                        cx="50%"
+                        cx="40%"
                         cy="50%"
-                        outerRadius={80}
-                        labelLine={false}
+                        outerRadius={60}
+                        labelLine={true}
                         label={pieLabelSource}
                       >
                         {data.leadSources.map((_, index) => (
