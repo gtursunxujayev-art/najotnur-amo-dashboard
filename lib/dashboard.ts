@@ -43,8 +43,12 @@ export type DashboardData = {
   kelishuvSummasi: number;
   onlineSummasi: number;
   offlineSummasi: number;
-  oylikTushum: number;    // from Google Sheets
-  haftalikTushum: number; // from Google Sheets
+  onlineSalesCount: number;       // Count of online won deals (from amoCRM)
+  offlineSalesCount: number;      // Count of offline won deals (from amoCRM)
+  onlineRevenue: number;          // Revenue from Google Sheets (courseType = "Online")
+  offlineRevenue: number;         // Revenue from Google Sheets (courseType = "Offline")
+  oylikTushum: number;            // Total from Google Sheets
+  haftalikTushum: number;         // Total from Google Sheets
   leadsCount: number;
   qualifiedLeadsCount: number;
   nonQualifiedLeadsCount: number;
@@ -140,6 +144,8 @@ export async function buildDashboardData(
   let kelishuvSummasi = 0;
   let onlineSummasi = 0;
   let offlineSummasi = 0;
+  let onlineSalesCount = 0;
+  let offlineSalesCount = 0;
   let leadsCount = 0;
   let qualifiedLeadsCount = 0;
   let nonQualifiedLeadsCount = 0;
@@ -292,9 +298,11 @@ export async function buildDashboardData(
 
       if (isOnlineDeal(lead)) {
         onlineSummasi += dealAmount;
+        onlineSalesCount++;
       }
       if (isOfflineDeal(lead)) {
         offlineSummasi += dealAmount;
+        offlineSalesCount++;
       }
     }
 
@@ -316,6 +324,15 @@ export async function buildDashboardData(
 
   // Revenue from Google Sheets for selected period
   const revenueSum = revenueRows.reduce((sum, r) => sum + r.amount, 0);
+  
+  // Separate revenue by course type (Online/Offline from Column C)
+  const onlineRevenue = revenueRows
+    .filter(r => r.courseType.toLowerCase() === 'online')
+    .reduce((sum, r) => sum + r.amount, 0);
+  
+  const offlineRevenue = revenueRows
+    .filter(r => r.courseType.toLowerCase() === 'offline')
+    .reduce((sum, r) => sum + r.amount, 0);
 
   const oylikTushum = revenueSum;
   const haftalikTushum = revenueSum;
@@ -418,6 +435,10 @@ export async function buildDashboardData(
     kelishuvSummasi,
     onlineSummasi,
     offlineSummasi,
+    onlineSalesCount,
+    offlineSalesCount,
+    onlineRevenue,
+    offlineRevenue,
     oylikTushum,
     haftalikTushum,
     leadsCount,
