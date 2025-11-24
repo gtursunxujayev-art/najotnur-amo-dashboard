@@ -77,22 +77,25 @@ function getCustomFieldString(lead: AmoLead, fieldId: number): string | null {
 
 export async function buildDashboardData(
   period: Period,
-  periodLabel: string
+  periodLabel: string,
+  options?: { skipCalls?: boolean }
 ): Promise<DashboardData> {
   console.log(`[Dashboard] Building dashboard data for period: ${periodLabel} (${period.from.toISOString()} to ${period.to.toISOString()})`);
+  
+  const skipCalls = options?.skipCalls ?? false;
   
   const [users, reasonsMap, leads, sheetCalls, amoCalls, revenueRows] =
     await Promise.all([
       getUsers(),
       getLossReasons(), // { [id]: name }
       getLeadsByCreatedAt(toUnixSeconds(period.from), toUnixSeconds(period.to)),
-      dashboardConfig.USE_SHEETS_CALLS
+      dashboardConfig.USE_SHEETS_CALLS && !skipCalls
         ? getSheetCalls(period.from, period.to).catch(err => {
             console.error("[Dashboard] Error fetching Google Sheets calls:", err);
             return [];
           })
         : Promise.resolve([]),
-      dashboardConfig.USE_AMO_CALLS
+      dashboardConfig.USE_AMO_CALLS && !skipCalls
         ? getAmoCalls(period.from, period.to).catch(err => {
             console.error("[Dashboard] Error fetching amoCRM calls:", err);
             return [];

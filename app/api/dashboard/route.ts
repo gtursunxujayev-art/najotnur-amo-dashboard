@@ -41,7 +41,8 @@ export async function GET(req: Request) {
 
     const { from, to, label } = getPeriodDates(period);
 
-    const data = await buildDashboardData({ from, to }, label);
+    // Skip call fetching - calls are now loaded separately via /api/dashboard/calls
+    const data = await buildDashboardData({ from, to }, label, { skipCalls: true });
 
     return NextResponse.json({ data });
   } catch (err: any) {

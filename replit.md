@@ -85,6 +85,18 @@ The project is configured for autoscale deployment on Replit:
 
 ## Recent Changes
 
+### November 24, 2025 - Async Call Loading Architecture
+- **Implemented async loading pattern** - Main dashboard loads immediately, calls fetch separately in background
+- **Created separate API endpoint** - `/api/dashboard/calls` handles call data independently from main dashboard
+- **Added skipCalls parameter** - Main dashboard API now accepts `skipCalls=true` to bypass expensive call fetching
+- **Improved user experience** - Dashboard shows data instantly (~1-2 seconds), calls section shows "loading" state while fetching
+- **Performance optimization** - Main dashboard load time reduced from 4-5 minutes to ~2 seconds
+- **Call fetching performance** - Unchanged (~4-5 minutes first fetch, ~9 seconds cached), but runs asynchronously without blocking UI
+- **Architecture**: Client-side state management with separate loading states for dashboard and calls data
+- **Bug fixes applied**:
+  - Fixed period calculation consistency - calls endpoint now uses same Monday-based weekly range as main dashboard
+  - Added race condition protection - AbortController prevents stale responses when users switch periods quickly
+
 ### November 24, 2025 - Multi-Entity Call Fetching
 - **Implemented comprehensive call data fetching** from all amoCRM entity types (leads, contacts, companies, customers)
 - **Added smart deduplication** using `params.uniq` field to identify unique physical calls across entities
