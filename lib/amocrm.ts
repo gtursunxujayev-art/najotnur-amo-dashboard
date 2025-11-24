@@ -52,15 +52,38 @@ export type AmoLead = {
 
 /**
  * Get leads created within [from, to] in unix seconds.
+ * Paginates through all results (amoCRM API returns max 250 per page).
  */
 export async function getLeadsByCreatedAt(
   fromUnix: number,
   toUnix: number
 ): Promise<AmoLead[]> {
   // amoCRM supports filters: filter[created_at][from], [to]
-  const url = `/api/v4/leads?limit=250&filter[created_at][from]=${fromUnix}&filter[created_at][to]=${toUnix}`;
-  const data = await amoRequest(url);
-  return data?._embedded?.leads || [];
+  const allLeads: AmoLead[] = [];
+  let page = 1;
+  const pageSize = 250;
+  
+  while (true) {
+    const url = `/api/v4/leads?limit=${pageSize}&page=${page}&filter[created_at][from]=${fromUnix}&filter[created_at][to]=${toUnix}`;
+    const data = await amoRequest(url);
+    const leads = data?._embedded?.leads || [];
+    
+    if (leads.length === 0) {
+      break; // No more pages
+    }
+    
+    allLeads.push(...leads);
+    console.log(`[AmoCRM] Fetched page ${page}: ${leads.length} leads (total: ${allLeads.length})`);
+    
+    // Check if there are more pages
+    if (leads.length < pageSize) {
+      break; // Last page (fewer results than requested)
+    }
+    
+    page++;
+  }
+  
+  return allLeads;
 }
 
 /**

@@ -85,6 +85,14 @@ The project is configured for autoscale deployment on Replit:
 
 ## Recent Changes
 
+### November 24, 2025 - Critical Lead Fetching Fix: Pagination for 1000+ Leads
+- **Fixed lead fetching to paginate through ALL results** - Was limited to first 250 leads only
+  - Old: `limit=250` (single API call) - showed only 242 leads instead of 1022
+  - New: Paginated loop fetching 250 leads per page until all fetched
+  - Now correctly fetches and processes all 1022 leads for November
+  - Metrics now match amoCRM: 32 won deals, 78,222,000 so'm total revenue
+  - Added logging to track pagination: `[AmoCRM] Fetched page X: Y leads (total: Z)`
+
 ### November 24, 2025 - Chart Layout Redesign with Data List, Sorting & Filtering
 - **Redesigned both "Sifatsiz lid sabablari" and "Lid manbalari" sections** - New two-column layout with smart filtering
   - Left column (25%): Text list showing ALL data sorted by count (biggest to smallest)
