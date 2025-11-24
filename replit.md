@@ -114,13 +114,14 @@ The project is configured for autoscale deployment on Replit:
   - Added logging to track pagination: `[AmoCRM] Fetched page X: Y leads (total: Z)`
 
 ### November 24, 2025 - Chart Layout Redesign with Data List, Sorting & Filtering
-- **Redesigned both "Sifatsiz lid sabablari" and "Lid manbalari" sections** - New two-column layout with smart filtering
-  - Left column (25%): Text list showing ALL data sorted by count (biggest to smallest)
+- **Redesigned both "Sifatsiz lid sabablari" and "Lid manbalari" sections** - Two-column layout with smart filtering
+  - Left column (40%): Text list showing ALL data sorted by count (biggest to smallest)
     - Sheet-style format with labels and numbers
     - Example: Ko'tarmadi  54
     - Example: Dubl  14
     - Example: Sifatsiz lid  10
-  - Right column (75%): Pie chart with smart <5% filtering
+    - Increased width to ensure numbers display clearly without cramping
+  - Right column (60%): Pie chart with smart <5% filtering
     - Only shows items with ≥5% of total value (clutter-free visualization)
     - Small items (< 5%) still appear in left list for full transparency
     - Labels connected with lines to pie segments

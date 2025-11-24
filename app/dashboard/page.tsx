@@ -274,7 +274,7 @@ export default function DashboardPage() {
               </p>
               <div className="flex h-64 gap-4">
                 {/* Left side: List - sorted by value descending */}
-                <div className="w-1/4 flex flex-col justify-start overflow-y-auto pr-2">
+                <div className="w-2/5 flex flex-col justify-start overflow-y-auto pr-2">
                   {data.nonQualifiedReasons.length === 0 ? (
                     <div className="text-xs text-slate-500">
                       Hali yo&apos;qotilgan lidlar yo&apos;q.
@@ -294,7 +294,7 @@ export default function DashboardPage() {
                 </div>
                 
                 {/* Right side: Pie chart with labels */}
-                <div className="w-3/4">
+                <div className="w-3/5">
                   {data.nonQualifiedReasons.length === 0 ? (
                     <div className="h-full flex items-center justify-center text-xs text-slate-500">
                       Hali yo&apos;qotilgan lidlar yo&apos;q.
@@ -350,7 +350,7 @@ export default function DashboardPage() {
               </p>
               <div className="flex h-64 gap-4">
                 {/* Left side: List - sorted by value descending */}
-                <div className="w-1/4 flex flex-col justify-start overflow-y-auto pr-2">
+                <div className="w-2/5 flex flex-col justify-start overflow-y-auto pr-2">
                   {data.leadSources.length === 0 ? (
                     <div className="text-xs text-slate-500">
                       Lead manbalari topilmadi.
@@ -370,7 +370,7 @@ export default function DashboardPage() {
                 </div>
                 
                 {/* Right side: Pie chart with labels */}
-                <div className="w-3/4">
+                <div className="w-3/5">
                   {data.leadSources.length === 0 ? (
                     <div className="h-full flex items-center justify-center text-xs text-slate-500">
                       Lead manbalari topilmadi.
