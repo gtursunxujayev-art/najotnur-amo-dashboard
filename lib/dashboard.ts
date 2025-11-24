@@ -345,6 +345,10 @@ export async function buildDashboardData(
     kelishuvSummasi,
     onlineSummasi,
     offlineSummasi,
+    onlineSalesCount,
+    offlineSalesCount,
+    onlineRevenue,
+    offlineRevenue,
     haftalikTushum,
     oylikTushum,
   });

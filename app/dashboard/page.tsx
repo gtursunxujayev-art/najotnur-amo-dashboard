@@ -221,13 +221,13 @@ export default function DashboardPage() {
             />
             <MetricCard
               title="Sotuv – Online"
-              value={`${data.onlineSummasi.toLocaleString("ru-RU")} so'm`}
-              subtitle="Online kelishuvlar"
+              value={data.onlineSalesCount.toLocaleString("ru-RU")}
+              subtitle={`${data.onlineRevenue.toLocaleString("ru-RU")} so'm`}
             />
             <MetricCard
               title="Sotuv – Offline"
-              value={`${data.offlineSummasi.toLocaleString("ru-RU")} so'm`}
-              subtitle="Offline kelishuvlar"
+              value={data.offlineSalesCount.toLocaleString("ru-RU")}
+              subtitle={`${data.offlineRevenue.toLocaleString("ru-RU")} so'm`}
             />
             <MetricCard
               title="Lidlar (jami)"
