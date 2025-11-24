@@ -85,6 +85,16 @@ The project is configured for autoscale deployment on Replit:
 
 ## Recent Changes
 
+### November 24, 2025 - Manager Statistics Table with Revenue
+- **Added comprehensive "Sotuv menejerlar bo'yicha" (Sales by Manager) table** with full analytics
+  - Columns: Menejer | Lid | Sifatli Lid | Sotuv | Online | Ofline | Tushum
+  - Tracks per-manager: total leads, qualified leads, total sales, online/offline breakdown
+  - **Tushum (Revenue) from Google Sheets** - aggregated by manager name
+  - Updated ManagerSalesStats type to include onlineSalesCount, offlineSalesCount, revenue
+  - Revenue calculation matches manager names from Google Sheets column (Manager column)
+  - Total sales (Sotuv) = online sales count + offline sales count
+  - All metrics calculated from amoCRM leads + Google Sheets revenue data
+
 ### November 24, 2025 - Automated Report Scheduler Setup
 - **Implemented node-cron scheduler for automatic reports** at 8:00 AM GMT+5
   - Daily reports: Every day at 8:00 AM (yesterday's data)

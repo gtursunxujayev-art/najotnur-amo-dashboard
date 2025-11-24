@@ -420,7 +420,7 @@ export default function DashboardPage() {
           {/* Manager sales */}
           <section className="rounded-lg border border-slate-700 bg-slate-900 p-4">
             <h2 className="mb-3 text-sm font-semibold text-slate-200">
-              Sotuv bo&apos;yicha menejerlar
+              Sotuv menejerlar bo&apos;yicha
             </h2>
             {data.managerSales.length === 0 ? (
               <div className="text-xs text-slate-500">
@@ -432,10 +432,12 @@ export default function DashboardPage() {
                   <thead>
                     <tr className="border-b border-slate-700 bg-slate-800/60">
                       <th className="px-3 py-2">Menejer</th>
-                      <th className="px-3 py-2">Lidlar</th>
-                      <th className="px-3 py-2">Sifatli lidlar</th>
-                      <th className="px-3 py-2">Sotuvlar soni</th>
-                      <th className="px-3 py-2">Sotuv summasi</th>
+                      <th className="px-3 py-2">Lid</th>
+                      <th className="px-3 py-2">Sifatli Lid</th>
+                      <th className="px-3 py-2">Sotuv</th>
+                      <th className="px-3 py-2">Online</th>
+                      <th className="px-3 py-2">Ofline</th>
+                      <th className="px-3 py-2">Tushum</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -452,10 +454,16 @@ export default function DashboardPage() {
                           {m.qualifiedLeads.toLocaleString("ru-RU")}
                         </td>
                         <td className="px-3 py-2">
-                          {m.wonDeals.toLocaleString("ru-RU")}
+                          {(m.onlineSalesCount + m.offlineSalesCount).toLocaleString("ru-RU")}
                         </td>
                         <td className="px-3 py-2">
-                          {m.wonAmount.toLocaleString("ru-RU")} so&apos;m
+                          {m.onlineSalesCount.toLocaleString("ru-RU")}
+                        </td>
+                        <td className="px-3 py-2">
+                          {m.offlineSalesCount.toLocaleString("ru-RU")}
+                        </td>
+                        <td className="px-3 py-2">
+                          {m.revenue.toLocaleString("ru-RU")} so&apos;m
                         </td>
                       </tr>
                     ))}

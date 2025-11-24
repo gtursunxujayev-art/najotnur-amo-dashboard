@@ -24,6 +24,9 @@ export type ManagerSalesStats = {
   qualifiedLeads: number;
   wonDeals: number;
   wonAmount: number;
+  onlineSalesCount: number;
+  offlineSalesCount: number;
+  revenue: number; // from Google Sheets
 };
 
 export type ManagerCallsStats = {
@@ -270,6 +273,9 @@ export async function buildDashboardData(
         qualifiedLeads: 0,
         wonDeals: 0,
         wonAmount: 0,
+        onlineSalesCount: 0,
+        offlineSalesCount: 0,
+        revenue: 0,
       });
     }
     const ms = managerSalesMap.get(managerId)!;
@@ -343,10 +349,12 @@ export async function buildDashboardData(
       if (isOnlineDeal(lead)) {
         onlineSummasi += dealAmount;
         onlineSalesCount++;
+        ms.onlineSalesCount++;
       }
       if (isOfflineDeal(lead)) {
         offlineSummasi += dealAmount;
         offlineSalesCount++;
+        ms.offlineSalesCount++;
       }
     }
 
@@ -513,6 +521,17 @@ export async function buildDashboardData(
   callsPerManager.forEach((cs) => {
     cs.avgCallSeconds =
       cs.callsAll > 0 ? Math.round(cs.callSecondsAll / cs.callsAll) : 0;
+  });
+
+  // Calculate revenue per manager from Google Sheets
+  revenueRows.forEach((r) => {
+    // Find manager by name in managerSalesMap (need to check values since map is keyed by ID)
+    for (const managerStats of managerSalesMap.values()) {
+      if (managerStats.managerName === r.managerName) {
+        managerStats.revenue += r.amount;
+        break;
+      }
+    }
   });
 
   return {
