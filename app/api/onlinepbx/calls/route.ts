@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { recentCalls } from "@/app/api/onlinepbx/webhook/route";
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient();
 
 export const dynamic = "force-dynamic";
 
@@ -59,31 +62,67 @@ export async function GET(request: Request) {
       `[OnlinePBX/Calls] Fetching calls from ${fromDate.toISOString()} to ${toDate.toISOString()}`
     );
 
-    // Use webhook storage (real OnlinePBX data being pushed via webhook)
-    let calls = Array.from(recentCalls).sort((a, b) => b.timestamp - a.timestamp);
-
-    // Apply date filtering if provided
-    if (fromDate && toDate) {
-      const fromTime = fromDate.getTime();
-      const toTime = toDate.getTime();
-      
-      calls = calls.filter((call) => {
-        const callTime = new Date(call.date).getTime();
-        return callTime >= fromTime && callTime <= toTime;
+    // First, try to get calls from database for historical data
+    let dbCalls: any[] = [];
+    try {
+      dbCalls = await prisma.onlinePBXCall.findMany({
+        where: {
+          date: {
+            gte: fromDate,
+            lte: toDate,
+          },
+        },
+        orderBy: { date: "desc" },
+        take: limit,
       });
+      
+      console.log(`[OnlinePBX/Calls] Retrieved ${dbCalls.length} calls from database`);
+    } catch (dbError) {
+      console.error("[OnlinePBX/Calls] Database query error (table may not exist yet):", dbError);
+      // Fall back to in-memory storage if DB query fails
     }
 
-    // Apply limit
-    const filteredCalls = calls.slice(0, limit);
+    // Convert DB records to same format as in-memory storage
+    let calls = dbCalls.map((call) => ({
+      id: call.callId,
+      type: call.direction,
+      date: call.date,
+      duration: call.duration,
+      phone: call.phone,
+      user: call.user,
+      source: call.source,
+      timestamp: call.createdAt.getTime(),
+    }));
 
-    console.log(`[OnlinePBX/Calls] Returning ${filteredCalls.length} calls from webhook storage (total: ${recentCalls.length})`);
+    // If no DB results, fall back to in-memory storage
+    if (calls.length === 0) {
+      calls = Array.from(recentCalls).sort((a, b) => b.timestamp - a.timestamp);
+
+      // Apply date filtering if provided
+      if (fromDate && toDate) {
+        const fromTime = fromDate.getTime();
+        const toTime = toDate.getTime();
+        
+        calls = calls.filter((call) => {
+          const callTime = new Date(call.date).getTime();
+          return callTime >= fromTime && callTime <= toTime;
+        });
+      }
+
+      // Apply limit
+      calls = calls.slice(0, limit);
+      console.log(`[OnlinePBX/Calls] Falling back to ${calls.length} calls from in-memory storage (total: ${recentCalls.length})`);
+    }
+
+    const totalCount = dbCalls.length > 0 ? dbCalls.length : recentCalls.length;
 
     return NextResponse.json({
       success: true,
       data: {
-        totalCalls: recentCalls.length,
-        filteredCount: filteredCalls.length,
-        recentCalls: filteredCalls,
+        totalCalls: totalCount,
+        filteredCount: calls.length,
+        recentCalls: calls,
+        source: dbCalls.length > 0 ? "database" : "memory",
       },
     });
   } catch (error: any) {

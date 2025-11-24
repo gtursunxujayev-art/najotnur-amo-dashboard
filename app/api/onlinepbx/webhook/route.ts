@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient();
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +13,7 @@ let webhookErrors: any[] = [];
  * OnlinePBX webhook endpoint
  * Receives real-time call events from OnlinePBX panel
  * Handles multiple data formats (JSON, form-encoded, URL params)
+ * Saves calls to database for persistent historical data
  */
 export async function POST(request: Request) {
   try {
@@ -77,6 +81,26 @@ export async function POST(request: Request) {
       // Keep only last 1000 calls
       if (recentCalls.length > 1000) {
         recentCalls = recentCalls.slice(-1000);
+      }
+
+      // Also save to database for persistent historical storage
+      try {
+        await prisma.onlinePBXCall.upsert({
+          where: { callId: callRecord.id },
+          update: {},
+          create: {
+            callId: callRecord.id,
+            direction: callRecord.type,
+            date: callRecord.date,
+            duration: callRecord.duration,
+            phone: callRecord.phone,
+            user: callRecord.user,
+            source: "webhook",
+          },
+        });
+      } catch (dbError) {
+        console.error("[OnlinePBX/Webhook] Database save error:", dbError);
+        // Continue even if DB save fails - don't block the webhook response
       }
 
       console.log(`[OnlinePBX/Webhook] Stored call. Total: ${recentCalls.length}`);

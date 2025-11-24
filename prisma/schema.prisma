@@ -28,3 +28,20 @@ model CallsCache {
   data      String   // JSON-encoded calls data
   updatedAt DateTime @updatedAt
 }
+
+model OnlinePBXCall {
+  id        String   @id @default(cuid())
+  callId    String   @unique // Original call ID from OnlinePBX
+  direction String   // "in" or "out"
+  date      DateTime // When the call occurred
+  duration  Int      // Duration in seconds
+  phone     String   // Phone number
+  user      String   // Manager/user name
+  source    String   @default("webhook") // "webhook" or "api"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+  @@index([user])
+  @@index([createdAt])
+}
