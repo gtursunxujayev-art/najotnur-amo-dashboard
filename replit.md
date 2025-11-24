@@ -85,6 +85,22 @@ The project is configured for autoscale deployment on Replit:
 
 ## Recent Changes
 
+### November 24, 2025 - Sifatsiz Lid Sabablari & Count Fixes  
+- **Fixed "Sifatsiz lid sabablari" chart** - Now grouped by E'tiroz sababi field (1121759) instead of status name
+  - Chart displays actual objection reasons from field 1121759 (e.g., "Dubl", "Ko'tarmadi", "Sifatsiz lid")
+  - Shows 126 lost leads with objection reasons (vs 143 total non-qualified before fix)
+- **Fixed "Sifatsiz lidlar" count** - Now only counts lost leads that have field 1121759 populated
+  - Before: 143 (all non-qualified = total - qualified)
+  - After: 126 (only lost leads WITH objection field filled)
+  - Ensures consistency: chart shows reasons from the same 126 leads
+- **Enhanced enum field handling** - Created `getFieldEnumMapping()` and `getStatusMapping()` functions
+  - Converts enum_id to text labels for proper display across charts
+
+### November 24, 2025 - Lead Sources (Lid manbalari) Text Display Fix
+- **Fixed chart to show text names instead of numbers** - Now displays "Target", "Community menejer", etc instead of enum IDs
+  - Chart shows 7 different lead sources: Target (174), Community menejer (13), Bizning ijtimoiy tarmoq (34), etc
+  - Created enum mapping system to convert amoCRM field enum_id → text value
+
 ### November 24, 2025 - Sotuv Online/Offline Display Update
 - **Changed Sotuv Online and Sotuv Offline metrics** - Now displays both count and revenue
   - Top number: Count of won deals from amoCRM (by course type)

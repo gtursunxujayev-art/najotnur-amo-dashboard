@@ -111,7 +111,7 @@ export async function buildDashboardData(
   
   const skipCalls = options?.skipCalls ?? false;
 
-  const [users, reasonsMap, leads, sheetCalls, amoCalls, revenueRows, leadSourceEnums, statusMap] =
+  const [users, reasonsMap, leads, sheetCalls, amoCalls, revenueRows, leadSourceEnums, statusMap, objectionEnums] =
     await Promise.all([
       getUsers(),
       getLossReasons(), // { [id]: name }
@@ -142,6 +142,12 @@ export async function buildDashboardData(
         console.error("[Dashboard] Error fetching status map:", err);
         return {};
       }),
+      dashboardConfig.OBJECTION_FIELD_ID != null
+        ? getFieldEnumMapping(dashboardConfig.OBJECTION_FIELD_ID).catch(err => {
+            console.error("[Dashboard] Error fetching objection enums:", err);
+            return {};
+          })
+        : Promise.resolve({}),
     ]);
 
   console.log(`[Dashboard] Data fetched - Leads: ${leads.length}, Sheet Calls: ${sheetCalls.length}, Amo Calls: ${amoCalls.length}, Revenue Rows: ${revenueRows.length}`);
@@ -269,23 +275,33 @@ export async function buildDashboardData(
     const ms = managerSalesMap.get(managerId)!;
     ms.totalLeads++;
 
-    // Lost reason map (for pie chart)
+    // Lost reason map (for pie chart) - grouped by objection field (E'tiroz sababi) if available
     if (isLost(lead)) {
-      if (lead.loss_reason_id != null) {
-        // Standard loss reason from amoCRM
+      // Try to get objection field value if it's configured
+      let objectionValue: string | null = null;
+      let objectionLabel: string | null = null;
+      
+      if (dashboardConfig.OBJECTION_FIELD_ID != null) {
+        objectionValue = getCustomFieldString(lead, dashboardConfig.OBJECTION_FIELD_ID);
+        if (objectionValue) {
+          // Convert enum_id to text label using objectionEnums mapping
+          const objectionEnumsTyped = objectionEnums as Record<number, string>;
+          const enumId = Number(objectionValue);
+          objectionLabel = !isNaN(enumId) && objectionEnumsTyped[enumId]
+            ? objectionEnumsTyped[enumId]
+            : objectionValue;
+        }
+      }
+      
+      // Use objection field value as the key if available, otherwise use loss_reason_id
+      if (objectionLabel) {
+        lostReasonMap.set(objectionLabel, (lostReasonMap.get(objectionLabel) || 0) + 1);
+        // Ensure it has a mapping for display
+        (reasonsMap as Record<string | number, string>)[objectionLabel] = objectionLabel;
+      } else if (lead.loss_reason_id != null) {
+        // Fall back to standard loss reason from amoCRM
         const rId = lead.loss_reason_id;
         lostReasonMap.set(rId, (lostReasonMap.get(rId) || 0) + 1);
-      } else {
-        // Fallback: use status name when loss_reason_id is null
-        // This handles cases where leads are marked as lost by status but no explicit loss_reason
-        const statusId = lead.status_id || -1;
-        const statusMapTyped = statusMap as Record<number, string>;
-        const statusName = statusMapTyped[statusId] || `Status ${statusId}`;
-        const reasonKey: string | number = `status_${statusId}`;
-        // Store as custom key to distinguish from amoCRM loss reason IDs
-        lostReasonMap.set(reasonKey, (lostReasonMap.get(reasonKey) || 0) + 1);
-        // Store mapping for display - use string key for consistency
-        (reasonsMap as Record<string | number, string>)[reasonKey] = statusName;
       }
     }
 
@@ -355,9 +371,21 @@ export async function buildDashboardData(
     }
   });
 
-  // FIX: Non-qualified count should be total leads minus qualified leads
-  // This is the correct calculation, not based on specific loss reasons
-  nonQualifiedLeadsCount = leadsCount - qualifiedLeadsCount;
+  // FIX: Non-qualified count should only include lost leads that have the objection field filled in
+  // This matches the "Sifatsiz lid sabablari" chart which is grouped by objection field
+  if (dashboardConfig.OBJECTION_FIELD_ID != null) {
+    leads.forEach((lead) => {
+      if (isLost(lead)) {
+        const objectionValue = getCustomFieldString(lead, dashboardConfig.OBJECTION_FIELD_ID || 0);
+        if (objectionValue && objectionValue.trim().length > 0) {
+          nonQualifiedLeadsCount++;
+        }
+      }
+    });
+  } else {
+    // Fallback: if objection field not configured, count as total - qualified
+    nonQualifiedLeadsCount = leadsCount - qualifiedLeadsCount;
+  }
 
   // Revenue from Google Sheets for selected period
   const revenueSum = revenueRows.reduce((sum, r) => sum + r.amount, 0);
