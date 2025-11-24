@@ -85,6 +85,14 @@ The project is configured for autoscale deployment on Replit:
 
 ## Recent Changes
 
+### November 24, 2025 - Sotuv Online/Offline Display Update
+- **Changed Sotuv Online and Sotuv Offline metrics** - Now displays both count and revenue
+  - Top number: Count of won deals from amoCRM (by course type)
+  - Bottom number: Revenue from Google Sheets (filtered by Column C: "Online" or "Offline")
+  - Example November data: 8 online sales, 59,273,000 so'm online revenue
+  - Added onlineSalesCount, offlineSalesCount, onlineRevenue, offlineRevenue fields
+  - Revenue calculation uses case-insensitive matching for "Online"/"Offline" in Google Sheets
+
 ### November 24, 2025 - Kelishuv Summasi Calculation Update
 - **Changed kelishuvSummasi calculation source** - Now uses custom field 1416675 instead of standard price field
   - Only applies to leads with status 79190542 ("Qisman to'lov qildi")
