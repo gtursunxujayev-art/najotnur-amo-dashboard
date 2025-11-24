@@ -92,8 +92,11 @@ export async function generateDashboardPdf(
       color: rgb(1, 1, 1),
     });
 
+    // Center "Sotuv hisobot" in the blue header
+    const subtitleWidth = font.widthOfTextAtSize("Sotuv hisobot", 12);
+    const subtitleX = width / 2 - subtitleWidth / 2;
     page.drawText("Sotuv hisobot", {
-      x: 40,
+      x: subtitleX,
       y: y - 35,
       size: 12,
       font,
@@ -121,7 +124,7 @@ export async function generateDashboardPdf(
       { label: "Kelishuv summasi", value: formatMoney(data.kelishuvSummasi) },
       { label: "Online tushum", value: formatMoney(data.onlineSummasi) },
       { label: "Offline tushum", value: formatMoney(data.offlineSummasi) },
-      { label: "Haftalik tushum (Sheets)", value: formatMoney(data.haftalikTushum) },
+      { label: "Tushum", value: formatMoney(data.haftalikTushum) },
     ];
 
     // Draw KPI cards in 2x2 grid
@@ -325,9 +328,9 @@ export async function generateDashboardPdf(
       });
       y -= 28;
 
-      const headers = ["Menejer", "Lidlar", "Qualified", "Sotuvlar", "Summasi"];
-      const colXs = [40, 160, 240, 310, 380];
-      const colWidths = [120, 80, 70, 70, 80];
+      const headers = ["Menejer", "Lidlar", "Qualified", "Sotuvlar", "Konversiya", "Summasi"];
+      const colXs = [40, 160, 240, 310, 370, 430];
+      const colWidths = [120, 80, 70, 60, 60, 80];
 
       // Header row
       page.drawRectangle({
@@ -399,11 +402,13 @@ export async function generateDashboardPdf(
         });
 
         const totalSales = m.onlineSalesCount + m.offlineSalesCount;
+        const conversion = m.qualifiedLeads > 0 ? ((totalSales / m.qualifiedLeads) * 100).toFixed(1) : "0";
         const vals = [
           m.managerName,
           String(m.totalLeads),
           String(m.qualifiedLeads),
           String(totalSales),
+          `${conversion}%`,
           formatMoney(m.revenue),
         ];
 
