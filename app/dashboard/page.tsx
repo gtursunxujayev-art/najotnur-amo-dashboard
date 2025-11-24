@@ -293,37 +293,43 @@ export default function DashboardPage() {
                     <div className="h-full flex items-center justify-center text-xs text-slate-500">
                       Hali yo&apos;qotilgan lidlar yo&apos;q.
                     </div>
-                  ) : (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart margin={{ top: 0, right: 20, bottom: 0, left: 20 }}>
-                        <Pie
-                          data={[...data.nonQualifiedReasons].sort((a, b) => b.value - a.value)}
-                          dataKey="value"
-                          nameKey="label"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={55}
-                          labelLine={true}
-                          label={pieLabelLossReason}
-                        >
-                          {data.nonQualifiedReasons.map((_, index) => (
-                            <Cell
-                              key={index}
-                              fill={COLORS[index % COLORS.length]}
-                            />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: "#020617",
-                            border: "1px solid #1e293b",
-                            borderRadius: 8,
-                            fontSize: 12,
-                          }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  )}
+                  ) : (() => {
+                    const total = data.nonQualifiedReasons.reduce((sum, item) => sum + item.value, 0);
+                    const filtered = [...data.nonQualifiedReasons]
+                      .sort((a, b) => b.value - a.value)
+                      .filter(item => (item.value / total) * 100 >= 5);
+                    return (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart margin={{ top: 0, right: 20, bottom: 0, left: 20 }}>
+                          <Pie
+                            data={filtered}
+                            dataKey="value"
+                            nameKey="label"
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={55}
+                            labelLine={true}
+                            label={pieLabelLossReason}
+                          >
+                            {filtered.map((_, index) => (
+                              <Cell
+                                key={index}
+                                fill={COLORS[index % COLORS.length]}
+                              />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "#020617",
+                              border: "1px solid #1e293b",
+                              borderRadius: 8,
+                              fontSize: 12,
+                            }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -363,37 +369,43 @@ export default function DashboardPage() {
                     <div className="h-full flex items-center justify-center text-xs text-slate-500">
                       Lead manbalari topilmadi.
                     </div>
-                  ) : (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart margin={{ top: 0, right: 20, bottom: 0, left: 20 }}>
-                        <Pie
-                          data={[...data.leadSources].sort((a, b) => b.value - a.value)}
-                          dataKey="value"
-                          nameKey="label"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={55}
-                          labelLine={true}
-                          label={pieLabelSource}
-                        >
-                          {data.leadSources.map((_, index) => (
-                            <Cell
-                              key={index}
-                              fill={COLORS[index % COLORS.length]}
-                            />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: "#020617",
-                            border: "1px solid #1e293b",
-                            borderRadius: 8,
-                            fontSize: 12,
-                          }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  )}
+                  ) : (() => {
+                    const total = data.leadSources.reduce((sum, item) => sum + item.value, 0);
+                    const filtered = [...data.leadSources]
+                      .sort((a, b) => b.value - a.value)
+                      .filter(item => (item.value / total) * 100 >= 5);
+                    return (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart margin={{ top: 0, right: 20, bottom: 0, left: 20 }}>
+                          <Pie
+                            data={filtered}
+                            dataKey="value"
+                            nameKey="label"
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={55}
+                            labelLine={true}
+                            label={pieLabelSource}
+                          >
+                            {filtered.map((_, index) => (
+                              <Cell
+                                key={index}
+                                fill={COLORS[index % COLORS.length]}
+                              />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "#020617",
+                              border: "1px solid #1e293b",
+                              borderRadius: 8,
+                              fontSize: 12,
+                            }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
