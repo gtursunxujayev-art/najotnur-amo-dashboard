@@ -85,6 +85,19 @@ The project is configured for autoscale deployment on Replit:
 
 ## Recent Changes
 
+### November 24, 2025 - Critical Bug Fixes for Dashboard Metrics
+- **FIXED: Non-qualified leads counting** - Changed from checking specific loss_reason_ids to: `total leads - qualified leads`
+  - Before: 0 non-qualified (incorrect logic)
+  - After: 143 non-qualified from 242 total (correct: 242 - 99 = 143)
+- **FIXED: Custom field extraction for dropdowns** - Now reads `enum_id` instead of `value` for amoCRM dropdown fields
+  - Before: Online/Offline sales showed 0 despite required field being filled
+  - After: Correctly shows 9,866,000 so'm for online sales
+  - This fixes Course Type field (ID: 1119699) detection
+- **FIXED: Google Sheets date parsing** - Added support for dd.mm.yyyy format (e.g., "24.11.2025")
+  - Before: 0 revenue rows found (dates not parsed)
+  - After: 20 revenue rows found for November
+  - Note: Revenue amounts still 0 - needs Google Sheets Column E data verification
+
 ### November 24, 2025 - Async Call Loading Architecture
 - **Implemented async loading pattern** - Main dashboard loads immediately, calls fetch separately in background
 - **Created separate API endpoint** - `/api/dashboard/calls` handles call data independently from main dashboard

@@ -63,14 +63,16 @@ function getCustomFieldString(lead: AmoLead, fieldId: number): string | null {
   const cf = (lead as any).custom_fields_values as
     | Array<{
         field_id: number;
-        values?: { value?: any }[];
+        values?: { value?: any; enum_id?: any }[];
       }>
     | undefined;
 
   if (!cf) return null;
   const f = cf.find((x) => x.field_id === fieldId);
   if (!f || !f.values || !f.values[0]) return null;
-  const v = f.values[0].value;
+  
+  // For dropdown fields, use enum_id (amoCRM stores dropdown as enum_id, not value)
+  const v = f.values[0].enum_id ?? f.values[0].value;
   if (v == null) return null;
   return String(v);
 }
@@ -170,7 +172,9 @@ export async function buildDashboardData(
     return false;
   };
 
-  const isNotQualified = (lead: AmoLead) => {
+  // Note: This function is ONLY for categorizing loss reasons
+  // The actual nonQualifiedLeadsCount is computed as: total - qualified
+  const hasNotQualifiedLossReason = (lead: AmoLead) => {
     if (!isLost(lead)) return false;
     const reasonId = lead.loss_reason_id!;
     return dashboardConfig.NOT_QUALIFIED_REASON_IDS.includes(reasonId);
@@ -190,20 +194,26 @@ export async function buildDashboardData(
     const managerName = usersMap.get(managerId) || `User ${managerId}`;
     const price = lead.price || 0;
 
-    // Debug logging for first few leads
-    if (leadsCount <= 3) {
-      console.log(`[Dashboard] Lead #${leadsCount}:`, {
-        id: lead.id,
+    // Debug logging - show ALL custom fields for first few leads to diagnose issue
+    if (leadsCount <= 5) {
+      const customFields = (lead as any).custom_fields_values || [];
+      console.log(`[Dashboard] Lead #${leadsCount} (ID: ${lead.id}):`, {
         status_id: lead.status_id,
         loss_reason_id: lead.loss_reason_id,
         price,
-        custom_fields_count: (lead as any).custom_fields_values?.length || 0,
+        isWon: isWon(lead),
+        isQualified: isQualified(lead),
+        isLost: isLost(lead),
       });
       
-      // Log course type field if present
-      if (dashboardConfig.COURSE_TYPE_FIELD_ID) {
-        const courseTypeVal = getCustomFieldString(lead, dashboardConfig.COURSE_TYPE_FIELD_ID);
-        console.log(`[Dashboard]   Course Type Field (${dashboardConfig.COURSE_TYPE_FIELD_ID}):`, courseTypeVal);
+      if (customFields.length > 0) {
+        console.log(`[Dashboard]   Custom fields:`, customFields.map((f: any) => ({
+          field_id: f.field_id,
+          field_name: f.field_name,
+          values: f.values?.map((v: any) => ({ value: v.value, enum_id: v.enum_id }))
+        })));
+      } else {
+        console.log(`[Dashboard]   No custom fields on this lead`);
       }
     }
 
@@ -231,10 +241,8 @@ export async function buildDashboardData(
       qualifiedLeadsCount++;
       ms.qualifiedLeads++;
     }
-
-    if (isNotQualified(lead)) {
-      nonQualifiedLeadsCount++;
-    }
+    
+    // Don't count nonQualifiedLeadsCount here - will compute after loop
 
     // Won / deals
     if (isWon(lead)) {
@@ -265,6 +273,10 @@ export async function buildDashboardData(
       leadSourcesMap.set(label, (leadSourcesMap.get(label) || 0) + 1);
     }
   });
+
+  // FIX: Non-qualified count should be total leads minus qualified leads
+  // This is the correct calculation, not based on specific loss reasons
+  nonQualifiedLeadsCount = leadsCount - qualifiedLeadsCount;
 
   // Revenue from Google Sheets for selected period
   const revenueSum = revenueRows.reduce((sum, r) => sum + r.amount, 0);

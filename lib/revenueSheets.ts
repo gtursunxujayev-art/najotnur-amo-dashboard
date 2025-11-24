@@ -94,7 +94,22 @@ export async function getSheetRevenue(
         const dateStr = String(safeIndex(r, dateIdx) || "").trim();
         if (!dateStr) return null;
 
-        const dt = new Date(dateStr); // expects something like 2025-03-15 or with time
+        // Parse date - handle common formats: dd.mm.yyyy, yyyy-mm-dd, mm/dd/yyyy
+        let dt: Date;
+        if (dateStr.includes('.')) {
+          // dd.mm.yyyy format (e.g., "24.11.2025")
+          const parts = dateStr.split('.');
+          if (parts.length === 3) {
+            const day = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10) - 1; // JS months are 0-indexed
+            const year = parseInt(parts[2], 10);
+            dt = new Date(year, month, day);
+          } else {
+            dt = new Date(dateStr);
+          }
+        } else {
+          dt = new Date(dateStr);
+        }
 
         const amountRaw = String(safeIndex(r, amountIdx) || "").replace(/\s/g, "");
         const amount = Number(amountRaw || 0);
@@ -111,10 +126,20 @@ export async function getSheetRevenue(
           paymentType,
         } as RevenueRow;
       })
-      .filter((row): row is RevenueRow => !!row && !Number.isNaN(row.amount))
-      .filter(
-        (row) => row.date >= from && row.date <= to
-      );
+      .filter((row): row is RevenueRow => {
+        if (!row) return false;
+        if (Number.isNaN(row.amount)) return false;
+        // Check if date is valid
+        if (!row.date || isNaN(row.date.getTime())) {
+          console.warn(`[RevenueSheets] Invalid date found, skipping row`);
+          return false;
+        }
+        return true;
+      })
+      .filter((row) => {
+        const isInRange = row.date >= from && row.date <= to;
+        return isInRange;
+      });
     
     console.log(`[RevenueSheets] Returning ${processedRows.length} revenue rows after filtering`);
     if (processedRows.length > 0) {
