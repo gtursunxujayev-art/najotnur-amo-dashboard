@@ -79,19 +79,32 @@ export async function buildDashboardData(
   period: Period,
   periodLabel: string
 ): Promise<DashboardData> {
+  console.log(`[Dashboard] Building dashboard data for period: ${periodLabel} (${period.from.toISOString()} to ${period.to.toISOString()})`);
+  
   const [users, reasonsMap, leads, sheetCalls, amoCalls, revenueRows] =
     await Promise.all([
       getUsers(),
       getLossReasons(), // { [id]: name }
       getLeadsByCreatedAt(toUnixSeconds(period.from), toUnixSeconds(period.to)),
       dashboardConfig.USE_SHEETS_CALLS
-        ? getSheetCalls(period.from, period.to)
+        ? getSheetCalls(period.from, period.to).catch(err => {
+            console.error("[Dashboard] Error fetching Google Sheets calls:", err);
+            return [];
+          })
         : Promise.resolve([]),
       dashboardConfig.USE_AMO_CALLS
-        ? getAmoCalls(period.from, period.to)
+        ? getAmoCalls(period.from, period.to).catch(err => {
+            console.error("[Dashboard] Error fetching amoCRM calls:", err);
+            return [];
+          })
         : Promise.resolve([]),
-      getSheetRevenue(period.from, period.to),
+      getSheetRevenue(period.from, period.to).catch(err => {
+        console.error("[Dashboard] Error fetching revenue data:", err);
+        return [];
+      }),
     ]);
+
+  console.log(`[Dashboard] Data fetched - Leads: ${leads.length}, Sheet Calls: ${sheetCalls.length}, Amo Calls: ${amoCalls.length}, Revenue Rows: ${revenueRows.length}`);
 
   const usersMap = new Map<number, string>();
   users.forEach((u) => usersMap.set(u.id, u.name));
