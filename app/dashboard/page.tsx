@@ -622,10 +622,10 @@ export default function DashboardPage() {
             )}
           </section>
 
-          {/* OnlinePBX calls (Real-time from webhooks) */}
+          {/* OnlinePBX calls (Real-time from webhooks) - Manager summary */}
           <section className="rounded-lg border border-slate-700 bg-slate-900 p-4">
             <h2 className="mb-3 text-sm font-semibold text-slate-200">
-              OnlinePBX Qo&apos;ng&apos;iroqlar (Real-time)
+              OnlinePBX Qo&apos;ng&apos;iroqlar bo&apos;yicha menejerlar
             </h2>
             {onlinepbxLoading ? (
               <div className="text-xs text-slate-400 animate-pulse">
@@ -639,56 +639,63 @@ export default function DashboardPage() {
               <div className="text-xs text-slate-500">
                 Tanlangan davr uchun OnlinePBX qo&apos;ng&apos;iroqlari topilmadi.
               </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="text-xs text-slate-400 mb-3">
-                  Jami: <span className="font-semibold text-slate-200">{onlinepbxData.totalCalls}</span> ta qo&apos;ng&apos;iroq (Tanlangan davr: <span className="font-semibold">{onlinepbxData.filteredCount}</span>)
-                </div>
-                <div className="overflow-x-auto max-h-96 overflow-y-auto">
+            ) : (() => {
+              // Aggregate calls by manager
+              const managerStats = onlinepbxData.recentCalls.reduce((acc, call) => {
+                const existing = acc.find((m) => m.user === call.user);
+                if (existing) {
+                  existing.totalCalls += 1;
+                  if (call.type === "out") {
+                    existing.outboundCalls += 1;
+                  }
+                  existing.totalDuration += call.duration;
+                } else {
+                  acc.push({
+                    user: call.user,
+                    totalCalls: 1,
+                    outboundCalls: call.type === "out" ? 1 : 0,
+                    totalDuration: call.duration,
+                  });
+                }
+                return acc;
+              }, [] as Array<{ user: string; totalCalls: number; outboundCalls: number; totalDuration: number }>);
+
+              return (
+                <div className="overflow-x-auto">
                   <table className="min-w-full text-left text-xs text-slate-200">
-                    <thead className="sticky top-0">
+                    <thead>
                       <tr className="border-b border-slate-700 bg-slate-800/60">
-                        <th className="px-3 py-2">Vaqt</th>
-                        <th className="px-3 py-2">Turi</th>
-                        <th className="px-3 py-2">Telefon</th>
-                        <th className="px-3 py-2">Foydalanuvchi</th>
-                        <th className="px-3 py-2">Vaqt (s)</th>
+                        <th className="px-3 py-2">Menejer</th>
+                        <th className="px-3 py-2">Jami qo&apos;ng&apos;iroqlar</th>
+                        <th className="px-3 py-2">Chiquvchi qo&apos;ng&apos;iroqlar</th>
+                        <th className="px-3 py-2">Davomiyligi (s)</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {onlinepbxData.recentCalls.map((call) => {
-                        const callDate = new Date(call.date);
-                        const timeStr = callDate.toLocaleString("uz-UZ", { 
-                          year: "numeric",
-                          month: "2-digit",
-                          day: "2-digit",
-                          hour: "2-digit", 
-                          minute: "2-digit", 
-                          second: "2-digit" 
-                        });
-                        const isIncoming = call.type === "in";
-                        return (
+                      {managerStats
+                        .sort((a, b) => b.totalCalls - a.totalCalls)
+                        .map((manager) => (
                           <tr
-                            key={call.id}
+                            key={manager.user}
                             className="border-b border-slate-800 last:border-0"
                           >
-                            <td className="px-3 py-2 text-slate-400 whitespace-nowrap">{timeStr}</td>
+                            <td className="px-3 py-2">{manager.user}</td>
                             <td className="px-3 py-2">
-                              <span className={`${isIncoming ? "text-green-400" : "text-blue-400"}`}>
-                                {isIncoming ? "📥 IN" : "📤 OUT"}
-                              </span>
+                              {manager.totalCalls.toLocaleString("ru-RU")}
                             </td>
-                            <td className="px-3 py-2 font-mono text-slate-300">{call.phone}</td>
-                            <td className="px-3 py-2">{call.user}</td>
-                            <td className="px-3 py-2 text-slate-400">{call.duration}</td>
+                            <td className="px-3 py-2">
+                              {manager.outboundCalls.toLocaleString("ru-RU")}
+                            </td>
+                            <td className="px-3 py-2 font-semibold">
+                              {manager.totalDuration.toLocaleString("ru-RU")}
+                            </td>
                           </tr>
-                        );
-                      })}
+                        ))}
                     </tbody>
                   </table>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </section>
         </div>
       )}
