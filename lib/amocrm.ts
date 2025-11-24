@@ -84,3 +84,28 @@ export async function getLossReasons(): Promise<Record<number, string>> {
   });
   return map;
 }
+
+/**
+ * Get enum mapping for a specific custom field (enum_id -> text value).
+ * Returns { enum_id: "enum_text" }
+ */
+export async function getFieldEnumMapping(fieldId: number): Promise<Record<number, string>> {
+  try {
+    const data = await amoRequest("/api/v4/leads/custom_fields?limit=250");
+    const fields = data?._embedded?.custom_fields || [];
+    const field = fields.find((f: any) => f.id === fieldId);
+    
+    if (!field || !field.enums) {
+      return {};
+    }
+    
+    const map: Record<number, string> = {};
+    field.enums.forEach((en: any) => {
+      map[en.id] = en.value;
+    });
+    return map;
+  } catch (err) {
+    console.error(`[amocrm] Error fetching enum mapping for field ${fieldId}:`, err);
+    return {};
+  }
+}

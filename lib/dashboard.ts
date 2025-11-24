@@ -3,6 +3,7 @@ import {
   getLeadsByCreatedAt,
   getUsers,
   getLossReasons,
+  getFieldEnumMapping,
   AmoLead,
 } from "@/lib/amocrm";
 import { dashboardConfig } from "@/config/dashboardConfig";
@@ -109,7 +110,7 @@ export async function buildDashboardData(
   
   const skipCalls = options?.skipCalls ?? false;
   
-  const [users, reasonsMap, leads, sheetCalls, amoCalls, revenueRows] =
+  const [users, reasonsMap, leads, sheetCalls, amoCalls, revenueRows, leadSourceEnums] =
     await Promise.all([
       getUsers(),
       getLossReasons(), // { [id]: name }
@@ -130,6 +131,12 @@ export async function buildDashboardData(
         console.error("[Dashboard] Error fetching revenue data:", err);
         return [];
       }),
+      dashboardConfig.LEAD_SOURCE_FIELD_ID != null
+        ? getFieldEnumMapping(dashboardConfig.LEAD_SOURCE_FIELD_ID).catch(err => {
+            console.error("[Dashboard] Error fetching lead source enums:", err);
+            return {};
+          })
+        : Promise.resolve({}),
     ]);
 
   console.log(`[Dashboard] Data fetched - Leads: ${leads.length}, Sheet Calls: ${sheetCalls.length}, Amo Calls: ${amoCalls.length}, Revenue Rows: ${revenueRows.length}`);
@@ -312,9 +319,18 @@ export async function buildDashboardData(
         lead,
         dashboardConfig.LEAD_SOURCE_FIELD_ID
       );
-      const label =
-        srcVal && srcVal.trim().length > 0 ? srcVal.trim() : "Unknown source";
-      leadSourcesMap.set(label, (leadSourcesMap.get(label) || 0) + 1);
+      
+      if (srcVal && srcVal.trim().length > 0) {
+        // Try to convert enum_id to text using the mapping
+        const enumId = Number(srcVal);
+        const enumMap = leadSourceEnums as Record<number, string>;
+        const label = !isNaN(enumId) && enumMap[enumId]
+          ? enumMap[enumId]
+          : srcVal.trim();
+        leadSourcesMap.set(label, (leadSourcesMap.get(label) || 0) + 1);
+      } else {
+        leadSourcesMap.set("Unknown source", (leadSourcesMap.get("Unknown source") || 0) + 1);
+      }
     }
   });
 
