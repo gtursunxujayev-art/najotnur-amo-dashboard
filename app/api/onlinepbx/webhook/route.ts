@@ -116,22 +116,42 @@ export async function POST(request: Request) {
 
 /**
  * GET endpoint to retrieve recently received calls and errors
+ * Supports filtering by date range
  */
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get("limit") || "100");
+    const limit = parseInt(searchParams.get("limit") || "1000");
     const showErrors = searchParams.get("errors") === "true";
+    const fromDateStr = searchParams.get("from");
+    const toDateStr = searchParams.get("to");
 
-    // Return recent calls, sorted by timestamp (newest first)
-    const calls = recentCalls
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, limit);
+    let calls = recentCalls.sort((a, b) => b.timestamp - a.timestamp);
+
+    // Apply date filtering if provided
+    if (fromDateStr && toDateStr) {
+      const fromDate = new Date(fromDateStr);
+      fromDate.setHours(0, 0, 0, 0);
+      const toDate = new Date(toDateStr);
+      toDate.setHours(23, 59, 59, 999);
+      
+      const fromTime = fromDate.getTime();
+      const toTime = toDate.getTime();
+      
+      calls = calls.filter((call) => {
+        const callTime = new Date(call.date).getTime();
+        return callTime >= fromTime && callTime <= toTime;
+      });
+    }
+
+    // Apply limit
+    calls = calls.slice(0, limit);
 
     const response: any = {
       success: true,
       data: {
         totalCalls: recentCalls.length,
+        filteredCount: calls.length,
         recentCalls: calls,
       },
     };

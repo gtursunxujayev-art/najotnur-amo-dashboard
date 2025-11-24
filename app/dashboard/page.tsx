@@ -24,6 +24,7 @@ type CallsData = {
 
 type OnlinePBXCallsData = {
   totalCalls: number;
+  filteredCount: number;
   recentCalls: Array<{
     id: string;
     type: "in" | "out";
@@ -129,7 +130,7 @@ export default function DashboardPage() {
     }
   }
 
-  async function loadOnlinePBXCalls() {
+  async function loadOnlinePBXCalls(periodKey: PeriodKey) {
     try {
       if (onlinepbxAbortRef.current) {
         onlinepbxAbortRef.current.abort();
@@ -138,7 +139,28 @@ export default function DashboardPage() {
 
       setState((s) => ({ ...s, onlinepbxLoading: true, onlinepbxError: null, onlinepbxData: null }));
 
-      const res = await fetch(`/api/onlinepbx/webhook?limit=20`, {
+      // Calculate date range based on period
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      let fromDate = new Date(today);
+      let toDate = new Date(today);
+      toDate.setHours(23, 59, 59, 999);
+
+      if (periodKey === "week") {
+        const dayOfWeek = today.getDay();
+        fromDate.setDate(today.getDate() - dayOfWeek); // Set to Monday
+        toDate = new Date();
+        toDate.setHours(23, 59, 59, 999);
+      } else if (periodKey === "month") {
+        fromDate.setDate(1); // Set to 1st of month
+        toDate = new Date();
+        toDate.setHours(23, 59, 59, 999);
+      }
+
+      const fromParam = fromDate.toISOString().split("T")[0];
+      const toParam = toDate.toISOString().split("T")[0];
+
+      const res = await fetch(`/api/onlinepbx/webhook?limit=1000&from=${fromParam}&to=${toParam}`, {
         cache: "no-store",
         signal: onlinepbxAbortRef.current.signal,
       });
@@ -208,7 +230,7 @@ export default function DashboardPage() {
       });
 
       loadCalls(periodKey);
-      loadOnlinePBXCalls();
+      loadOnlinePBXCalls(periodKey);
     } catch (err: any) {
       if (err.name === "AbortError") return;
       console.error("Dashboard load error", err);
@@ -615,14 +637,14 @@ export default function DashboardPage() {
               </div>
             ) : !onlinepbxData || onlinepbxData.recentCalls.length === 0 ? (
               <div className="text-xs text-slate-500">
-                OnlinePBX qo&apos;ng&apos;iroqlari ko&apos;rsatilmadi. Webhook-dan qo&apos;ng&apos;iroq kutilmoqda...
+                Tanlangan davr uchun OnlinePBX qo&apos;ng&apos;iroqlari topilmadi.
               </div>
             ) : (
               <div className="space-y-2">
                 <div className="text-xs text-slate-400 mb-3">
-                  Jami: <span className="font-semibold text-slate-200">{onlinepbxData.totalCalls}</span> ta qo&apos;ng&apos;iroq
+                  Jami: <span className="font-semibold text-slate-200">{onlinepbxData.totalCalls}</span> ta qo&apos;ng&apos;iroq (Tanlangan davr: <span className="font-semibold">{onlinepbxData.filteredCount}</span>)
                 </div>
-                <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                <div className="overflow-x-auto max-h-96 overflow-y-auto">
                   <table className="min-w-full text-left text-xs text-slate-200">
                     <thead className="sticky top-0">
                       <tr className="border-b border-slate-700 bg-slate-800/60">
@@ -634,9 +656,12 @@ export default function DashboardPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {onlinepbxData.recentCalls.slice(0, 10).map((call) => {
+                      {onlinepbxData.recentCalls.map((call) => {
                         const callDate = new Date(call.date);
-                        const timeStr = callDate.toLocaleTimeString("uz-UZ", { 
+                        const timeStr = callDate.toLocaleString("uz-UZ", { 
+                          year: "numeric",
+                          month: "2-digit",
+                          day: "2-digit",
                           hour: "2-digit", 
                           minute: "2-digit", 
                           second: "2-digit" 
@@ -647,7 +672,7 @@ export default function DashboardPage() {
                             key={call.id}
                             className="border-b border-slate-800 last:border-0"
                           >
-                            <td className="px-3 py-2 text-slate-400">{timeStr}</td>
+                            <td className="px-3 py-2 text-slate-400 whitespace-nowrap">{timeStr}</td>
                             <td className="px-3 py-2">
                               <span className={`${isIncoming ? "text-green-400" : "text-blue-400"}`}>
                                 {isIncoming ? "📥 IN" : "📤 OUT"}
