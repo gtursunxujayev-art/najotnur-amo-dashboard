@@ -160,7 +160,7 @@ export default function DashboardPage() {
       const fromParam = fromDate.toISOString().split("T")[0];
       const toParam = toDate.toISOString().split("T")[0];
 
-      const res = await fetch(`/api/onlinepbx/webhook?limit=1000&from=${fromParam}&to=${toParam}`, {
+      const res = await fetch(`/api/onlinepbx/calls?limit=1000&from=${fromParam}&to=${toParam}`, {
         cache: "no-store",
         signal: onlinepbxAbortRef.current.signal,
       });

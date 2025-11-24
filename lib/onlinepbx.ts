@@ -2,7 +2,7 @@
 // OnlinePBX API client for fetching real-time call data
 
 const BASE_URL = "https://api2.onlinepbx.ru";
-const DOMAIN = "najot";
+const DOMAIN = process.env.ONLINEPBX_DOMAIN || "najot";
 const API_KEY = process.env.ONLINEPBX_API_KEY || "";
 
 export type OnlinePBXCall = {
