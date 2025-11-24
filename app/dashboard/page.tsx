@@ -159,6 +159,12 @@ export default function DashboardPage() {
 
   useEffect(() => {
     load(state.period);
+    
+    // Initialize scheduler on app startup
+    fetch("/api/admin/init-scheduler", { method: "GET" })
+      .then(r => r.json())
+      .then(d => console.log("[Dashboard] Scheduler initialized:", d))
+      .catch(e => console.error("[Dashboard] Scheduler init error:", e));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
