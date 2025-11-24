@@ -22,6 +22,20 @@ type CallsData = {
   }>;
 };
 
+type OnlinePBXCallsData = {
+  totalCalls: number;
+  recentCalls: Array<{
+    id: string;
+    type: "in" | "out";
+    date: string;
+    duration: number;
+    phone: string;
+    user: string;
+    source: string;
+    timestamp: number;
+  }>;
+};
+
 type UiState = {
   loading: boolean;
   error: string | null;
@@ -30,6 +44,9 @@ type UiState = {
   callsLoading: boolean;
   callsError: string | null;
   callsData: CallsData | null;
+  onlinepbxLoading: boolean;
+  onlinepbxError: string | null;
+  onlinepbxData: OnlinePBXCallsData | null;
 };
 
 const COLORS = ["#22c55e", "#3b82f6", "#a855f7", "#f97316", "#ef4444", "#eab308"];
@@ -56,10 +73,14 @@ export default function DashboardPage() {
     callsLoading: false,
     callsError: null,
     callsData: null,
+    onlinepbxLoading: false,
+    onlinepbxError: null,
+    onlinepbxData: null,
   });
 
   const dashboardAbortRef = useRef<AbortController | null>(null);
   const callsAbortRef = useRef<AbortController | null>(null);
+  const onlinepbxAbortRef = useRef<AbortController | null>(null);
 
   async function loadCalls(periodKey: PeriodKey) {
     try {
@@ -108,6 +129,51 @@ export default function DashboardPage() {
     }
   }
 
+  async function loadOnlinePBXCalls() {
+    try {
+      if (onlinepbxAbortRef.current) {
+        onlinepbxAbortRef.current.abort();
+      }
+      onlinepbxAbortRef.current = new AbortController();
+
+      setState((s) => ({ ...s, onlinepbxLoading: true, onlinepbxError: null, onlinepbxData: null }));
+
+      const res = await fetch(`/api/onlinepbx/webhook?limit=20`, {
+        cache: "no-store",
+        signal: onlinepbxAbortRef.current.signal,
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const msg = body.error || res.statusText || "Failed to load OnlinePBX calls";
+        throw new Error(msg);
+      }
+
+      const json = await res.json();
+      const onlinepbxData: OnlinePBXCallsData = json.data;
+
+      setState((s) => {
+        return {
+          ...s,
+          onlinepbxLoading: false,
+          onlinepbxError: null,
+          onlinepbxData,
+        };
+      });
+    } catch (err: any) {
+      if (err.name === "AbortError") return;
+      console.error("OnlinePBX calls load error", err);
+      setState((s) => {
+        return {
+          ...s,
+          onlinepbxLoading: false,
+          onlinepbxError: err?.message || "Failed to load OnlinePBX data",
+          onlinepbxData: null,
+        };
+      });
+    }
+  }
+
   async function load(periodKey: PeriodKey) {
     try {
       if (dashboardAbortRef.current) {
@@ -142,6 +208,7 @@ export default function DashboardPage() {
       });
 
       loadCalls(periodKey);
+      loadOnlinePBXCalls();
     } catch (err: any) {
       if (err.name === "AbortError") return;
       console.error("Dashboard load error", err);
@@ -168,7 +235,7 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { data, loading, error, period, callsLoading, callsError, callsData } = state;
+  const { data, loading, error, period, callsLoading, callsError, callsData, onlinepbxLoading, onlinepbxError, onlinepbxData } = state;
 
   const handleChangePeriod = (p: PeriodKey) => {
     if (p === period) return;
@@ -485,10 +552,10 @@ export default function DashboardPage() {
             )}
           </section>
 
-          {/* Manager calls */}
+          {/* Manager calls (amoCRM) */}
           <section className="rounded-lg border border-slate-700 bg-slate-900 p-4">
             <h2 className="mb-3 text-sm font-semibold text-slate-200">
-              Qo&apos;ng&apos;iroqlar bo&apos;yicha menejerlar
+              Qo&apos;ng&apos;iroqlar bo&apos;yicha menejerlar (amoCRM)
             </h2>
             {callsLoading ? (
               <div className="text-xs text-slate-400 animate-pulse">
@@ -529,6 +596,72 @@ export default function DashboardPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+          </section>
+
+          {/* OnlinePBX calls (Real-time from webhooks) */}
+          <section className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+            <h2 className="mb-3 text-sm font-semibold text-slate-200">
+              OnlinePBX Qo&apos;ng&apos;iroqlar (Real-time)
+            </h2>
+            {onlinepbxLoading ? (
+              <div className="text-xs text-slate-400 animate-pulse">
+                OnlinePBX qo&apos;ng&apos;iroqlari yuklanmoqda...
+              </div>
+            ) : onlinepbxError ? (
+              <div className="text-xs text-red-400">
+                Xato: {onlinepbxError}
+              </div>
+            ) : !onlinepbxData || onlinepbxData.recentCalls.length === 0 ? (
+              <div className="text-xs text-slate-500">
+                OnlinePBX qo&apos;ng&apos;iroqlari ko&apos;rsatilmadi. Webhook-dan qo&apos;ng&apos;iroq kutilmoqda...
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="text-xs text-slate-400 mb-3">
+                  Jami: <span className="font-semibold text-slate-200">{onlinepbxData.totalCalls}</span> ta qo&apos;ng&apos;iroq
+                </div>
+                <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                  <table className="min-w-full text-left text-xs text-slate-200">
+                    <thead className="sticky top-0">
+                      <tr className="border-b border-slate-700 bg-slate-800/60">
+                        <th className="px-3 py-2">Vaqt</th>
+                        <th className="px-3 py-2">Turi</th>
+                        <th className="px-3 py-2">Telefon</th>
+                        <th className="px-3 py-2">Foydalanuvchi</th>
+                        <th className="px-3 py-2">Vaqt (s)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {onlinepbxData.recentCalls.slice(0, 10).map((call) => {
+                        const callDate = new Date(call.date);
+                        const timeStr = callDate.toLocaleTimeString("uz-UZ", { 
+                          hour: "2-digit", 
+                          minute: "2-digit", 
+                          second: "2-digit" 
+                        });
+                        const isIncoming = call.type === "in";
+                        return (
+                          <tr
+                            key={call.id}
+                            className="border-b border-slate-800 last:border-0"
+                          >
+                            <td className="px-3 py-2 text-slate-400">{timeStr}</td>
+                            <td className="px-3 py-2">
+                              <span className={`${isIncoming ? "text-green-400" : "text-blue-400"}`}>
+                                {isIncoming ? "📥 IN" : "📤 OUT"}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 font-mono text-slate-300">{call.phone}</td>
+                            <td className="px-3 py-2">{call.user}</td>
+                            <td className="px-3 py-2 text-slate-400">{call.duration}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </section>
