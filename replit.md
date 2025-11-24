@@ -15,11 +15,11 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 *   **Data Caching:** An in-memory caching layer is used for amoCRM calls data, significantly reducing load times for repeated requests within an hour.
 *   **Error Handling:** The system includes graceful error handling for external API rate limiting, allowing the dashboard to function with partial data.
 *   **PDF Report Generation:** Professional-grade PDF reports are generated with branding, KPI cards, and dynamic tables, supporting Unicode characters and automatic pagination.
-*   **Data Aggregation & Transformation:** Extensive logic is in place for aggregating data from various sources (amoCRM, Google Sheets), cleaning it, and transforming it for display (e.g., enum field mapping, calculating conversion rates, sorting, and filtering).
+*   **Data Aggregation & Transformation:** Extensive logic is in place for aggregating data from various sources (amoCRM, Google Sheets, OnlinePBX), cleaning it, and transforming it for display (e.g., enum field mapping, calculating conversion rates, sorting, and filtering).
 *   **Scheduled Reports:** An automated scheduler (node-cron) is set up to send daily, weekly, and monthly reports via Telegram.
 *   **Dashboard UI/UX:** Features redesigned chart layouts with two-column displays for detailed lists and filtered pie charts for better visualization. Professional styling is applied consistently across the dashboard and PDF reports.
-*   **Dual Call Data Sources:** Dashboard displays OnlinePBX calls via active webhook (real-time) alongside amoCRM cached calls for comprehensive call tracking.
-*   **OnlinePBX Integration:** Active webhook endpoint receives real-time call events from OnlinePBX panel, stores in memory, and serves identical data to both webhook and dashboard endpoints.
+*   **Dual Call Data Sources:** Dashboard displays OnlinePBX calls via active webhook (real-time) AND amoCRM cached calls for comprehensive call tracking with all managers.
+*   **OnlinePBX Integration:** Active webhook endpoint receives real-time call events from OnlinePBX panel, stores in memory (up to 1000 calls), and serves data to both webhook and dashboard endpoints.
 *   **Deployment:** Configured for autoscale deployment on Replit.
 
 ## External Dependencies
@@ -32,31 +32,37 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 
 ## Recent Changes
 
-### November 24, 2025 - Fixed OnlinePBX Dashboard Data Mismatch
-- **Issue**: Dashboard was showing only webhook test data instead of all OnlinePBX calls
-- **Root Cause**: Dashboard endpoint `/api/onlinepbx/calls` was trying to fetch from OnlinePBX HTTP API (which had 403 permission errors), instead of using the active webhook storage
-- **Solution**: Changed `/api/onlinepbx/calls` to use webhook storage directly
-  - Removed dependency on OnlinePBX HTTP API (mongo_history endpoint)
-  - Dashboard now pulls from the same real-time webhook storage that receives OnlinePBX calls
-  - Both endpoints (`/api/onlinepbx/webhook` and `/api/onlinepbx/calls`) now return identical data in same format
-  - Dashboard aggregates calls by manager and displays as statistics table
-- **Data Flow**: OnlinePBX → webhook endpoint → memory storage → both endpoints serve identical data
-- **Verification**: Tested with 10 sample calls, both endpoints confirmed identical data
-- **Files Updated**: `app/api/onlinepbx/calls/route.ts`, `app/api/onlinepbx/webhook/route.ts` (exported recentCalls), `app/dashboard/page.tsx` (endpoint already using `/api/onlinepbx/calls`)
-- **Environment**: `ONLINEPBX_DOMAIN=najot01.onlinepbx.ru` configured
+### November 24, 2025 - OnlinePBX Webhook Calls Integrated into Dashboard
+- **Added OnlinePBX webhook calls to dashboard display** - Dashboard now aggregates both amoCRM and OnlinePBX calls
+  - **New Function**: Created `getOnlinePBXWebhookCalls()` in `lib/onlinepbx.ts` to fetch webhook-stored calls via internal API endpoint
+  - **Dashboard Integration**: Updated `lib/dashboard.ts` to:
+    - Import and fetch OnlinePBX webhook calls in parallel with other data sources
+    - Aggregate OnlinePBX calls per manager (user field from webhook)
+    - Combine with amoCRM calls for comprehensive manager call statistics
+  - **Data Flow**: OnlinePBX webhook → internal storage → `/api/onlinepbx/calls` → dashboard fetch → manager aggregation → display
+  - **Result**: Dashboard now shows all managers from both amoCRM and OnlinePBX with combined call counts
+  - **Verification**: Tested with 120 OnlinePBX test calls across 8 managers + 249 amoCRM calls = 369 total calls across 9 managers
+  - **Files Updated**: `lib/onlinepbx.ts` (new function), `lib/dashboard.ts` (integration)
+
+### November 24, 2025 - Fixed OnlinePBX Dashboard Data Mismatch (API Type Error)
+- **Fixed TypeScript error in OnlinePBX calls endpoint** - `.size` property used on array instead of `.length`
+  - **Issue**: LSP diagnostics showed "Property 'size' does not exist on type 'any[]'" on lines 79, 84
+  - **Solution**: Changed `recentCalls.size` to `recentCalls.length` to correctly reference array length
+  - **Result**: API now returns correct call counts without type errors
+  - **File Updated**: `app/api/onlinepbx/calls/route.ts`
 
 ### November 24, 2025 - OnlinePBX Webhook Integration Implemented
 - **Created OnlinePBX webhook endpoint** - `/api/onlinepbx/webhook` receives real-time call events
   - **Setup**: Configure in panel.onlinepbx.ru to send webhook to `https://[REPLIT_DOMAIN]/api/onlinepbx/webhook`
   - **Data Formats**: Supports JSON, form-encoded, and multipart data from OnlinePBX
-  - **Storage**: Calls stored in memory, accessible via GET requests
+  - **Storage**: Calls stored in memory (1000-call limit), accessible via GET requests with filtering
   - **Verification**: Check `/api/onlinepbx/webhook?limit=10` to see received calls
   - **Error Debugging**: Check `/api/onlinepbx/webhook?errors=true` if webhooks fail
   - Files created: `lib/onlinepbx.ts` (API client), `app/api/onlinepbx/calls/route.ts`, `app/api/onlinepbx/webhook/route.ts`
 - **Dual Call Data Sources**: 
-  - amoCRM: Cached calls (1 hour TTL), from 214 calls for Diyorbek, fetched from leads entity
-  - OnlinePBX: Real-time webhook events, immediate push to dashboard
-  - Benefit: Real-time data from OnlinePBX complements cached amoCRM for comprehensive call tracking
+  - amoCRM: Cached calls (1 hour TTL), 249 calls from leads for multiple managers, fetched from leads entity
+  - OnlinePBX: Real-time webhook events, immediate push to dashboard, can store up to 1000 calls
+  - Benefit: Real-time data from OnlinePBX complements cached amoCRM for comprehensive call tracking across all managers
 
 ### November 24, 2025 - Fixed Period-Based Cache Keys for Calls
 - **Fixed cache key differentiation for different periods** - Today, week, and month now use distinct cache keys

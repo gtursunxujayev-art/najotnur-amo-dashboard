@@ -139,6 +139,60 @@ export async function getOnlinePBXCalls(
 }
 
 /**
+ * Fetch OnlinePBX webhook-based calls from our internal endpoint
+ * This is the new approach using webhook storage instead of HTTP API
+ */
+export async function getOnlinePBXWebhookCalls(
+  from: Date,
+  to: Date
+): Promise<OnlinePBXCall[]> {
+  try {
+    const domain = process.env.VERCEL_URL || process.env.REPLIT_DOMAINS || "localhost:5000";
+    const protocol = domain === "localhost:5000" ? "http" : "https";
+    
+    const fromStr = from.toISOString().split('T')[0];
+    const toStr = to.toISOString().split('T')[0];
+    
+    const url = `${protocol}://${domain}/api/onlinepbx/calls?from=${fromStr}&to=${toStr}`;
+    
+    console.log(`[OnlinePBX] Fetching webhook-based calls from: ${url}`);
+    
+    const response = await fetch(url, {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      console.error(`[OnlinePBX] Webhook API returned status ${response.status}`);
+      return [];
+    }
+
+    const data = await response.json();
+    
+    if (!data.success || !data.data?.recentCalls) {
+      console.error("[OnlinePBX] Invalid webhook response format");
+      return [];
+    }
+
+    // Convert webhook format to OnlinePBXCall format
+    const calls: OnlinePBXCall[] = data.data.recentCalls.map((c: any) => ({
+      id: c.id,
+      type: c.type || "out",
+      date: new Date(c.date),
+      duration: c.duration || 0,
+      phone: c.phone || "Unknown",
+      user: c.user || "Unknown",
+    }));
+
+    console.log(`[OnlinePBX] Fetched ${calls.length} webhook-based calls`);
+    return calls;
+  } catch (error) {
+    console.error("[OnlinePBX] Error fetching webhook calls:", error);
+    return [];
+  }
+}
+
+/**
  * Get OnlinePBX users list
  */
 export async function getOnlinePBXUsers() {

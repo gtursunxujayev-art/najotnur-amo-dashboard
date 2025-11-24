@@ -11,6 +11,7 @@ import { dashboardConfig } from "@/config/dashboardConfig";
 import { getSheetCalls } from "@/lib/googleSheets";
 import { getAmoCalls } from "@/lib/amoCalls";
 import { getSheetRevenue } from "@/lib/revenueSheets";
+import { getOnlinePBXWebhookCalls } from "@/lib/onlinepbx";
 
 export type Period = {
   from: Date;
@@ -114,7 +115,7 @@ export async function buildDashboardData(
   
   const skipCalls = options?.skipCalls ?? false;
 
-  const [users, reasonsMap, leads, sheetCalls, amoCalls, revenueRows, leadSourceEnums, statusMap, objectionEnums] =
+  const [users, reasonsMap, leads, sheetCalls, amoCalls, onlinepbxCalls, revenueRows, leadSourceEnums, statusMap, objectionEnums] =
     await Promise.all([
       getUsers(),
       getLossReasons(), // { [id]: name }
@@ -128,6 +129,12 @@ export async function buildDashboardData(
       dashboardConfig.USE_AMO_CALLS && !skipCalls
         ? getAmoCalls(period.from, period.to).catch(err => {
             console.error("[Dashboard] Error fetching amoCRM calls:", err);
+            return [];
+          })
+        : Promise.resolve([]),
+      !skipCalls
+        ? getOnlinePBXWebhookCalls(period.from, period.to).catch(err => {
+            console.error("[Dashboard] Error fetching OnlinePBX webhook calls:", err);
             return [];
           })
         : Promise.resolve([]),
@@ -153,7 +160,7 @@ export async function buildDashboardData(
         : Promise.resolve({}),
     ]);
 
-  console.log(`[Dashboard] Data fetched - Leads: ${leads.length}, Sheet Calls: ${sheetCalls.length}, Amo Calls: ${amoCalls.length}, Revenue Rows: ${revenueRows.length}`);
+  console.log(`[Dashboard] Data fetched - Leads: ${leads.length}, Sheet Calls: ${sheetCalls.length}, Amo Calls: ${amoCalls.length}, OnlinePBX Calls: ${onlinepbxCalls.length}, Revenue Rows: ${revenueRows.length}`);
 
   const usersMap = new Map<number, string>();
   users.forEach((u) => usersMap.set(u.id, u.name));
@@ -506,7 +513,17 @@ export async function buildDashboardData(
     });
   }
 
-  // 2) Google Sheets calls (successful)
+  // 2) OnlinePBX webhook calls (real-time)
+  if (onlinepbxCalls.length > 0) {
+    onlinepbxCalls.forEach((c) => {
+      const cs = ensureManagerCalls(c.user);
+      cs.callsAll++;
+      cs.callSecondsAll += c.duration;
+      // Note: OnlinePBX doesn't have success tracking, all calls counted as received
+    });
+  }
+
+  // 3) Google Sheets calls (successful)
   if (dashboardConfig.USE_SHEETS_CALLS) {
     sheetCalls.forEach((c) => {
       const cs = ensureManagerCalls(c.managerName);
@@ -517,7 +534,7 @@ export async function buildDashboardData(
     });
   }
 
-  // 3) Average call length
+  // 4) Average call length
   callsPerManager.forEach((cs) => {
     cs.avgCallSeconds =
       cs.callsAll > 0 ? Math.round(cs.callSecondsAll / cs.callsAll) : 0;
