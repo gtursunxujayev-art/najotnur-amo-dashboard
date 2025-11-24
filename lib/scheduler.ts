@@ -9,11 +9,11 @@ export function initializeScheduler() {
     return;
   }
 
-  console.log("[Scheduler] Initializing automated report scheduler...");
+  console.log("[Scheduler] Initializing automated report scheduler (GMT+5)...");
 
-  // Daily reports at 9 AM
-  cron.schedule("0 9 * * *", async () => {
-    console.log("[Scheduler] Triggering daily report at 9 AM");
+  // Daily reports at 8:00 AM GMT+5
+  cron.schedule("0 8 * * *", async () => {
+    console.log("[Scheduler] Triggering daily report at 8:00 AM GMT+5");
     try {
       const res = await fetch(
         `${getBaseUrl()}/api/reports/daily`,
@@ -26,11 +26,11 @@ export function initializeScheduler() {
     } catch (err) {
       console.error("[Scheduler] Daily report error:", err);
     }
-  });
+  }, { timezone: "Asia/Tashkent" });
 
-  // Weekly reports on Monday at 9 AM
-  cron.schedule("0 9 * * 1", async () => {
-    console.log("[Scheduler] Triggering weekly report on Monday at 9 AM");
+  // Weekly reports on Monday at 8:00 AM GMT+5
+  cron.schedule("0 8 * * 1", async () => {
+    console.log("[Scheduler] Triggering weekly report on Monday at 8:00 AM GMT+5");
     try {
       const res = await fetch(
         `${getBaseUrl()}/api/reports/weekly`,
@@ -43,11 +43,11 @@ export function initializeScheduler() {
     } catch (err) {
       console.error("[Scheduler] Weekly report error:", err);
     }
-  });
+  }, { timezone: "Asia/Tashkent" });
 
-  // Monthly reports on 1st of month at 9 AM
-  cron.schedule("0 9 1 * *", async () => {
-    console.log("[Scheduler] Triggering monthly report on 1st at 9 AM");
+  // Monthly reports on 1st of month at 8:00 AM GMT+5
+  cron.schedule("0 8 1 * *", async () => {
+    console.log("[Scheduler] Triggering monthly report on 1st at 8:00 AM GMT+5");
     try {
       const res = await fetch(
         `${getBaseUrl()}/api/reports/monthly`,
@@ -60,14 +60,14 @@ export function initializeScheduler() {
     } catch (err) {
       console.error("[Scheduler] Monthly report error:", err);
     }
-  });
+  }, { timezone: "Asia/Tashkent" });
 
   isSchedulerInitialized = true;
   console.log("[Scheduler] Scheduler initialized successfully");
-  console.log("[Scheduler] Schedule:");
-  console.log("  ✓ Daily: Every day at 9 AM");
-  console.log("  ✓ Weekly: Every Monday at 9 AM");
-  console.log("  ✓ Monthly: 1st of each month at 9 AM");
+  console.log("[Scheduler] Schedule (GMT+5 / Asia/Tashkent):");
+  console.log("  ✓ Daily: Every day at 8:00 AM");
+  console.log("  ✓ Weekly: Every Monday at 8:00 AM");
+  console.log("  ✓ Monthly: 1st of each month at 8:00 AM");
 }
 
 function getBaseUrl(): string {

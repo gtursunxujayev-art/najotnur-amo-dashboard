@@ -85,6 +85,16 @@ The project is configured for autoscale deployment on Replit:
 
 ## Recent Changes
 
+### November 24, 2025 - Automated Report Scheduler Setup
+- **Implemented node-cron scheduler for automatic reports** at 8:00 AM GMT+5
+  - Daily reports: Every day at 8:00 AM (yesterday's data)
+  - Weekly reports: Every Monday at 8:00 AM (last week's data)
+  - Monthly reports: 1st of each month at 8:00 AM (previous month's data)
+- **Timezone**: Asia/Tashkent (GMT+5)
+- **Report delivery**: PDF sent via Telegram to subscribed users
+- **Manual trigger endpoint**: `/api/reports/trigger?type=daily|weekly|monthly`
+- **Users must be subscribed** in database (`dailyReport`, `weeklyReport`, `monthlyReport` fields)
+
 ### November 24, 2025 - Critical Lead Fetching Fix: Pagination for 1000+ Leads
 - **Fixed lead fetching to paginate through ALL results** - Was limited to first 250 leads only
   - Old: `limit=250` (single API call) - showed only 242 leads instead of 1022
