@@ -1,6 +1,7 @@
 // lib/amoCalls.ts
 
 import { amoRequest } from "@/lib/amocrm";
+import { callsCache } from "@/lib/callsCache";
 
 export type AmoCallRow = {
   managerId: number;
@@ -62,6 +63,8 @@ async function fetchCallsFromEntity(
 
 /**
  * Fetch call notes (call_in, call_out) from amoCRM for the given period.
+ * Uses smart caching: returns cached data instantly if fresh (< 1 hour old),
+ * fetches from amoCRM only if cache is missing or stale.
  * Fetches from all entity types: leads, contacts, companies, and customers.
  * This matches the amoCRM call statistics page which shows calls from all entities.
  * Returns empty array on error instead of throwing to prevent dashboard crashes.
@@ -70,9 +73,25 @@ export async function getAmoCalls(
   from: Date,
   to: Date
 ): Promise<AmoCallRow[]> {
+  // Use cache key based on period (day granularity)
+  const dateKey = from.toISOString().split('T')[0]; // e.g., "2025-11-24"
+  const cacheKey = `calls-${dateKey}`;
+  
+  // Check if we have fresh cached data
+  const cachedCalls = callsCache.get(cacheKey);
+  if (cachedCalls) {
+    // Convert ISO strings back to Date objects
+    return cachedCalls.map(c => ({
+      ...c,
+      datetime: typeof c.datetime === 'string' ? new Date(c.datetime) : c.datetime,
+    }));
+  }
+  
+  // Cache is stale or missing - fetch from amoCRM
   const allCalls: AmoCallRow[] = [];
   
   try {
+    console.log(`[AmoCalls] Cache miss or stale for "${cacheKey}" - fetching from amoCRM`);
     console.log(`[AmoCalls] Fetching calls from ${from.toISOString()} to ${to.toISOString()}`);
     console.log(`[AmoCalls] Fetching from all entity types: leads, contacts, companies, customers`);
     
@@ -115,6 +134,15 @@ export async function getAmoCalls(
     const duplicatesRemoved = allCalls.length - uniqueCalls.length;
     console.log(`[AmoCalls] Unique calls after deduplication: ${uniqueCalls.length} (removed ${duplicatesRemoved} duplicates, kept ${callsWithoutUniq.length} without uniq)`);
     
+    // Cache the results for 1 hour
+    // Serialize Date objects to ISO strings for proper caching
+    const serializableCalls = uniqueCalls.map(c => ({
+      ...c,
+      datetime: c.datetime.toISOString(),
+    }));
+    callsCache.set(cacheKey, serializableCalls as any);
+    
+    // Convert back to Date objects for return
     return uniqueCalls;
   } catch (error: any) {
     console.error("[AmoCalls] Error fetching calls from amoCRM:", error.message);

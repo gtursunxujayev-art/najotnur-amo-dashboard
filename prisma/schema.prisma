@@ -21,3 +21,10 @@ model TelegramUser {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
+
+model CallsCache {
+  id        Int      @id @default(autoincrement())
+  period    String   @unique // e.g., "all" or "90days"
+  data      String   // JSON-encoded calls data
+  updatedAt DateTime @updatedAt
+}

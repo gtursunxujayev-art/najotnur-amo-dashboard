@@ -1,227 +1,28 @@
-# Najot Nur Dashboard - Replit Setup
+# Najot Nur Dashboard
 
 ## Overview
-This is a Next.js-based sales dashboard and automation system for Najot Nur. The application integrates with amoCRM, Google Sheets, and Telegram to provide real-time sales statistics, automated reporting, and user management.
+This project is a Next.js-based sales dashboard and automation system for Najot Nur. Its primary purpose is to provide real-time sales statistics, automated reporting, and user management by integrating with amoCRM, Google Sheets, and Telegram. The business vision is to streamline sales operations, provide critical insights for decision-making, and automate repetitive reporting tasks for improved efficiency and market responsiveness.
 
-## Tech Stack
-- **Frontend**: Next.js 16 (App Router), React 19, Tailwind CSS
-- **Database**: PostgreSQL (via Prisma ORM)
-- **External Integrations**:
-  - amoCRM API (CRM data)
-  - Google Sheets API (call statistics)
-  - Telegram Bot API (automated reports)
-  - GitHub API (configuration management)
+## User Preferences
+The agent should prioritize iterative development. Ask before making major changes to the core architecture or introducing new external dependencies. When explaining concepts, use clear and concise language.
 
-## Project Structure
-```
-├── app/                    # Next.js app directory
-│   ├── api/               # API routes
-│   │   ├── admin/        # Admin configuration endpoints
-│   │   ├── dashboard/    # Dashboard data endpoints
-│   │   ├── reports/      # Report generation endpoints
-│   │   └── telegram/     # Telegram webhook handler
-│   ├── dashboard/        # Dashboard page
-│   ├── admin/           # Admin configuration page
-│   ├── users/           # User management page
-│   └── lib/             # App-specific utilities
-├── config/              # Application configuration
-├── lib/                # Shared utilities and API clients
-├── prisma/             # Database schema and migrations
-└── public/             # Static assets
-```
+## System Architecture
+The application is built with Next.js 16 (App Router) and React 19, leveraging Tailwind CSS for styling. It uses a PostgreSQL database managed via Prisma ORM.
 
-## Environment Variables
+**Technical Implementations & Design Choices:**
+*   **Real-time Data:** External API calls use `no-store` caching for real-time data retrieval.
+*   **Asynchronous Loading:** The dashboard implements an asynchronous loading pattern where the main UI loads immediately, and data-intensive sections (like call fetching) load in the background, improving perceived performance.
+*   **Data Caching:** An in-memory caching layer is used for amoCRM calls data, significantly reducing load times for repeated requests within an hour.
+*   **Error Handling:** The system includes graceful error handling for external API rate limiting, allowing the dashboard to function with partial data.
+*   **PDF Report Generation:** Professional-grade PDF reports are generated with branding, KPI cards, and dynamic tables, supporting Unicode characters and automatic pagination.
+*   **Data Aggregation & Transformation:** Extensive logic is in place for aggregating data from various sources (amoCRM, Google Sheets), cleaning it, and transforming it for display (e.g., enum field mapping, calculating conversion rates, sorting, and filtering).
+*   **Scheduled Reports:** An automated scheduler (node-cron) is set up to send daily, weekly, and monthly reports via Telegram.
+*   **Dashboard UI/UX:** Features redesigned chart layouts with two-column displays for detailed lists and filtered pie charts for better visualization. Professional styling is applied consistently across the dashboard and PDF reports.
+*   **Deployment:** Configured for autoscale deployment on Replit.
 
-### Required for Core Functionality
-- `DATABASE_URL`: PostgreSQL connection string (already configured)
-
-### Required for amoCRM Integration
-- `AMO_BASE_URL`: Base URL for amoCRM API (e.g., https://yourcompany.amocrm.ru)
-- `AMO_LONG_LIVED_TOKEN`: Long-lived access token for amoCRM API
-
-### Required for Google Sheets Integration
-- `SHEETS_API_KEY`: Google Sheets API key
-- `SHEETS_SPREADSHEET_ID`: ID of the Google Spreadsheet containing call data
-- `SHEETS_CALLS_RANGE`: (Optional) Range for call data, defaults to "Calls!A:D"
-
-### Required for Telegram Bot
-- `TELEGRAM_BOT_TOKEN`: Telegram bot token for sending reports
-
-### Required for GitHub Configuration Management
-- `GITHUB_TOKEN`: GitHub personal access token
-- `GITHUB_OWNER`: GitHub repository owner
-- `GITHUB_REPO`: GitHub repository name
-- `GITHUB_BRANCH`: (Optional) Git branch, defaults to "main"
-
-**Note**: Most of these environment variables are optional for development. The app will function with limited features if they're not set.
-
-## Development Setup
-
-### Running Locally
-The project is configured to run on port 5000 with the Next.js development server:
-```bash
-npm run dev -- -p 5000 -H 0.0.0.0
-```
-
-### Database Setup
-The database is already configured and migrations have been applied. To reset or modify the database:
-```bash
-npx prisma migrate dev
-npx prisma studio  # To view/edit database in browser
-```
-
-## Deployment
-The project is configured for autoscale deployment on Replit:
-- **Build**: `npm run build`
-- **Start**: `npm start`
-- **Deployment Type**: Autoscale (stateless)
-
-## Features
-1. **Dashboard**: Real-time sales statistics with charts and metrics
-2. **Admin Panel**: Configure dashboard settings and API integrations
-3. **User Management**: View and manage Telegram bot subscribers
-4. **Automated Reports**: Scheduled daily, weekly, and monthly reports via Telegram
-5. **Telegram Bot**: Interactive bot for report subscriptions
-
-## Recent Changes
-
-### November 24, 2025 - Professional PDF Report Design Redesign
-- **Completely redesigned PDF reports sent to Telegram** - Now matches dashboard's professional design
-  - **Modern header**: Dark navy "Najot Nur" branding with period label
-  - **KPI Cards (2x2 grid)**: Professional light gray cards with blue accent values
-  - **Metrics section**: Organized display of leads, qualified leads, non-qualified, conversion rate
-  - **Section headers**: Dark background headers with white text for clear separation
-  - **Manager sales table**: Professional table with alternating row colors, proper alignment, auto-pagination
-  - **Color scheme**: Professional dark slate/blue theme matching dashboard
-  - **Better spacing**: Improved readability with proper margins and visual hierarchy
-  - **Auto-pagination**: Tables automatically create new pages when needed
-  - Files updated: `lib/reportPdf.ts` - complete redesign from plain text to professional PDF
-
-### November 24, 2025 - Manager Statistics Table with Revenue & Conversion
-- **Added comprehensive "Sotuv menejerlar bo'yicha" (Sales by Manager) table** with full analytics
-  - Columns: Menejer | Lid | Sifatli Lid | Sotuv | **Konversiya** | Online | Ofline | Tushum
-  - **Konversiya (Conversion)** = (Sotuv / Sifatli Lid) × 100 = X%
-  - **Sorted by Tushum (Revenue)** descending - highest revenue managers appear first
-  - Tracks per-manager: total leads, qualified leads, total sales, conversion rate, online/offline breakdown
-  - **Tushum (Revenue) from Google Sheets** - aggregated by manager name
-  - Updated ManagerSalesStats type to include onlineSalesCount, offlineSalesCount, revenue
-  - All metrics calculated from amoCRM leads + Google Sheets revenue data
-
-### November 24, 2025 - Automated Report Scheduler Setup
-- **Implemented node-cron scheduler for automatic reports** at 8:00 AM GMT+5
-  - Daily reports: Every day at 8:00 AM (yesterday's data)
-  - Weekly reports: Every Monday at 8:00 AM (last week's data)
-  - Monthly reports: 1st of each month at 8:00 AM (previous month's data)
-- **Timezone**: Asia/Tashkent (GMT+5)
-- **Report delivery**: PDF sent via Telegram to subscribed users
-- **Manual trigger endpoint**: `/api/reports/trigger?type=daily|weekly|monthly`
-- **Users must be subscribed** in database (`dailyReport`, `weeklyReport`, `monthlyReport` fields)
-
-### November 24, 2025 - Critical Lead Fetching Fix: Pagination for 1000+ Leads
-- **Fixed lead fetching to paginate through ALL results** - Was limited to first 250 leads only
-  - Old: `limit=250` (single API call) - showed only 242 leads instead of 1022
-  - New: Paginated loop fetching 250 leads per page until all fetched
-  - Now correctly fetches and processes all 1022 leads for November
-  - Metrics now match amoCRM: 32 won deals, 78,222,000 so'm total revenue
-  - Added logging to track pagination: `[AmoCRM] Fetched page X: Y leads (total: Z)`
-
-### November 24, 2025 - Chart Layout Redesign with Data List, Sorting & Filtering
-- **Redesigned both "Sifatsiz lid sabablari" and "Lid manbalari" sections** - Two-column layout with smart filtering
-  - Left column (40%): Text list showing ALL data sorted by count (biggest to smallest)
-    - Sheet-style format with labels and numbers
-    - Example: Ko'tarmadi  54
-    - Example: Dubl  14
-    - Example: Sifatsiz lid  10
-    - Increased width to ensure numbers display clearly without cramping
-  - Right column (60%): Pie chart with smart <5% filtering
-    - Only shows items with ≥5% of total value (clutter-free visualization)
-    - Small items (< 5%) still appear in left list for full transparency
-    - Labels connected with lines to pie segments
-    - Pie centered in container for balanced layout
-    - Data sorted descending for consistency
-  - Applied to both loss reasons and lead sources charts
-  - Uses flexbox layout for better responsiveness
-  - Improved readability and data visibility
-
-### November 24, 2025 - Sifatsiz Lid Sabablari & Count Fixes  
-- **Fixed "Sifatsiz lid sabablari" chart** - Now grouped by E'tiroz sababi field (1121759) instead of status name
-  - Chart displays actual objection reasons from field 1121759 (e.g., "Dubl", "Ko'tarmadi", "Sifatsiz lid")
-  - Shows 126 lost leads with objection reasons (vs 143 total non-qualified before fix)
-- **Fixed "Sifatsiz lidlar" count** - Now only counts lost leads that have field 1121759 populated
-  - Before: 143 (all non-qualified = total - qualified)
-  - After: 126 (only lost leads WITH objection field filled)
-  - Ensures consistency: chart shows reasons from the same 126 leads
-- **Enhanced enum field handling** - Created `getFieldEnumMapping()` and `getStatusMapping()` functions
-  - Converts enum_id to text labels for proper display across charts
-
-### November 24, 2025 - Lead Sources (Lid manbalari) Text Display Fix
-- **Fixed chart to show text names instead of numbers** - Now displays "Target", "Community menejer", etc instead of enum IDs
-  - Chart shows 7 different lead sources: Target (174), Community menejer (13), Bizning ijtimoiy tarmoq (34), etc
-  - Created enum mapping system to convert amoCRM field enum_id → text value
-
-### November 24, 2025 - Sotuv Online/Offline Display Update
-- **Changed Sotuv Online and Sotuv Offline metrics** - Now displays both count and revenue
-  - Top number: Count of won deals from amoCRM (by course type)
-  - Bottom number: Revenue from Google Sheets (filtered by Column C: "Online" or "Offline")
-  - Example November data: 8 online sales, 59,273,000 so'm online revenue
-  - Added onlineSalesCount, offlineSalesCount, onlineRevenue, offlineRevenue fields
-  - Revenue calculation uses case-insensitive matching for "Online"/"Offline" in Google Sheets
-
-### November 24, 2025 - Kelishuv Summasi Calculation Update
-- **Changed kelishuvSummasi calculation source** - Now uses custom field 1416675 instead of standard price field
-  - Only applies to leads with status 79190542 ("Qisman to'lov qildi")
-  - Other won statuses (142) continue using standard price field
-  - Before: 9,866,000 so'm (from price field)
-  - After: 24,446,000 so'm (from field 1416675 - partial payment amounts)
-  - Added getCustomFieldNumber() helper function for numeric field extraction
-
-### November 24, 2025 - Critical Bug Fixes for Dashboard Metrics
-- **FIXED: Non-qualified leads counting** - Changed from checking specific loss_reason_ids to: `total leads - qualified leads`
-  - Before: 0 non-qualified (incorrect logic)
-  - After: 143 non-qualified from 242 total (correct: 242 - 99 = 143)
-- **FIXED: Custom field extraction for dropdowns** - Now reads `enum_id` instead of `value` for amoCRM dropdown fields
-  - Before: Online/Offline sales showed 0 despite required field being filled
-  - After: Correctly shows 9,866,000 so'm for online sales
-  - This fixes Course Type field (ID: 1119699) detection
-- **FIXED: Google Sheets date parsing** - Added support for dd.mm.yyyy format (e.g., "24.11.2025")
-  - Before: 0 revenue rows found (dates not parsed)
-  - After: 149 revenue rows found for November with 503,145,000 so'm total revenue ✅
-
-### November 24, 2025 - Async Call Loading Architecture
-- **Implemented async loading pattern** - Main dashboard loads immediately, calls fetch separately in background
-- **Created separate API endpoint** - `/api/dashboard/calls` handles call data independently from main dashboard
-- **Added skipCalls parameter** - Main dashboard API now accepts `skipCalls=true` to bypass expensive call fetching
-- **Improved user experience** - Dashboard shows data instantly (~1-2 seconds), calls section shows "loading" state while fetching
-- **Performance optimization** - Main dashboard load time reduced from 4-5 minutes to ~2 seconds
-- **Call fetching performance** - Unchanged (~4-5 minutes first fetch, ~9 seconds cached), but runs asynchronously without blocking UI
-- **Architecture**: Client-side state management with separate loading states for dashboard and calls data
-- **Bug fixes applied**:
-  - Fixed period calculation consistency - calls endpoint now uses same Monday-based weekly range as main dashboard
-  - Added race condition protection - AbortController prevents stale responses when users switch periods quickly
-
-### November 24, 2025 - Multi-Entity Call Fetching
-- **Implemented comprehensive call data fetching** from all amoCRM entity types (leads, contacts, companies, customers)
-- **Added smart deduplication** using `params.uniq` field to identify unique physical calls across entities
-- **Enhanced data integrity** by retaining calls without `uniq` field instead of discarding them
-- **Improved logging** to show total records fetched, duplicates removed, and calls kept without deduplication keys
-- **Graceful error handling** for amoCRM rate limiting - dashboard continues working with partial data
-- **Performance**: First fetch ~4-5 minutes (uncached), subsequent fetches ~9 seconds (cached)
-- **Known**: Dashboard shows ~28K calls/month vs amoCRM UI showing ~5.7K - likely due to different filtering (call status, duration, etc.)
-
-### November 23, 2025 - Initial Replit Setup
-- Configured Next.js for Replit environment (port 5000 with 0.0.0.0 host)
-- Applied Prisma migrations to existing Neon PostgreSQL database
-- Configured deployment settings for autoscale production deployment
-- Added cache control headers to prevent browser caching issues
-- Configured allowedDevOrigins for Replit proxy support
-
-## Architecture Notes
-- Uses Next.js App Router with React Server Components
-- Database queries are optimized with Prisma
-- External API calls use no-store caching for real-time data
-- Scheduled reports configured via Vercel cron (needs adaptation for Replit)
-
-## Known Considerations
-- The `vercel.json` file contains cron configurations that won't work on Replit directly
-- Some features require external API credentials to function fully
-- The app gracefully handles missing API credentials by showing empty data or disabling features
+## External Dependencies
+*   **amoCRM API:** Used for CRM data, including leads, sales, and manager statistics.
+*   **Google Sheets API:** Integrates for call statistics and revenue data.
+*   **Telegram Bot API:** Utilized for sending automated reports and user subscriptions.
+*   **GitHub API:** (Optional) Planned for configuration management.
+*   **PostgreSQL:** The primary database, accessed via Prisma ORM.
