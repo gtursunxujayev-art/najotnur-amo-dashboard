@@ -83,7 +83,18 @@ The project is configured for autoscale deployment on Replit:
 4. **Automated Reports**: Scheduled daily, weekly, and monthly reports via Telegram
 5. **Telegram Bot**: Interactive bot for report subscriptions
 
-## Recent Changes (November 23, 2025)
+## Recent Changes
+
+### November 24, 2025 - Multi-Entity Call Fetching
+- **Implemented comprehensive call data fetching** from all amoCRM entity types (leads, contacts, companies, customers)
+- **Added smart deduplication** using `params.uniq` field to identify unique physical calls across entities
+- **Enhanced data integrity** by retaining calls without `uniq` field instead of discarding them
+- **Improved logging** to show total records fetched, duplicates removed, and calls kept without deduplication keys
+- **Graceful error handling** for amoCRM rate limiting - dashboard continues working with partial data
+- **Performance**: First fetch ~4-5 minutes (uncached), subsequent fetches ~9 seconds (cached)
+- **Known**: Dashboard shows ~28K calls/month vs amoCRM UI showing ~5.7K - likely due to different filtering (call status, duration, etc.)
+
+### November 23, 2025 - Initial Replit Setup
 - Configured Next.js for Replit environment (port 5000 with 0.0.0.0 host)
 - Applied Prisma migrations to existing Neon PostgreSQL database
 - Configured deployment settings for autoscale production deployment
