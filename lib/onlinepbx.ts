@@ -3,10 +3,10 @@
 
 const BASE_URL = "https://api2.onlinepbx.ru";
 
-// DOMAIN should be in format: "example.onpbx.ru"
+// DOMAIN should be in format: "example.onlinepbx.ru" or "example.onpbx.ru"
 // If env var is just "najot", auto-append ".onpbx.ru"
 let rawDomain = process.env.ONLINEPBX_DOMAIN || "najot";
-const DOMAIN = rawDomain.includes(".onpbx.ru") ? rawDomain : `${rawDomain}.onpbx.ru`;
+const DOMAIN = rawDomain.includes(".onlinepbx.ru") || rawDomain.includes(".onpbx.ru") ? rawDomain : `${rawDomain}.onpbx.ru`;
 const API_KEY = process.env.ONLINEPBX_API_KEY || "";
 
 console.log(`[OnlinePBX] Initialized with domain: ${DOMAIN}`);
