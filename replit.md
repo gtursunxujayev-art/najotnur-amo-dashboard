@@ -21,13 +21,27 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 *   **Deployment:** Configured for autoscale deployment on Replit.
 
 ## External Dependencies
-*   **amoCRM API:** Used for CRM data, including leads, sales, and manager statistics.
+*   **amoCRM API:** Used for CRM data, including leads, sales, and manager statistics. Calls cached for 1 hour.
+*   **OnlinePBX Webhooks:** Real-time call events pushed via webhooks to `/api/onlinepbx/webhook`. Stores calls in memory.
 *   **Google Sheets API:** Integrates for call statistics and revenue data.
 *   **Telegram Bot API:** Utilized for sending automated reports and user subscriptions.
 *   **GitHub API:** (Optional) Planned for configuration management.
 *   **PostgreSQL:** The primary database, accessed via Prisma ORM.
 
 ## Recent Changes
+
+### November 24, 2025 - OnlinePBX Webhook Integration Implemented
+- **Created OnlinePBX webhook endpoint** - `/api/onlinepbx/webhook` receives real-time call events
+  - **Setup**: Configure in panel.onlinepbx.ru to send webhook to `https://[REPLIT_DOMAIN]/api/onlinepbx/webhook`
+  - **Data Formats**: Supports JSON, form-encoded, and multipart data from OnlinePBX
+  - **Storage**: Calls stored in memory, accessible via GET requests
+  - **Verification**: Check `/api/onlinepbx/webhook?limit=10` to see received calls
+  - **Error Debugging**: Check `/api/onlinepbx/webhook?errors=true` if webhooks fail
+  - Files created: `lib/onlinepbx.ts` (API client), `app/api/onlinepbx/calls/route.ts`, `app/api/onlinepbx/webhook/route.ts`
+- **Dual Call Data Sources**: 
+  - amoCRM: Cached calls (1 hour TTL), from 214 calls for Diyorbek, fetched from leads entity
+  - OnlinePBX: Real-time webhook events, immediate push to dashboard
+  - Benefit: Real-time data from OnlinePBX complements cached amoCRM for comprehensive call tracking
 
 ### November 24, 2025 - Fixed Period-Based Cache Keys for Calls
 - **Fixed cache key differentiation for different periods** - Today, week, and month now use distinct cache keys

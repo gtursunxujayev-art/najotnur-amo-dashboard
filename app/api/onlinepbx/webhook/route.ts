@@ -4,55 +4,106 @@ export const dynamic = "force-dynamic";
 
 // In-memory storage for recent calls from webhook
 let recentCalls: any[] = [];
+let webhookErrors: any[] = [];
 
 /**
  * OnlinePBX webhook endpoint
  * Receives real-time call events from OnlinePBX panel
+ * Handles multiple data formats (JSON, form-encoded, URL params)
  */
 export async function POST(request: Request) {
   try {
-    const data = await request.json();
+    const contentType = request.headers.get("content-type") || "";
+    let data: any = {};
 
-    console.log("[OnlinePBX/Webhook] Received event:", {
-      event: data.event,
-      callId: data.callId,
-      from: data.from,
-      to: data.to,
-      user: data.user,
-      duration: data.duration,
-      timestamp: data.timestamp,
-    });
+    // Try multiple ways to parse the request
+    try {
+      if (contentType.includes("application/json")) {
+        data = await request.json();
+      } else if (contentType.includes("application/x-www-form-urlencoded")) {
+        const text = await request.text();
+        const params = new URLSearchParams(text);
+        for (const [key, value] of params.entries()) {
+          data[key] = value;
+        }
+      } else if (contentType.includes("multipart/form-data")) {
+        const formData = await request.formData();
+        for (const [key, value] of formData.entries()) {
+          data[key] = value;
+        }
+      } else {
+        // Try raw text and parse as JSON
+        const text = await request.text();
+        try {
+          data = JSON.parse(text);
+        } catch {
+          // Fall back to treating as query-like parameters
+          const params = new URLSearchParams(text);
+          for (const [key, value] of params.entries()) {
+            data[key] = value;
+          }
+        }
+      }
+    } catch (parseError) {
+      console.error("[OnlinePBX/Webhook] Parse error:", parseError);
+      data = { error: "Could not parse request body" };
+    }
 
-    // Store call events
-    if (data.event === "call_end" || data.event === "call_finish") {
+    console.log("[OnlinePBX/Webhook] Received data:", data);
+
+    // Parse call data based on whatever fields are present
+    const isCallEnd =
+      (data.event === "call_end" ||
+        data.event === "call_finish" ||
+        data.type === "call_end" ||
+        data.call_end) &&
+      (data.call_id || data.callId || data.uuid);
+
+    let stored = false;
+    if (isCallEnd || data.duration) {
       const callRecord = {
-        id: data.callId || `${Date.now()}`,
-        type: data.direction === "in" ? "in" : "out",
+        id: data.call_id || data.callId || data.uuid || `${Date.now()}`,
+        type: data.direction === "in" || data.direction === "1" ? "in" : "out",
         date: new Date((data.timestamp || Date.now() / 1000) * 1000),
         duration: parseInt(data.duration) || 0,
-        phone: data.from || data.to || "Unknown",
-        user: data.user || "Unknown",
+        phone: data.from || data.phone || data.to || "Unknown",
+        user: data.user || data.user_name || data.username || "Unknown",
         source: "webhook",
         timestamp: Date.now(),
       };
 
       recentCalls.push(callRecord);
 
-      // Keep only last 1000 calls in memory
+      // Keep only last 1000 calls
       if (recentCalls.length > 1000) {
         recentCalls = recentCalls.slice(-1000);
       }
 
-      console.log(`[OnlinePBX/Webhook] Stored call event. Total calls: ${recentCalls.length}`);
+      console.log(`[OnlinePBX/Webhook] Stored call. Total: ${recentCalls.length}`);
+      stored = true;
     }
 
+    // Return 200 OK for all successful requests (OnlinePBX webhook requirement)
     return NextResponse.json({
       success: true,
-      message: "Call event received",
-      eventType: data.event,
+      message: "Call event received and processed",
+      eventType: data.event || data.type || "unknown",
+      stored: stored,
     });
   } catch (error: any) {
-    console.error("[OnlinePBX/Webhook] Error:", error.message);
+    console.error("[OnlinePBX/Webhook] Error:", error);
+    
+    const errorRecord = {
+      timestamp: Date.now(),
+      error: error.message,
+      stack: error.stack?.substring(0, 200),
+    };
+    
+    webhookErrors.push(errorRecord);
+    if (webhookErrors.length > 50) {
+      webhookErrors = webhookErrors.slice(-50);
+    }
+
     return NextResponse.json(
       {
         success: false,
@@ -64,25 +115,32 @@ export async function POST(request: Request) {
 }
 
 /**
- * GET endpoint to retrieve recently received calls
+ * GET endpoint to retrieve recently received calls and errors
  */
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get("limit") || "100");
+    const showErrors = searchParams.get("errors") === "true";
 
     // Return recent calls, sorted by timestamp (newest first)
     const calls = recentCalls
       .sort((a, b) => b.timestamp - a.timestamp)
       .slice(0, limit);
 
-    return NextResponse.json({
+    const response: any = {
       success: true,
       data: {
         totalCalls: recentCalls.length,
         recentCalls: calls,
       },
-    });
+    };
+
+    if (showErrors) {
+      response.errors = webhookErrors.slice(-20);
+    }
+
+    return NextResponse.json(response);
   } catch (error: any) {
     console.error("[OnlinePBX/Webhook] GET Error:", error.message);
     return NextResponse.json(
