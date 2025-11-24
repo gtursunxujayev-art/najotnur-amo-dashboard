@@ -119,7 +119,7 @@ const cfg: DashboardConfig = {
   "USE_AMO_CALLS": true,
   "USE_SHEETS_CALLS": false,
   "REVENUE_SHEETS": {
-    "link": "1WmYVOW6surq2eG03WBE8mJGn2CnTaB-cgeQTrsqJnZo",
+    "link": "https://docs.google.com/spreadsheets/d/1WmYVOW6surq2eG03WBE8mJGn2CnTaB-cgeQTrsqJnZo",
     "managerColumn": "Asosiy!B",
     "dateColumn": "Asosiy!A",
     "paymentTypeColumn": "Asosiy!D",
