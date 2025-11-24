@@ -272,6 +272,7 @@ export async function buildDashboardData(
   const oylikTushum = revenueSum;
   const haftalikTushum = revenueSum;
 
+  // Detailed metrics summary with warnings
   console.log(`[Dashboard] Metrics Summary:`, {
     leadsCount,
     qualifiedLeadsCount,
@@ -282,6 +283,29 @@ export async function buildDashboardData(
     haftalikTushum,
     oylikTushum,
   });
+
+  // Check for potential configuration issues and log warnings
+  const wonLeadsCount = leads.filter(l => isWon(l)).length;
+  const lostLeadsCount = leads.filter(l => isLost(l)).length;
+  const leadsWithCourseType = leads.filter(l => 
+    getCustomFieldString(l, dashboardConfig.COURSE_TYPE_FIELD_ID || 0) !== null
+  ).length;
+
+  if (wonLeadsCount > 0 && onlineSummasi === 0 && offlineSummasi === 0) {
+    console.warn(`[Dashboard] WARNING: Found ${wonLeadsCount} won leads but Online/Offline sales are 0. Possible issues:
+      1. Course Type custom field (ID: ${dashboardConfig.COURSE_TYPE_FIELD_ID}) is not set on leads
+      2. Course Type values don't match configured enum IDs
+      3. Lead prices are 0
+      - Leads with Course Type set: ${leadsWithCourseType}/${leadsCount}`);
+  }
+
+  if (lostLeadsCount > 0 && nonQualifiedLeadsCount === 0) {
+    console.warn(`[Dashboard] WARNING: Found ${lostLeadsCount} lost leads but no non-qualified leads counted. Check if loss_reason_id matches configured NOT_QUALIFIED_REASON_IDS`);
+  }
+
+  if (revenueRows.length === 0) {
+    console.warn(`[Dashboard] WARNING: No revenue data found in Google Sheets for period ${period.from.toISOString()} to ${period.to.toISOString()}`);
+  }
 
   const nonQualifiedReasons: Slice[] = Array.from(lostReasonMap.entries()).map(
     ([reasonId, count]) => ({
