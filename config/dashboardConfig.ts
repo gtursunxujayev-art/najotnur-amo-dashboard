@@ -75,8 +75,8 @@ const cfg: DashboardConfig = {
     "link": "https://docs.google.com/spreadsheets/d/1WmYVOW6surq2eG03WBE8mJGn2CnTaB-cgeQTrsqJnZo",
     "managerColumn": "Asosiy!B",
     "dateColumn": "Asosiy!A",
-    "paymentTypeColumn": "Asosiy!B",
-    "incomeTypeColumn": "Asosiy!B",
+    "paymentTypeColumn": "Asosiy!D",
+    "incomeTypeColumn": "Asosiy!D",
     "amountColumn": "Asosiy!E",
     "courseTypeColumn": "Asosiy!C"
   },

@@ -16,10 +16,17 @@ function extractSpreadsheetIdFromUrl(url: string | null): string | null {
   return m ? m[1] : null;
 }
 
-function colLetterToIndex(letter: string): number {
-  const l = letter.trim().toUpperCase();
-  if (!l) return -1;
-  const code = l.charCodeAt(0);
+function colLetterToIndex(columnRef: string): number {
+  // Handle both "A" and "Sheet!A" formats
+  const ref = columnRef.trim();
+  if (!ref) return -1;
+  
+  // Extract column letter from formats like "Asosiy!B" or just "B"
+  const match = ref.match(/([A-Z]+)$/i);
+  if (!match) return -1;
+  
+  const letter = match[1].toUpperCase();
+  const code = letter.charCodeAt(0);
   return code - "A".charCodeAt(0);
 }
 
@@ -45,10 +52,17 @@ export async function getSheetRevenue(
   }
 
   try {
+    console.log(`[RevenueSheets] Fetching data from spreadsheet ${spreadsheetId}`);
     const sheets = await getGoogleSheetsClient();
     
-    // We read columns A:Z of the first sheet
-    const range = "A:Z";
+    // Extract sheet name from column reference if present (e.g., "Asosiy!A" -> "Asosiy")
+    const sheetName = dashboardConfig.REVENUE_DATE_COLUMN.includes('!')
+      ? dashboardConfig.REVENUE_DATE_COLUMN.split('!')[0]
+      : '';
+    
+    // We read columns A:Z from the specified sheet
+    const range = sheetName ? `${sheetName}!A:Z` : "A:Z";
+    console.log(`[RevenueSheets] Reading range: ${range}`);
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
@@ -56,7 +70,11 @@ export async function getSheetRevenue(
     });
 
     const rows: string[][] = response.data.values || [];
-    if (rows.length <= 1) return [];
+    console.log(`[RevenueSheets] Got ${rows.length} rows from Google Sheets`);
+    if (rows.length <= 1) {
+      console.log(`[RevenueSheets] No data rows found (only header or empty)`);
+      return [];
+    }
 
     const dateIdx = colLetterToIndex(dashboardConfig.REVENUE_DATE_COLUMN);
     const amountIdx = colLetterToIndex(dashboardConfig.REVENUE_AMOUNT_COLUMN);
@@ -64,10 +82,13 @@ export async function getSheetRevenue(
     const managerIdx = colLetterToIndex(dashboardConfig.REVENUE_MANAGER_COLUMN);
     const paymentIdx = colLetterToIndex(dashboardConfig.REVENUE_PAYMENT_TYPE_COLUMN);
 
+    console.log(`[RevenueSheets] Column indices - Date: ${dateIdx}, Amount: ${amountIdx}, Manager: ${managerIdx}`);
+    console.log(`[RevenueSheets] Filtering data from ${from.toISOString()} to ${to.toISOString()}`);
+
     const safeIndex = (arr: any[], idx: number) =>
       idx >= 0 && idx < arr.length ? arr[idx] : "";
 
-    return rows
+    const processedRows = rows
       .slice(1) // skip header
       .map((r) => {
         const dateStr = String(safeIndex(r, dateIdx) || "").trim();
@@ -94,8 +115,14 @@ export async function getSheetRevenue(
       .filter(
         (row) => row.date >= from && row.date <= to
       );
+    
+    console.log(`[RevenueSheets] Returning ${processedRows.length} revenue rows after filtering`);
+    if (processedRows.length > 0) {
+      console.log(`[RevenueSheets] Sample row:`, processedRows[0]);
+    }
+    return processedRows;
   } catch (error) {
-    console.error("Error fetching revenue from Google Sheets:", error);
+    console.error("[RevenueSheets] Error fetching revenue from Google Sheets:", error);
     return [];
   }
 }
