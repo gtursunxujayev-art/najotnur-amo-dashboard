@@ -250,7 +250,7 @@ export default function DashboardPage() {
               subtitle="Won from qualified"
             />
             <MetricCard
-              title="Haftalik tushum"
+              title="Tushum"
               value={`${data.haftalikTushum.toLocaleString("ru-RU")} so'm`}
               subtitle="Hozircha = kelishuv summasi"
             />
