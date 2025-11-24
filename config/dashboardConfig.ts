@@ -58,18 +58,59 @@ function applyRevenueAliases(c: DashboardConfig) {
 }
 
 const cfg: DashboardConfig = {
-  "PIPELINE_IDS": [],
-  "QUALIFIED_STATUS_IDS": [],
-  "WON_STATUS_IDS": [],
-  "LOST_STATUS_IDS": [],
-  "QUALIFIED_LOSS_REASON_IDS": [],
-  "NOT_QUALIFIED_REASON_IDS": [],
+  "PIPELINE_IDS": [
+    9975586
+  ],
+  "QUALIFIED_STATUS_IDS": [
+    79198062,
+    79190542,
+    142,
+    79199558,
+    79190534,
+    79190530,
+    79190526
+  ],
+  "WON_STATUS_IDS": [
+    142,
+    79190542
+  ],
+  "LOST_STATUS_IDS": [
+    143
+  ],
+  "QUALIFIED_LOSS_REASON_IDS": [
+    923397,
+    923603,
+    927869,
+    927871
+  ],
+  "NOT_QUALIFIED_REASON_IDS": [
+    927873,
+    930117,
+    927867,
+    927865,
+    886101,
+    885455,
+    885519,
+    881379,
+    672845,
+    672843
+  ],
   "OBJECTION_FIELD_ID": 1121759,
-  "LEAD_SOURCE_FIELD_ID": null,
-  "COURSE_TYPE_FIELD_ID": null,
-  "ONLINE_COURSE_ENUM_IDS": [],
-  "OFFLINE_COURSE_ENUM_IDS": [],
-  "USE_AMO_CALLS": false,
+  "LEAD_SOURCE_FIELD_ID": 1312637,
+  "COURSE_TYPE_FIELD_ID": 1119699,
+  "ONLINE_COURSE_ENUM_IDS": [
+    865961,
+    865963,
+    865959,
+    923327,
+    923329
+  ],
+  "OFFLINE_COURSE_ENUM_IDS": [
+    671757,
+    865965,
+    865967
+  ],
+  "USE_AMO_CALLS": true,
   "USE_SHEETS_CALLS": false,
   "REVENUE_SHEETS": {
     "link": "https://docs.google.com/spreadsheets/d/1WmYVOW6surq2eG03WBE8mJGn2CnTaB-cgeQTrsqJnZo",
