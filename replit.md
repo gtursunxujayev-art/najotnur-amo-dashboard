@@ -29,6 +29,14 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 
 ## Recent Changes
 
+### November 24, 2025 - Fixed Period-Based Cache Keys for Calls
+- **Fixed cache key differentiation for different periods** - Today, week, and month now use distinct cache keys
+  - **Issue**: All periods were using same cache key "calls-2025-11-24", causing same cached data to return
+  - **Solution**: Changed cache key to include both start and end dates: `calls-{fromDate}-to-{toDate}`
+  - **Result**: Today/Week use `calls-2025-11-24-to-2025-11-24`, Month uses `calls-2025-11-01-to-2025-11-24`
+  - **Note**: Today and week show same 249 calls because Nov 24 is Monday (both start from same date)
+  - Files updated: `lib/amoCalls.ts` - improved cache key logic with date range
+
 ### November 24, 2025 - Smart Call Data Caching & Dashboard Integration
 - **Implemented in-memory call caching layer** - Dramatically improves dashboard performance
   - **Performance**: First load 11.6s → Subsequent loads ~1s (caching returns data instantly)

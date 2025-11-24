@@ -73,9 +73,12 @@ export async function getAmoCalls(
   from: Date,
   to: Date
 ): Promise<AmoCallRow[]> {
-  // Use cache key based on period (day granularity)
-  const dateKey = from.toISOString().split('T')[0]; // e.g., "2025-11-24"
-  const cacheKey = `calls-${dateKey}`;
+  // Use cache key based on period start date (YYYY-MM-DD)
+  // This ensures different periods (today, week, month) have different cache keys
+  const fromDateStr = from.toISOString().split('T')[0]; // e.g., "2025-11-24"
+  const toDateStr = to.toISOString().split('T')[0]; // e.g., "2025-11-24"
+  // Include both dates to differentiate between periods (today vs week vs month)
+  const cacheKey = `calls-${fromDateStr}-to-${toDateStr}`;
   
   // Check if we have fresh cached data
   const cachedCalls = callsCache.get(cacheKey);
@@ -106,6 +109,14 @@ export async function getAmoCalls(
       const calls = await fetchCallsFromEntity('leads', fromUnix, toUnix);
       allCalls.push(...calls);
       console.log(`[AmoCalls] Successfully fetched ${calls.length} calls from leads`);
+      
+      // Debug: Show date range of fetched calls
+      if (calls.length > 0) {
+        const dates = calls.map(c => c.datetime.toISOString().split('T')[0]);
+        const uniqueDates = Array.from(new Set(dates)).sort();
+        console.log(`[AmoCalls] Calls span dates: ${uniqueDates[0]} to ${uniqueDates[uniqueDates.length - 1]}`);
+        console.log(`[AmoCalls] Unique dates (${uniqueDates.length}): ${uniqueDates.slice(0, 7).join(', ')}${uniqueDates.length > 7 ? '...' : ''}`);
+      }
     } catch (error: any) {
       console.error(`[AmoCalls] Error fetching calls from leads:`, error.message);
     }
