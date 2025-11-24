@@ -25,30 +25,40 @@ export async function sendTelegramPdf(
     return;
   }
 
-  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`;
+  try {
+    console.log(`[telegram] Sending PDF to chat ${chatId}, PDF size: ${pdfBytes.length} bytes`);
+    
+    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`;
 
-  const form = new FormData();
-  form.append("chat_id", String(chatId));
-  form.append("caption", caption);
+    const form = new FormData();
+    form.append("chat_id", String(chatId));
+    form.append("caption", caption);
 
-  // pdfBytes is Uint8Array<ArrayBufferLike> – TS is strict about BlobPart.
-  // We cast to any so it is accepted as a BlobPart at compile time.
-  const bytesForBlob: any = pdfBytes;
-  const blob = new Blob([bytesForBlob], { type: "application/pdf" });
-  form.append("document", blob, "dashboard-report.pdf");
+    // pdfBytes is Uint8Array<ArrayBufferLike> – TS is strict about BlobPart.
+    // We cast to any so it is accepted as a BlobPart at compile time.
+    const bytesForBlob: any = pdfBytes;
+    const blob = new Blob([bytesForBlob], { type: "application/pdf" });
+    form.append("document", blob, "dashboard-report.pdf");
 
-  const res = await fetch(url, {
-    method: "POST",
-    body: form as any,
-  });
+    console.log(`[telegram] Making request to ${url}`);
+    const res = await fetch(url, {
+      method: "POST",
+      body: form as any,
+    });
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    console.error(
-      "[telegram] sendDocument error",
-      res.status,
-      res.statusText,
-      text
-    );
+    const responseText = await res.text().catch(() => "");
+    
+    if (!res.ok) {
+      console.error(
+        `[telegram] sendDocument FAILED - Status: ${res.status} ${res.statusText}`,
+        `Response: ${responseText}`
+      );
+      throw new Error(`Telegram API error ${res.status}: ${responseText}`);
+    }
+
+    console.log(`[telegram] PDF sent successfully to chat ${chatId}`);
+  } catch (err: any) {
+    console.error(`[telegram] Error sending PDF: ${err?.message || err}`);
+    throw err;
   }
 }
