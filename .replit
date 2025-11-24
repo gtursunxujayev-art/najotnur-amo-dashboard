@@ -34,6 +34,10 @@ outputType = "webview"
 localPort = 5000
 externalPort = 80
 
+[[ports]]
+localPort = 44997
+externalPort = 3000
+
 [deployment]
 deploymentTarget = "autoscale"
 run = ["npm", "start"]
@@ -44,3 +48,4 @@ build = ["npm", "run", "build"]
 [userenv.shared]
 AMO_BASE_URL = "https://najotnur01.amocrm.ru"
 SHEETS_SPREADSHEET_ID = "1WmYVOW6surq2eG03WBE8mJGn2CnTaB-cgeQTrsqJnZo"
+ONLINEPBX_DOMAIN = "najot"
