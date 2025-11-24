@@ -190,6 +190,23 @@ export async function buildDashboardData(
     const managerName = usersMap.get(managerId) || `User ${managerId}`;
     const price = lead.price || 0;
 
+    // Debug logging for first few leads
+    if (leadsCount <= 3) {
+      console.log(`[Dashboard] Lead #${leadsCount}:`, {
+        id: lead.id,
+        status_id: lead.status_id,
+        loss_reason_id: lead.loss_reason_id,
+        price,
+        custom_fields_count: (lead as any).custom_fields_values?.length || 0,
+      });
+      
+      // Log course type field if present
+      if (dashboardConfig.COURSE_TYPE_FIELD_ID) {
+        const courseTypeVal = getCustomFieldString(lead, dashboardConfig.COURSE_TYPE_FIELD_ID);
+        console.log(`[Dashboard]   Course Type Field (${dashboardConfig.COURSE_TYPE_FIELD_ID}):`, courseTypeVal);
+      }
+    }
+
     if (!managerSalesMap.has(managerId)) {
       managerSalesMap.set(managerId, {
         managerId,
@@ -254,6 +271,17 @@ export async function buildDashboardData(
 
   const oylikTushum = revenueSum;
   const haftalikTushum = revenueSum;
+
+  console.log(`[Dashboard] Metrics Summary:`, {
+    leadsCount,
+    qualifiedLeadsCount,
+    nonQualifiedLeadsCount,
+    kelishuvSummasi,
+    onlineSummasi,
+    offlineSummasi,
+    haftalikTushum,
+    oylikTushum,
+  });
 
   const nonQualifiedReasons: Slice[] = Array.from(lostReasonMap.entries()).map(
     ([reasonId, count]) => ({
