@@ -85,13 +85,18 @@ The project is configured for autoscale deployment on Replit:
 
 ## Recent Changes
 
-### November 24, 2025 - Chart Layout Redesign with Data List
-- **Redesigned "Sifatsiz lid sabablari" section** - New two-column layout with list + pie chart
-  - Left column (33%): Text list showing objection reasons with counts (sheet-style format)
+### November 24, 2025 - Chart Layout Redesign with Data List & Sorting
+- **Redesigned both "Sifatsiz lid sabablari" and "Lid manbalari" sections** - New two-column layout
+  - Left column (25%): Text list showing data sorted by count (biggest to smallest)
+    - Sheet-style format with labels and numbers
     - Example: Ko'tarmadi  54
     - Example: Dubl  14
     - Example: Sifatsiz lid  10
-  - Right column (67%): Pie chart positioned on the right side
+  - Right column (75%): Pie chart with labels on slices
+    - Labels connected with lines to pie segments
+    - Pie centered in container for balanced layout
+    - Data also sorted descending for consistency
+  - Applied to both loss reasons and lead sources charts
   - Uses flexbox layout for better responsiveness
   - Improved readability and data visibility
 
