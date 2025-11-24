@@ -11,11 +11,32 @@ function formatMoney(num: number): string {
   }).format(num);
 }
 
-// Sanitize text to remove control characters and handle missing glyphs
+// Sanitize text for WinAnsi encoding (pdf-lib's default)
+// Replaces unsupported Unicode characters with ASCII equivalents
 function sanitizeText(text: string): string {
   if (!text) return "";
-  // Remove control characters (U+0000 to U+001F, U+007F to U+009F)
-  return text.replace(/[\x00-\x1F\x7F-\x9F]/g, "");
+  
+  return text
+    // Remove control characters
+    .replace(/[\x00-\x1F\x7F-\x9F]/g, "")
+    // Replace common Unicode characters with ASCII equivalents
+    .replace(/→/g, "->")  // Rightwards arrow
+    .replace(/←/g, "<-")  // Leftwards arrow
+    .replace(/↑/g, "^")   // Upwards arrow
+    .replace(/↓/g, "v")   // Downwards arrow
+    .replace(/'/g, "'")   // Right single quotation mark
+    .replace(/'/g, "'")   // Left single quotation mark
+    .replace(/"/g, '"')   // Left double quotation mark
+    .replace(/"/g, '"')   // Right double quotation mark
+    .replace(/–/g, "-")   // En dash
+    .replace(/—/g, "-")   // Em dash
+    .replace(/…/g, "...") // Horizontal ellipsis
+    .replace(/•/g, "*")   // Bullet point
+    // Replace any remaining non-ASCII chars with space
+    .replace(/[^\x20-\x7E]/g, " ")
+    // Clean up multiple spaces
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export async function generateDashboardPdf(
@@ -37,22 +58,12 @@ export async function generateDashboardPdf(
 
     console.log("[reportPdf] Creating PDF document...");
     const pdfDoc = await PDFDocument.create();
-    
-    // Register fontkit for custom font support
-    pdfDoc.registerFontkit(fontkit);
-    
     let page = pdfDoc.addPage();
     const { width, height} = page.getSize();
     
-    // Load Unicode-capable fonts (Noto Sans supports Uzbek Cyrillic and most Unicode chars)
-    console.log("[reportPdf] Loading custom fonts...");
-    const fontPath = path.join(process.cwd(), "public", "fonts", "NotoSans-Regular.ttf");
-    const boldFontPath = path.join(process.cwd(), "public", "fonts", "NotoSans-Bold.ttf");
-    const fontBytes = fs.readFileSync(fontPath);
-    const boldFontBytes = fs.readFileSync(boldFontPath);
-    const font = await pdfDoc.embedFont(fontBytes);
-    const boldFont = await pdfDoc.embedFont(boldFontBytes);
-    console.log("[reportPdf] Fonts loaded successfully");
+    // Use standard fonts (WinAnsi encoding) with text sanitization
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
     // Color scheme (professional blue/slate theme)
     const primaryColor = rgb(15 / 255, 23 / 255, 42 / 255); // Dark slate
