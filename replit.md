@@ -85,6 +85,14 @@ The project is configured for autoscale deployment on Replit:
 
 ## Recent Changes
 
+### November 24, 2025 - Kelishuv Summasi Calculation Update
+- **Changed kelishuvSummasi calculation source** - Now uses custom field 1416675 instead of standard price field
+  - Only applies to leads with status 79190542 ("Qisman to'lov qildi")
+  - Other won statuses (142) continue using standard price field
+  - Before: 9,866,000 so'm (from price field)
+  - After: 24,446,000 so'm (from field 1416675 - partial payment amounts)
+  - Added getCustomFieldNumber() helper function for numeric field extraction
+
 ### November 24, 2025 - Critical Bug Fixes for Dashboard Metrics
 - **FIXED: Non-qualified leads counting** - Changed from checking specific loss_reason_ids to: `total leads - qualified leads`
   - Before: 0 non-qualified (incorrect logic)
@@ -95,8 +103,7 @@ The project is configured for autoscale deployment on Replit:
   - This fixes Course Type field (ID: 1119699) detection
 - **FIXED: Google Sheets date parsing** - Added support for dd.mm.yyyy format (e.g., "24.11.2025")
   - Before: 0 revenue rows found (dates not parsed)
-  - After: 20 revenue rows found for November
-  - Note: Revenue amounts still 0 - needs Google Sheets Column E data verification
+  - After: 149 revenue rows found for November with 503,145,000 so'm total revenue ✅
 
 ### November 24, 2025 - Async Call Loading Architecture
 - **Implemented async loading pattern** - Main dashboard loads immediately, calls fetch separately in background
