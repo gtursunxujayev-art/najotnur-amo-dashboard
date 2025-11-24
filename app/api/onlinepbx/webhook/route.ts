@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 // In-memory storage for recent calls from webhook
-let recentCalls: any[] = [];
+export let recentCalls: any[] = [];
 let webhookErrors: any[] = [];
 
 /**

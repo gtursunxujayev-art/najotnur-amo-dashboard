@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getOnlinePBXCalls, groupCallsByUser } from "@/lib/onlinepbx";
+import { recentCalls } from "@/app/api/onlinepbx/webhook/route";
 
 export const dynamic = "force-dynamic";
 
@@ -59,31 +59,31 @@ export async function GET(request: Request) {
       `[OnlinePBX/Calls] Fetching calls from ${fromDate.toISOString()} to ${toDate.toISOString()}`
     );
 
-    // Fetch calls from OnlinePBX API
-    const calls = await getOnlinePBXCalls(fromDate, toDate);
+    // Use webhook storage (real OnlinePBX data being pushed via webhook)
+    let calls = Array.from(recentCalls).sort((a, b) => b.timestamp - a.timestamp);
 
-    console.log(`[OnlinePBX/Calls] Fetched ${calls.length} calls from OnlinePBX API`);
+    // Apply date filtering if provided
+    if (fromDate && toDate) {
+      const fromTime = fromDate.getTime();
+      const toTime = toDate.getTime();
+      
+      calls = calls.filter((call) => {
+        const callTime = new Date(call.date).getTime();
+        return callTime >= fromTime && callTime <= toTime;
+      });
+    }
 
-    // Transform to match dashboard format (same as webhook endpoint)
-    const recentCalls = calls
-      .map(call => ({
-        id: call.id,
-        type: call.type,
-        date: call.date.toISOString(),
-        duration: call.duration,
-        phone: call.phone,
-        user: call.user,
-        source: "onlinepbx-api" as const,
-        timestamp: call.date.getTime(),
-      }))
-      .slice(0, limit);
+    // Apply limit
+    const filteredCalls = calls.slice(0, limit);
+
+    console.log(`[OnlinePBX/Calls] Returning ${filteredCalls.length} calls from webhook storage (total: ${recentCalls.length})`);
 
     return NextResponse.json({
       success: true,
       data: {
-        totalCalls: calls.length,
-        filteredCount: recentCalls.length,
-        recentCalls,
+        totalCalls: recentCalls.length,
+        filteredCount: filteredCalls.length,
+        recentCalls: filteredCalls,
       },
     });
   } catch (error: any) {
