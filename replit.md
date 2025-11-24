@@ -85,6 +85,18 @@ The project is configured for autoscale deployment on Replit:
 
 ## Recent Changes
 
+### November 24, 2025 - Professional PDF Report Design Redesign
+- **Completely redesigned PDF reports sent to Telegram** - Now matches dashboard's professional design
+  - **Modern header**: Dark navy "Najot Nur" branding with period label
+  - **KPI Cards (2x2 grid)**: Professional light gray cards with blue accent values
+  - **Metrics section**: Organized display of leads, qualified leads, non-qualified, conversion rate
+  - **Section headers**: Dark background headers with white text for clear separation
+  - **Manager sales table**: Professional table with alternating row colors, proper alignment, auto-pagination
+  - **Color scheme**: Professional dark slate/blue theme matching dashboard
+  - **Better spacing**: Improved readability with proper margins and visual hierarchy
+  - **Auto-pagination**: Tables automatically create new pages when needed
+  - Files updated: `lib/reportPdf.ts` - complete redesign from plain text to professional PDF
+
 ### November 24, 2025 - Manager Statistics Table with Revenue & Conversion
 - **Added comprehensive "Sotuv menejerlar bo'yicha" (Sales by Manager) table** with full analytics
   - Columns: Menejer | Lid | Sifatli Lid | Sotuv | **Konversiya** | Online | Ofline | Tushum
