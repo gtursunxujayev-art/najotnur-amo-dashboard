@@ -44,7 +44,7 @@ export async function generateDashboardPdf(
     y: y - 15,
     size: 24,
     font: boldFont,
-    color: rgb(255, 255, 255),
+    color: rgb(1, 1, 1),
   });
 
   page.drawText("Sotuv hisobot", {
@@ -202,7 +202,7 @@ export async function generateDashboardPdf(
       y: y - 13,
       size: 10,
       font: boldFont,
-      color: rgb(255, 255, 255),
+      color: rgb(1, 1, 1),
     });
     y -= 25;
 
@@ -236,7 +236,7 @@ export async function generateDashboardPdf(
       y: y - 13,
       size: 10,
       font: boldFont,
-      color: rgb(255, 255, 255),
+      color: rgb(1, 1, 1),
     });
     y -= 25;
 
@@ -276,7 +276,7 @@ export async function generateDashboardPdf(
       y: y - 13,
       size: 10,
       font: boldFont,
-      color: rgb(255, 255, 255),
+      color: rgb(1, 1, 1),
     });
     y -= 28;
 
@@ -342,7 +342,7 @@ export async function generateDashboardPdf(
       }
 
       // Alternate row colors
-      const rowColor = i % 2 === 0 ? rgb(255, 255, 255) : lightGray;
+      const rowColor = i % 2 === 0 ? rgb(1, 1, 1) : lightGray;
       page.drawRectangle({
         x: 40,
         y: y - 14,
