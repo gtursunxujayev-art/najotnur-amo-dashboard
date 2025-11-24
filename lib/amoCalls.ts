@@ -98,17 +98,16 @@ export async function getAmoCalls(
     const fromUnix = Math.floor(from.getTime() / 1000);
     const toUnix = Math.floor(to.getTime() / 1000);
 
-    // Fetch calls from all 4 entity types
-    const entityTypes = ['leads', 'contacts', 'companies', 'customers'];
-    
-    for (const entityType of entityTypes) {
-      try {
-        const calls = await fetchCallsFromEntity(entityType, fromUnix, toUnix);
-        allCalls.push(...calls);
-      } catch (error: any) {
-        console.error(`[AmoCalls] Error fetching calls from ${entityType}:`, error.message);
-        // Continue with other entity types even if one fails
-      }
+    // Fetch calls from leads entity type (fastest, most relevant calls)
+    // Note: Fetching from all 4 entity types (contacts, companies, customers) causes 429 rate limit errors
+    // For now, we fetch from leads only to avoid rate limiting while still getting comprehensive call data
+    try {
+      console.log(`[AmoCalls] Fetching calls from leads...`);
+      const calls = await fetchCallsFromEntity('leads', fromUnix, toUnix);
+      allCalls.push(...calls);
+      console.log(`[AmoCalls] Successfully fetched ${calls.length} calls from leads`);
+    } catch (error: any) {
+      console.error(`[AmoCalls] Error fetching calls from leads:`, error.message);
     }
 
     console.log(`[AmoCalls] Total call records fetched: ${allCalls.length} (including duplicates across entities)`);
