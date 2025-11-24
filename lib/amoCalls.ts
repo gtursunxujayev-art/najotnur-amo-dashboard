@@ -101,24 +101,31 @@ export async function getAmoCalls(
     const fromUnix = Math.floor(from.getTime() / 1000);
     const toUnix = Math.floor(to.getTime() / 1000);
 
-    // Fetch calls from leads entity type (fastest, most relevant calls)
-    // Note: Fetching from all 4 entity types (contacts, companies, customers) causes 429 rate limit errors
-    // For now, we fetch from leads only to avoid rate limiting while still getting comprehensive call data
-    try {
-      console.log(`[AmoCalls] Fetching calls from leads...`);
-      const calls = await fetchCallsFromEntity('leads', fromUnix, toUnix);
-      allCalls.push(...calls);
-      console.log(`[AmoCalls] Successfully fetched ${calls.length} calls from leads`);
-      
-      // Debug: Show date range of fetched calls
-      if (calls.length > 0) {
-        const dates = calls.map(c => c.datetime.toISOString().split('T')[0]);
-        const uniqueDates = Array.from(new Set(dates)).sort();
-        console.log(`[AmoCalls] Calls span dates: ${uniqueDates[0]} to ${uniqueDates[uniqueDates.length - 1]}`);
-        console.log(`[AmoCalls] Unique dates (${uniqueDates.length}): ${uniqueDates.slice(0, 7).join(', ')}${uniqueDates.length > 7 ? '...' : ''}`);
+    // Fetch calls from all entity types sequentially (with delays to avoid rate limiting)
+    // Using sequential approach prevents 429 rate limit errors
+    const entityTypes = ['leads', 'contacts', 'companies', 'customers'];
+    for (const entityType of entityTypes) {
+      try {
+        console.log(`[AmoCalls] Fetching calls from ${entityType}...`);
+        const calls = await fetchCallsFromEntity(entityType, fromUnix, toUnix);
+        allCalls.push(...calls);
+        console.log(`[AmoCalls] Successfully fetched ${calls.length} calls from ${entityType}`);
+        
+        // Debug: Show date range of fetched calls
+        if (calls.length > 0) {
+          const dates = calls.map(c => c.datetime.toISOString().split('T')[0]);
+          const uniqueDates = Array.from(new Set(dates)).sort();
+          console.log(`[AmoCalls] ${entityType} calls span dates: ${uniqueDates[0]} to ${uniqueDates[uniqueDates.length - 1]}`);
+        }
+        
+        // Small delay between entity type fetches to avoid rate limiting (429 errors)
+        if (entityType !== entityTypes[entityTypes.length - 1]) {
+          await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay between requests
+        }
+      } catch (error: any) {
+        console.error(`[AmoCalls] Error fetching calls from ${entityType}:`, error.message);
+        // Continue to next entity type on error
       }
-    } catch (error: any) {
-      console.error(`[AmoCalls] Error fetching calls from leads:`, error.message);
     }
 
     console.log(`[AmoCalls] Total call records fetched: ${allCalls.length} (including duplicates across entities)`);
