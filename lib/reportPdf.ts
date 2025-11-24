@@ -1,11 +1,21 @@
 // lib/reportPdf.ts
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { buildDashboardData, Period } from "@/lib/dashboard";
+import fs from "fs";
+import path from "path";
+import fontkit from "@pdf-lib/fontkit";
 
 function formatMoney(num: number): string {
   return new Intl.NumberFormat("uz-UZ", {
     maximumFractionDigits: 0,
   }).format(num);
+}
+
+// Sanitize text to remove control characters and handle missing glyphs
+function sanitizeText(text: string): string {
+  if (!text) return "";
+  // Remove control characters (U+0000 to U+001F, U+007F to U+009F)
+  return text.replace(/[\x00-\x1F\x7F-\x9F]/g, "");
 }
 
 export async function generateDashboardPdf(
@@ -14,15 +24,35 @@ export async function generateDashboardPdf(
 ): Promise<Uint8Array> {
   try {
     console.log("[reportPdf] Starting PDF generation...");
-    const data = await buildDashboardData(period, periodLabel);
-    console.log("[reportPdf] Dashboard data built successfully");
+    let data;
+    try {
+      // Skip calls to avoid timeout issues with amoCRM API
+      data = await buildDashboardData(period, periodLabel, { skipCalls: true });
+      console.log("[reportPdf] Dashboard data built successfully");
+    } catch (dashErr: any) {
+      console.error("[reportPdf] CRITICAL: Dashboard data building failed:", dashErr?.message || String(dashErr));
+      console.error("[reportPdf] Stack:", dashErr?.stack);
+      throw new Error(`Dashboard data build failed: ${dashErr?.message || String(dashErr)}`);
+    }
 
     console.log("[reportPdf] Creating PDF document...");
     const pdfDoc = await PDFDocument.create();
+    
+    // Register fontkit for custom font support
+    pdfDoc.registerFontkit(fontkit);
+    
     let page = pdfDoc.addPage();
-    const { width, height } = page.getSize();
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const { width, height} = page.getSize();
+    
+    // Load Unicode-capable fonts (Noto Sans supports Uzbek Cyrillic and most Unicode chars)
+    console.log("[reportPdf] Loading custom fonts...");
+    const fontPath = path.join(process.cwd(), "public", "fonts", "NotoSans-Regular.ttf");
+    const boldFontPath = path.join(process.cwd(), "public", "fonts", "NotoSans-Bold.ttf");
+    const fontBytes = fs.readFileSync(fontPath);
+    const boldFontBytes = fs.readFileSync(boldFontPath);
+    const font = await pdfDoc.embedFont(fontBytes);
+    const boldFont = await pdfDoc.embedFont(boldFontBytes);
+    console.log("[reportPdf] Fonts loaded successfully");
 
     // Color scheme (professional blue/slate theme)
     const primaryColor = rgb(15 / 255, 23 / 255, 42 / 255); // Dark slate
@@ -62,7 +92,7 @@ export async function generateDashboardPdf(
     y -= 60;
 
     // Period label
-    page.drawText(periodLabel, {
+    page.drawText(sanitizeText(periodLabel), {
       x: 40,
       y,
       size: 11,
@@ -101,7 +131,7 @@ export async function generateDashboardPdf(
       });
 
       // Label
-      page.drawText(kpi.label, {
+      page.drawText(sanitizeText(kpi.label), {
         x: cardX + 10,
         y: cardY - 15,
         size: 8,
@@ -110,7 +140,7 @@ export async function generateDashboardPdf(
       });
 
       // Value
-      page.drawText(kpi.value, {
+      page.drawText(sanitizeText(kpi.value), {
         x: cardX + 10,
         y: cardY - 30,
         size: 12,
@@ -152,14 +182,14 @@ export async function generateDashboardPdf(
     let metricY = y - 15;
     for (let i = 0; i < metrics.length; i += 2) {
       // First metric
-      page.drawText(metrics[i].label, {
+      page.drawText(sanitizeText(metrics[i].label), {
         x: 50,
         y: metricY,
         size: 8,
         font,
         color: rgb(100 / 255, 116 / 255, 139 / 255),
       });
-      page.drawText(String(metrics[i].value), {
+      page.drawText(sanitizeText(String(metrics[i].value)), {
         x: 50,
         y: metricY - 12,
         size: 11,
@@ -169,14 +199,14 @@ export async function generateDashboardPdf(
 
       // Second metric (if exists)
       if (i + 1 < metrics.length) {
-        page.drawText(metrics[i + 1].label, {
+        page.drawText(sanitizeText(metrics[i + 1].label), {
           x: width / 2 + 20,
           y: metricY,
           size: 8,
           font,
           color: rgb(100 / 255, 116 / 255, 139 / 255),
         });
-        page.drawText(String(metrics[i + 1].value), {
+        page.drawText(sanitizeText(String(metrics[i + 1].value)), {
           x: width / 2 + 20,
           y: metricY - 12,
           size: 11,
@@ -212,7 +242,7 @@ export async function generateDashboardPdf(
 
       const sorted = [...data.nonQualifiedReasons].sort((a, b) => b.value - a.value);
       for (const item of sorted) {
-        page.drawText(`${item.label}: ${item.value}`, {
+        page.drawText(sanitizeText(`${item.label}: ${item.value}`), {
           x: 50,
           y,
           size: 8,
@@ -246,7 +276,7 @@ export async function generateDashboardPdf(
 
       const sorted = [...data.leadSources].sort((a, b) => b.value - a.value);
       for (const item of sorted) {
-        page.drawText(`${item.label}: ${item.value}`, {
+        page.drawText(sanitizeText(`${item.label}: ${item.value}`), {
           x: 50,
           y,
           size: 8,
@@ -300,7 +330,7 @@ export async function generateDashboardPdf(
       });
 
       headers.forEach((h, i) => {
-        page.drawText(h, {
+        page.drawText(sanitizeText(h), {
           x: colXs[i] + 5,
           y: y - 12,
           size: 8,
@@ -333,7 +363,7 @@ export async function generateDashboardPdf(
           });
 
           headers.forEach((h, j) => {
-            page.drawText(h, {
+            page.drawText(sanitizeText(h), {
               x: colXs[j] + 5,
               y: y - 12,
               size: 8,
@@ -367,7 +397,7 @@ export async function generateDashboardPdf(
         ];
 
         vals.forEach((v, j) => {
-          page.drawText(v, {
+          page.drawText(sanitizeText(v), {
             x: colXs[j] + 5,
             y: y - 11,
             size: 7,
@@ -381,11 +411,19 @@ export async function generateDashboardPdf(
     }
 
     console.log("[reportPdf] Saving PDF...");
-    const pdfBytes = await pdfDoc.save();
-    console.log(`[reportPdf] PDF saved successfully: ${pdfBytes.length} bytes`);
+    let pdfBytes;
+    try {
+      pdfBytes = await pdfDoc.save();
+      console.log(`[reportPdf] PDF saved successfully: ${pdfBytes.length} bytes`);
+    } catch (saveErr: any) {
+      console.error("[reportPdf] CRITICAL: PDF save failed:", saveErr?.message || String(saveErr));
+      console.error("[reportPdf] Stack:", saveErr?.stack);
+      throw new Error(`PDF save failed: ${saveErr?.message || String(saveErr)}`);
+    }
     return pdfBytes;
   } catch (err: any) {
-    console.error("[reportPdf] ERROR during PDF generation:", err?.message || err);
+    console.error("[reportPdf] FINAL ERROR during PDF generation:", err?.message || String(err));
+    console.error("[reportPdf] Error stack:", err?.stack);
     throw err;
   }
 }
