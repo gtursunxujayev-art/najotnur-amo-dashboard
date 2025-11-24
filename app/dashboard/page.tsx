@@ -266,42 +266,62 @@ export default function DashboardPage() {
               <p className="mb-2 text-xs text-slate-400">
                 Barcha yo&apos;qotilgan lidlar “E&apos;tiroz sababi” bo&apos;yicha.
               </p>
-              <div className="h-64">
-                {data.nonQualifiedReasons.length === 0 ? (
-                  <div className="flex h-full items-center justify-center text-xs text-slate-500">
-                    Hali yo&apos;qotilgan lidlar yo&apos;q.
-                  </div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart margin={{ top: 0, right: 100, bottom: 0, left: 100 }}>
-                      <Pie
-                        data={data.nonQualifiedReasons}
-                        dataKey="value"
-                        nameKey="label"
-                        cx="40%"
-                        cy="50%"
-                        outerRadius={60}
-                        labelLine={true}
-                        label={pieLabelLossReason}
-                      >
-                        {data.nonQualifiedReasons.map((_, index) => (
-                          <Cell
-                            key={index}
-                            fill={COLORS[index % COLORS.length]}
-                          />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "#020617",
-                          border: "1px solid #1e293b",
-                          borderRadius: 8,
-                          fontSize: 12,
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                )}
+              <div className="flex h-64 gap-4">
+                {/* Left side: List */}
+                <div className="w-1/3 flex flex-col justify-start overflow-y-auto pr-2">
+                  {data.nonQualifiedReasons.length === 0 ? (
+                    <div className="text-xs text-slate-500">
+                      Hali yo&apos;qotilgan lidlar yo&apos;q.
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {data.nonQualifiedReasons.map((reason, index) => (
+                        <div key={index} className="flex justify-between text-xs text-slate-300 whitespace-nowrap">
+                          <span className="flex-shrink-0">{reason.label}</span>
+                          <span className="ml-2 text-slate-400 font-semibold flex-shrink-0">{reason.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                {/* Right side: Pie chart */}
+                <div className="w-2/3">
+                  {data.nonQualifiedReasons.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-xs text-slate-500">
+                      Hali yo&apos;qotilgan lidlar yo&apos;q.
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart margin={{ top: 0, right: 20, bottom: 0, left: 0 }}>
+                        <Pie
+                          data={data.nonQualifiedReasons}
+                          dataKey="value"
+                          nameKey="label"
+                          cx="70%"
+                          cy="50%"
+                          outerRadius={50}
+                          labelLine={false}
+                        >
+                          {data.nonQualifiedReasons.map((_, index) => (
+                            <Cell
+                              key={index}
+                              fill={COLORS[index % COLORS.length]}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "#020617",
+                            border: "1px solid #1e293b",
+                            borderRadius: 8,
+                            fontSize: 12,
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
               </div>
             </div>
 

@@ -85,13 +85,15 @@ The project is configured for autoscale deployment on Replit:
 
 ## Recent Changes
 
-### November 24, 2025 - Chart Label Spacing Improvement
-- **Fixed overlapping chart labels** - Added margin space and label lines for better readability
-  - Added 100px margins on left and right for label positioning
-  - Enabled label lines connecting pie slices to text labels
-  - Repositioned pie chart to 40% left to maximize label space
-  - Reduced pie radius to allow room for labels on both sides
-  - Improves visibility for both "Sifatsiz lid sabablari" and "Lid manbalari" charts
+### November 24, 2025 - Chart Layout Redesign with Data List
+- **Redesigned "Sifatsiz lid sabablari" section** - New two-column layout with list + pie chart
+  - Left column (33%): Text list showing objection reasons with counts (sheet-style format)
+    - Example: Ko'tarmadi  54
+    - Example: Dubl  14
+    - Example: Sifatsiz lid  10
+  - Right column (67%): Pie chart positioned on the right side
+  - Uses flexbox layout for better responsiveness
+  - Improved readability and data visibility
 
 ### November 24, 2025 - Sifatsiz Lid Sabablari & Count Fixes  
 - **Fixed "Sifatsiz lid sabablari" chart** - Now grouped by E'tiroz sababi field (1121759) instead of status name
