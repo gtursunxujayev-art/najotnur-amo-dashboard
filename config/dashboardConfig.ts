@@ -27,6 +27,10 @@ export type DashboardConfig = {
   // custom fields
   LEAD_SOURCE_FIELD_ID: number | null;
   COURSE_TYPE_FIELD_ID: number | null;
+  
+  // Partial payment field (for kelishuvSummasi calculation)
+  PARTIAL_PAYMENT_FIELD_ID: number | null;
+  PARTIAL_PAYMENT_STATUS_ID: number;
 
   ONLINE_COURSE_ENUM_IDS: number[];
   OFFLINE_COURSE_ENUM_IDS: number[];
@@ -98,6 +102,8 @@ const cfg: DashboardConfig = {
   "OBJECTION_FIELD_ID": 1121759,
   "LEAD_SOURCE_FIELD_ID": 1312637,
   "COURSE_TYPE_FIELD_ID": 1119699,
+  "PARTIAL_PAYMENT_FIELD_ID": 1416675,
+  "PARTIAL_PAYMENT_STATUS_ID": 79190542,
   "ONLINE_COURSE_ENUM_IDS": [
     865961,
     865963,

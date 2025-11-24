@@ -77,6 +77,25 @@ function getCustomFieldString(lead: AmoLead, fieldId: number): string | null {
   return String(v);
 }
 
+function getCustomFieldNumber(lead: AmoLead, fieldId: number): number {
+  const cf = (lead as any).custom_fields_values as
+    | Array<{
+        field_id: number;
+        values?: { value?: any }[];
+      }>
+    | undefined;
+
+  if (!cf) return 0;
+  const f = cf.find((x) => x.field_id === fieldId);
+  if (!f || !f.values || !f.values[0]) return 0;
+  
+  const v = f.values[0].value;
+  if (v == null) return 0;
+  
+  const num = Number(v);
+  return isNaN(num) ? 0 : num;
+}
+
 export async function buildDashboardData(
   period: Period,
   periodLabel: string,
@@ -246,19 +265,36 @@ export async function buildDashboardData(
 
     // Won / deals
     if (isWon(lead)) {
-      kelishuvSummasi += price;
+      // For "Qisman to'lov qildi" status, use custom field 1416675 for kelishuvSummasi
+      let dealAmount = price;
+      if (lead.status_id === dashboardConfig.PARTIAL_PAYMENT_STATUS_ID && 
+          dashboardConfig.PARTIAL_PAYMENT_FIELD_ID != null) {
+        dealAmount = getCustomFieldNumber(lead, dashboardConfig.PARTIAL_PAYMENT_FIELD_ID);
+        
+        if (leadsCount <= 5) {
+          console.log(`[Dashboard] Lead #${leadsCount} using partial payment field:`, {
+            lead_id: lead.id,
+            status_id: lead.status_id,
+            price: price,
+            partialPaymentAmount: dealAmount,
+            field_id: dashboardConfig.PARTIAL_PAYMENT_FIELD_ID
+          });
+        }
+      }
+      
+      kelishuvSummasi += dealAmount;
       ms.wonDeals++;
-      ms.wonAmount += price;
+      ms.wonAmount += dealAmount;
 
       if (isQualified(lead)) {
         wonFromQualifiedCount++;
       }
 
       if (isOnlineDeal(lead)) {
-        onlineSummasi += price;
+        onlineSummasi += dealAmount;
       }
       if (isOfflineDeal(lead)) {
-        offlineSummasi += price;
+        offlineSummasi += dealAmount;
       }
     }
 
