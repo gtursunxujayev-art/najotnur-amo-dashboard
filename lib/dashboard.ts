@@ -4,6 +4,7 @@ import {
   getUsers,
   getLossReasons,
   getFieldEnumMapping,
+  getStatusMapping,
   AmoLead,
 } from "@/lib/amocrm";
 import { dashboardConfig } from "@/config/dashboardConfig";
@@ -109,8 +110,8 @@ export async function buildDashboardData(
   console.log(`[Dashboard] Building dashboard data for period: ${periodLabel} (${period.from.toISOString()} to ${period.to.toISOString()})`);
   
   const skipCalls = options?.skipCalls ?? false;
-  
-  const [users, reasonsMap, leads, sheetCalls, amoCalls, revenueRows, leadSourceEnums] =
+
+  const [users, reasonsMap, leads, sheetCalls, amoCalls, revenueRows, leadSourceEnums, statusMap] =
     await Promise.all([
       getUsers(),
       getLossReasons(), // { [id]: name }
@@ -137,6 +138,10 @@ export async function buildDashboardData(
             return {};
           })
         : Promise.resolve({}),
+      getStatusMapping().catch(err => {
+        console.error("[Dashboard] Error fetching status map:", err);
+        return {};
+      }),
     ]);
 
   console.log(`[Dashboard] Data fetched - Leads: ${leads.length}, Sheet Calls: ${sheetCalls.length}, Amo Calls: ${amoCalls.length}, Revenue Rows: ${revenueRows.length}`);
@@ -145,7 +150,7 @@ export async function buildDashboardData(
   users.forEach((u) => usersMap.set(u.id, u.name));
 
   const managerSalesMap = new Map<number, ManagerSalesStats>();
-  const lostReasonMap = new Map<number, number>();
+  const lostReasonMap = new Map<string | number, number>(); // Can hold both number IDs and string keys like "status_143"
   const leadSourcesMap = new Map<string, number>();
 
   let kelishuvSummasi = 0;
@@ -185,7 +190,9 @@ export async function buildDashboardData(
       return dashboardConfig.OFFLINE_COURSE_ENUM_IDS.includes(num);
     })();
 
-  const isLost = (lead: AmoLead) => lead.loss_reason_id != null;
+  const isLost = (lead: AmoLead) => 
+    lead.loss_reason_id != null || 
+    dashboardConfig.LOST_STATUS_IDS.includes(lead.status_id || -1);
 
   const isQualified = (lead: AmoLead) => {
     const statusId = lead.status_id || -1;
@@ -263,9 +270,23 @@ export async function buildDashboardData(
     ms.totalLeads++;
 
     // Lost reason map (for pie chart)
-    if (isLost(lead) && lead.loss_reason_id != null) {
-      const rId = lead.loss_reason_id;
-      lostReasonMap.set(rId, (lostReasonMap.get(rId) || 0) + 1);
+    if (isLost(lead)) {
+      if (lead.loss_reason_id != null) {
+        // Standard loss reason from amoCRM
+        const rId = lead.loss_reason_id;
+        lostReasonMap.set(rId, (lostReasonMap.get(rId) || 0) + 1);
+      } else {
+        // Fallback: use status name when loss_reason_id is null
+        // This handles cases where leads are marked as lost by status but no explicit loss_reason
+        const statusId = lead.status_id || -1;
+        const statusMapTyped = statusMap as Record<number, string>;
+        const statusName = statusMapTyped[statusId] || `Status ${statusId}`;
+        const reasonKey: string | number = `status_${statusId}`;
+        // Store as custom key to distinguish from amoCRM loss reason IDs
+        lostReasonMap.set(reasonKey, (lostReasonMap.get(reasonKey) || 0) + 1);
+        // Store mapping for display - use string key for consistency
+        (reasonsMap as Record<string | number, string>)[reasonKey] = statusName;
+      }
     }
 
     // Qualified / Not qualified counters
@@ -410,7 +431,7 @@ export async function buildDashboardData(
 
   const nonQualifiedReasons: Slice[] = Array.from(lostReasonMap.entries()).map(
     ([reasonId, count]) => ({
-      label: reasonsMap[reasonId] || `Reason ${reasonId}`,
+      label: (reasonsMap as Record<string | number, string>)[reasonId] || `Reason ${reasonId}`,
       value: count,
     })
   );

@@ -109,3 +109,26 @@ export async function getFieldEnumMapping(fieldId: number): Promise<Record<numbe
     return {};
   }
 }
+
+/**
+ * Get status mapping (status_id -> status name) from amoCRM pipelines.
+ * Returns { status_id: "Status Name" }
+ */
+export async function getStatusMapping(): Promise<Record<number, string>> {
+  try {
+    const data = await amoRequest("/api/v4/leads/pipelines?limit=250");
+    const pipelines = data?._embedded?.pipelines || [];
+    const map: Record<number, string> = {};
+    
+    pipelines.forEach((p: any) => {
+      const statuses = p?._embedded?.statuses || [];
+      statuses.forEach((s: any) => {
+        map[s.id] = s.name;
+      });
+    });
+    return map;
+  } catch (err) {
+    console.error("[amocrm] Error fetching status mapping:", err);
+    return {};
+  }
+}
