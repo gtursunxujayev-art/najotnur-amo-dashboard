@@ -435,38 +435,50 @@ export default function DashboardPage() {
                       <th className="px-3 py-2">Lid</th>
                       <th className="px-3 py-2">Sifatli Lid</th>
                       <th className="px-3 py-2">Sotuv</th>
+                      <th className="px-3 py-2">Konversiya</th>
                       <th className="px-3 py-2">Online</th>
                       <th className="px-3 py-2">Ofline</th>
                       <th className="px-3 py-2">Tushum</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.managerSales.map((m) => (
-                      <tr
-                        key={m.managerId}
-                        className="border-b border-slate-800 last:border-0"
-                      >
-                        <td className="px-3 py-2">{m.managerName}</td>
-                        <td className="px-3 py-2">
-                          {m.totalLeads.toLocaleString("ru-RU")}
-                        </td>
-                        <td className="px-3 py-2">
-                          {m.qualifiedLeads.toLocaleString("ru-RU")}
-                        </td>
-                        <td className="px-3 py-2">
-                          {(m.onlineSalesCount + m.offlineSalesCount).toLocaleString("ru-RU")}
-                        </td>
-                        <td className="px-3 py-2">
-                          {m.onlineSalesCount.toLocaleString("ru-RU")}
-                        </td>
-                        <td className="px-3 py-2">
-                          {m.offlineSalesCount.toLocaleString("ru-RU")}
-                        </td>
-                        <td className="px-3 py-2">
-                          {m.revenue.toLocaleString("ru-RU")} so&apos;m
-                        </td>
-                      </tr>
-                    ))}
+                    {data.managerSales
+                      .sort((a, b) => b.revenue - a.revenue)
+                      .map((m) => {
+                        const totalSales = m.onlineSalesCount + m.offlineSalesCount;
+                        const conversion = m.qualifiedLeads > 0 
+                          ? ((totalSales / m.qualifiedLeads) * 100).toFixed(1) 
+                          : "0";
+                        return (
+                          <tr
+                            key={m.managerId}
+                            className="border-b border-slate-800 last:border-0"
+                          >
+                            <td className="px-3 py-2">{m.managerName}</td>
+                            <td className="px-3 py-2">
+                              {m.totalLeads.toLocaleString("ru-RU")}
+                            </td>
+                            <td className="px-3 py-2">
+                              {m.qualifiedLeads.toLocaleString("ru-RU")}
+                            </td>
+                            <td className="px-3 py-2">
+                              {totalSales.toLocaleString("ru-RU")}
+                            </td>
+                            <td className="px-3 py-2 font-semibold">
+                              {conversion}%
+                            </td>
+                            <td className="px-3 py-2">
+                              {m.onlineSalesCount.toLocaleString("ru-RU")}
+                            </td>
+                            <td className="px-3 py-2">
+                              {m.offlineSalesCount.toLocaleString("ru-RU")}
+                            </td>
+                            <td className="px-3 py-2 font-semibold">
+                              {m.revenue.toLocaleString("ru-RU")} so&apos;m
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>
