@@ -41,25 +41,38 @@ function sanitizeText(text: string): string {
 
 export async function generateDashboardPdf(
   period: Period,
-  periodLabel: string
+  periodLabel: string,
+  source: "manual" | "auto" = "auto"
 ): Promise<Uint8Array> {
+  const startTime = Date.now();
+  const tag = `[reportPdf-${source}]`;
+  
   try {
-    console.log("[reportPdf] Starting PDF generation...");
+    console.log(`${tag} Starting PDF generation for period: ${periodLabel}`);
     let data;
     try {
       // Skip calls to avoid timeout issues with amoCRM API
       data = await buildDashboardData(period, periodLabel, { skipCalls: true });
-      console.log("[reportPdf] Dashboard data built successfully");
+      console.log(`${tag} Dashboard data built successfully - ${Object.keys(data).length} fields`);
+      
+      // Validate data structure
+      if (!data || typeof data !== "object") {
+        throw new Error("Invalid dashboard data: data is null or not an object");
+      }
+      if (typeof data.leadsCount !== "number") {
+        throw new Error("Invalid dashboard data: leadsCount is not a number");
+      }
     } catch (dashErr: any) {
-      console.error("[reportPdf] CRITICAL: Dashboard data building failed:", dashErr?.message || String(dashErr));
-      console.error("[reportPdf] Stack:", dashErr?.stack);
+      console.error(`${tag} CRITICAL: Dashboard data building failed:`, dashErr?.message || String(dashErr));
+      console.error(`${tag} Stack:`, dashErr?.stack);
       throw new Error(`Dashboard data build failed: ${dashErr?.message || String(dashErr)}`);
     }
 
-    console.log("[reportPdf] Creating PDF document...");
+    console.log(`${tag} Creating PDF document...`);
     const pdfDoc = await PDFDocument.create();
     let page = pdfDoc.addPage();
     const { width, height} = page.getSize();
+    console.log(`${tag} PDF page created: ${width}x${height}`);
     
     // Use standard fonts (WinAnsi encoding) with text sanitization
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -426,20 +439,29 @@ export async function generateDashboardPdf(
       }
     }
 
-    console.log("[reportPdf] Saving PDF...");
+    console.log(`${tag} Saving PDF...`);
     let pdfBytes;
     try {
       pdfBytes = await pdfDoc.save();
-      console.log(`[reportPdf] PDF saved successfully: ${pdfBytes.length} bytes`);
+      const durationMs = Date.now() - startTime;
+      console.log(`${tag} PDF saved successfully: ${pdfBytes.length} bytes (${durationMs}ms total)`);
+      
+      // Validate PDF size - styled PDF should be at least 5KB
+      if (pdfBytes.length < 5000) {
+        console.warn(`${tag} WARNING: Generated PDF is very small (${pdfBytes.length} bytes) - may lack styling`);
+      } else {
+        console.log(`${tag} ✓ PDF size is appropriate for a styled report`);
+      }
     } catch (saveErr: any) {
-      console.error("[reportPdf] CRITICAL: PDF save failed:", saveErr?.message || String(saveErr));
-      console.error("[reportPdf] Stack:", saveErr?.stack);
+      console.error(`${tag} CRITICAL: PDF save failed:`, saveErr?.message || String(saveErr));
+      console.error(`${tag} Stack:`, saveErr?.stack);
       throw new Error(`PDF save failed: ${saveErr?.message || String(saveErr)}`);
     }
     return pdfBytes;
   } catch (err: any) {
-    console.error("[reportPdf] FINAL ERROR during PDF generation:", err?.message || String(err));
-    console.error("[reportPdf] Error stack:", err?.stack);
+    const durationMs = Date.now() - startTime;
+    console.error(`${tag} FINAL ERROR during PDF generation (after ${durationMs}ms):`, err?.message || String(err));
+    console.error(`${tag} Error stack:`, err?.stack);
     throw err;
   }
 }

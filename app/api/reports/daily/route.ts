@@ -31,7 +31,7 @@ export async function GET() {
     console.log("[reports/daily] Generating PDF...");
     let pdfBytes;
     try {
-      pdfBytes = await generateDashboardPdf(period, label);
+      pdfBytes = await generateDashboardPdf(period, label, "auto");
       console.log(`[reports/daily] PDF generated: ${pdfBytes.length} bytes`);
     } catch (pdfErr: any) {
       console.error("[reports/daily] PDF generation failed:", pdfErr?.message || pdfErr);

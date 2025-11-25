@@ -138,7 +138,9 @@ export async function POST(req: Request) {
     }
 
     const { period, label } = resolveManualPeriod(periodKey);
-    const pdfBytes = await generateDashboardPdf(period, label);
+    console.log(`[reports/manual] Generating PDF for manual report - Period: ${periodKey}, Label: ${label}`);
+    const pdfBytes = await generateDashboardPdf(period, label, "manual");
+    console.log(`[reports/manual] PDF generated successfully: ${pdfBytes.length} bytes`);
 
     const caption = `Najot Nur sotuv hisobot (${label})`;
 

@@ -25,7 +25,9 @@ export async function GET() {
       });
     }
 
-    const pdfBytes = await generateDashboardPdf(period, label);
+    console.log("[reports/monthly] Generating PDF...");
+    const pdfBytes = await generateDashboardPdf(period, label, "auto");
+    console.log(`[reports/monthly] PDF generated: ${pdfBytes.length} bytes`);
 
     await Promise.all(
       users.map((u) =>
