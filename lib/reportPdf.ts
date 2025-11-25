@@ -134,10 +134,10 @@ export async function generateDashboardPdf(
     const cardGap = 20;
 
     const kpiData = [
+      { label: "Tushum", value: formatMoney(data.oylikTushum) },
+      { label: "Offline tushum", value: formatMoney(data.offlineRevenue) },
+      { label: "Online tushum", value: formatMoney(data.onlineRevenue) },
       { label: "Kelishuv summasi", value: formatMoney(data.kelishuvSummasi) },
-      { label: "Online tushum", value: formatMoney(data.onlineSummasi) },
-      { label: "Offline tushum", value: formatMoney(data.offlineSummasi) },
-      { label: "Tushum", value: formatMoney(data.haftalikTushum) },
     ];
 
     // Draw KPI cards in 2x2 grid

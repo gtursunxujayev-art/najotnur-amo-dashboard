@@ -33,6 +33,20 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 
 ## Recent Changes
 
+### November 25, 2025 - Fixed PDF Revenue Data Source (Google Sheets instead of amoCRM)
+- **Problem**: PDF was showing amoCRM deal amounts for "Online tushum" and "Offline tushum", but should show Google Sheets revenue
+- **Root Cause**: KPI cards were using `onlineSummasi`/`offlineSummasi` (amoCRM deal amounts) instead of `onlineRevenue`/`offlineRevenue` (Google Sheets)
+- **Solution Implemented**:
+  - ✅ Updated KPI cards to use Google Sheets revenue data
+  - ✅ Reordered KPI cards to match user requirement: Tushum | Offline tushum | Online tushum | Kelishuv summasi
+  - ✅ Changed data sources:
+    - "Tushum" → `oylikTushum` (Google Sheets total)
+    - "Offline tushum" → `offlineRevenue` (Google Sheets offline revenue)
+    - "Online tushum" → `onlineRevenue` (Google Sheets online revenue)
+    - "Kelishuv summasi" → `kelishuvSummasi` (amoCRM deal amounts - kept for reference)
+- **Result**: PDF KPI cards now show accurate revenue data from Google Sheets
+- **Files Modified**: `lib/reportPdf.ts`
+
 ### November 25, 2025 - Fixed Manual vs Auto Report Styling + Added Missing Sales Metrics
 - **Problem 1**: Auto reports came without design ("old style with 0 design"), while manual reports had full styling
 - **Problem 2**: PDF reports were missing key sales metrics (All sales, Offline sales, Online sales)
