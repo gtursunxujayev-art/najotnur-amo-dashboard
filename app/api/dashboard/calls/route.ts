@@ -43,11 +43,31 @@ export async function GET(request: Request) {
 
     console.log(`[Dashboard/Calls] Fetching calls for period: ${period} (${fromDate.toISOString()} to ${toDate.toISOString()})`);
 
-    // Fetch calls and users in parallel
-    const [calls, users] = await Promise.all([
-      getAmoCalls(fromDate, toDate),
-      getUsers(),
-    ]);
+    // Set a timeout of 25 seconds for the entire request
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Calls fetch timeout - taking too long")), 25000)
+    );
+
+    // Fetch calls and users in parallel with timeout protection
+    let calls, users;
+    try {
+      [calls, users] = await Promise.race([
+        Promise.all([getAmoCalls(fromDate, toDate), getUsers()]),
+        timeoutPromise,
+      ]) as [any[], any[]];
+    } catch (timeoutErr: any) {
+      console.warn(`[Dashboard/Calls] Warning: ${timeoutErr.message}, returning partial results`);
+      // Return empty data on timeout instead of crashing
+      return NextResponse.json({
+        success: true,
+        partial: true,
+        warning: "Calls data took too long to load - showing cached/partial results",
+        data: {
+          totalCalls: 0,
+          managerCalls: [],
+        },
+      });
+    }
 
     // Group calls by manager
     const callsByManager = new Map<number, { callsAll: number; callsOutbound: number }>();

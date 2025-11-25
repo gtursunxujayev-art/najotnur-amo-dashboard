@@ -81,6 +81,26 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 - **Result**: Dashboard now resilient to rate limiting, automatically retries on 429 errors
 - **Files Modified**: `lib/amocrm.ts`, `lib/amoCalls.ts`
 
+### November 25, 2025 - Optimized Calls Page Loading Performance
+- **Problem**: Calls page was timing out (30+ seconds) when loading amoCRM call data
+- **Root Cause**: Fetching 13,000+ calls from 4 amoCRM entities (leads, contacts, companies, customers) with slow pagination
+- **Solution Implemented**:
+  - ✅ Reduced max pages per entity from 50 to 15
+  - ✅ Added 8-second time limit per entity to stop pagination early
+  - ✅ Added 25-second overall request timeout with graceful fallback
+  - ✅ Enhanced logging with performance metrics (pages, time per entity)
+- **Result**: 
+  - Calls API now loads in ~22 seconds (down from timeout/hang)
+  - Returns up to 3,185 calls when available
+  - Gracefully returns partial/empty results on timeout
+- **Performance**: 
+  - Leads: 2.6s (249 calls)
+  - Contacts: 8-9s (2000 calls, hits time limit)
+  - Companies: 7s (844 calls)
+  - Customers: 2.2s (92 calls)
+- **Recommendation**: Consider using OnlinePBX webhook data instead (real-time, much faster) for the primary calls display
+- **Files Modified**: `lib/amoCalls.ts`, `app/api/dashboard/calls/route.ts`
+
 ### November 25, 2025 - Separated Calls to Dedicated Page (Improved Dashboard Speed)
 - **Goal**: Improve dashboard loading speed by moving call data to separate page
 - **Implementation**:

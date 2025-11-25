@@ -20,10 +20,12 @@ async function fetchCallsFromEntity(
   entityType: string,
   fromUnix: number,
   toUnix: number,
-  maxPages: number = 50,
+  maxPages: number = 15,
   delayMs: number = 0
 ): Promise<AmoCallRow[]> {
   const result: AmoCallRow[] = [];
+  const startTime = Date.now();
+  const maxDurationMs = 8000; // Stop after 8 seconds to prevent timeouts
   
   // Add delay before starting to throttle rapid-fire requests
   if (delayMs > 0) {
@@ -41,6 +43,12 @@ async function fetchCallsFromEntity(
   let pageCount = 0;
 
   while (url && pageCount < maxPages) {
+    // Check if we've exceeded time limit
+    if (Date.now() - startTime > maxDurationMs) {
+      console.log(`[AmoCalls] Time limit (${maxDurationMs}ms) reached for ${entityType}, stopping pagination`);
+      break;
+    }
+    
     try {
       const data = await amoRequest(url);
       const notes = data?._embedded?.notes || [];
@@ -75,7 +83,8 @@ async function fetchCallsFromEntity(
     }
   }
 
-  console.log(`[AmoCalls] Fetched ${result.length} calls from ${entityType} (${pageCount} page(s)${pageCount >= maxPages ? ' [MAX REACHED]' : ''})`);
+  const duration = Date.now() - startTime;
+  console.log(`[AmoCalls] Fetched ${result.length} calls from ${entityType} (${pageCount} page(s)${pageCount >= maxPages ? ' [MAX REACHED]' : ''}) in ${duration}ms`);
   return result;
 }
 
