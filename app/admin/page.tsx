@@ -43,7 +43,7 @@ type ConstructorState = {
 };
 
 export default function AdminPage() {
-  const [tab, setTab] = useState<"info" | "constructor" | "tushum" | "csv-import">("info");
+  const [tab, setTab] = useState<"info" | "constructor" | "tushum" | "csv-import" | "amocrm-calls">("info");
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvUploading, setCsvUploading] = useState(false);
   const [csvResult, setCsvResult] = useState<any>(null);
@@ -53,6 +53,10 @@ export default function AdminPage() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  const [amoCalls, setAmoCalls] = useState<any>(null);
+  const [loadingCalls, setLoadingCalls] = useState(false);
+  const [callsDays, setCallsDays] = useState(7);
 
   const [constructorData, setConstructorData] = useState<ConstructorState>({
     PIPELINE_IDS: [],
@@ -199,7 +203,7 @@ export default function AdminPage() {
     <main className="min-h-screen bg-slate-950 p-6 text-slate-50">
       <h1 className="mb-6 text-3xl font-bold">Admin panel</h1>
 
-      <div className="mb-6 flex gap-3">
+      <div className="mb-6 flex gap-3 flex-wrap">
         <button
           onClick={() => setTab("info")}
           className={`rounded px-3 py-1 ${tab === "info" ? "bg-emerald-600" : "bg-slate-800"}`}
@@ -219,6 +223,12 @@ export default function AdminPage() {
           Tushum
         </button>
         <button
+          onClick={() => setTab("amocrm-calls")}
+          className={`rounded px-3 py-1 ${tab === "amocrm-calls" ? "bg-emerald-600" : "bg-slate-800"}`}
+        >
+          📞 amoCRM Calls
+        </button>
+        <button
           onClick={() => setTab("csv-import")}
           className={`rounded px-3 py-1 ${tab === "csv-import" ? "bg-emerald-600" : "bg-slate-800"}`}
         >
@@ -234,6 +244,82 @@ export default function AdminPage() {
       {err && (
         <div className="mb-3 rounded bg-red-900/40 px-3 py-2 text-sm text-red-200">
           {err}
+        </div>
+      )}
+
+      {tab === "amocrm-calls" && (
+        <div className="rounded-xl bg-slate-900/60 p-6">
+          <h2 className="text-xl font-bold mb-4">📞 amoCRM Call Data</h2>
+          <div className="space-y-4">
+            <div className="flex gap-3 items-center">
+              <label className="text-sm text-slate-300">Last</label>
+              <select value={callsDays} onChange={(e) => setCallsDays(parseInt(e.target.value))} className="bg-slate-800 text-slate-100 rounded px-2 py-1 text-sm">
+                <option value={1}>1 day</option>
+                <option value={7}>7 days</option>
+                <option value={30}>30 days</option>
+                <option value={90}>90 days</option>
+              </select>
+              <button onClick={async () => { setLoadingCalls(true); try { const r = await fetch(`/api/amocrm/calls?days=${callsDays}&limit=100`); const d = await r.json(); setAmoCalls(d); } finally { setLoadingCalls(false); } }} disabled={loadingCalls} className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-600 px-3 py-1 rounded text-sm font-semibold"> {loadingCalls ? "Loading..." : "Fetch"} </button>
+            </div>
+
+            {amoCalls && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="bg-slate-800 p-3 rounded">
+                    <p className="text-xs text-slate-400">Total Calls</p>
+                    <p className="text-2xl font-bold text-emerald-400">{amoCalls.stats?.totalCalls || 0}</p>
+                  </div>
+                  <div className="bg-slate-800 p-3 rounded">
+                    <p className="text-xs text-slate-400">Avg Duration</p>
+                    <p className="text-2xl font-bold text-blue-400">{amoCalls.stats?.averageDuration || 0}s</p>
+                  </div>
+                  <div className="bg-slate-800 p-3 rounded">
+                    <p className="text-xs text-slate-400">Total Duration</p>
+                    <p className="text-2xl font-bold text-purple-400">{(amoCalls.stats?.totalDuration / 3600).toFixed(1)}h</p>
+                  </div>
+                  <div className="bg-slate-800 p-3 rounded">
+                    <p className="text-xs text-slate-400">Managers</p>
+                    <p className="text-2xl font-bold text-pink-400">{Object.keys(amoCalls.stats?.callsByManager || {}).length}</p>
+                  </div>
+                </div>
+
+                <div className="bg-slate-800 p-4 rounded">
+                  <p className="text-sm font-semibold mb-3 text-slate-200">By Manager:</p>
+                  <div className="space-y-2">
+                    {Object.entries(amoCalls.stats?.callsByManager || {}).map(([manager, stats]: [string, any]) => (
+                      <div key={manager} className="flex justify-between items-center text-sm bg-slate-700/50 p-2 rounded">
+                        <span>{manager}</span>
+                        <span className="text-slate-300">{stats.count} calls, {Math.round(stats.totalSeconds / 60)}m, avg {stats.avgSeconds}s</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="max-h-96 overflow-y-auto">
+                  <table className="w-full text-xs text-slate-300">
+                    <thead className="sticky top-0 bg-slate-800">
+                      <tr>
+                        <th className="text-left px-2 py-1">#</th>
+                        <th className="text-left px-2 py-1">Manager</th>
+                        <th className="text-left px-2 py-1">Date/Time</th>
+                        <th className="text-left px-2 py-1">Duration</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {amoCalls.calls?.slice(0, 50).map((call: any, idx: number) => (
+                        <tr key={idx} className="border-t border-slate-700">
+                          <td className="px-2 py-1">{call.index}</td>
+                          <td className="px-2 py-1">{call.managerName}</td>
+                          <td className="px-2 py-1">{new Date(call.dateTime).toLocaleString()}</td>
+                          <td className="px-2 py-1">{call.durationMinutes}m</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
