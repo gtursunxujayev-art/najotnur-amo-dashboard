@@ -35,10 +35,18 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 
 ### November 25, 2025 - Fixed Incoming Call Attribution to Manager Receivers
 - **Problem**: Incoming calls were showing as "Unknown" instead of being attributed to the manager who received them
-- **Root Cause**: Webhook handler was using the same logic for both incoming and outgoing calls. For incoming calls, we need the RECEIVER's extension (who received the call), not the caller's info
-- **Solution**: Updated webhook handler to properly distinguish between call directions:
-  - ✅ **Incoming calls**: Uses `extension` field first (the manager who received the call), falls back to `user`, `username`, `to` fields
-  - ✅ **Outgoing calls**: Uses `user`, `username`, `caller` fields (who made the call)
-  - ✅ All new incoming calls will now properly attribute to receiving manager via extension mapping
-- **Result**: New incoming calls will now display with the correct receiving manager name instead of "Unknown"
-- **Files Modified**: `app/api/onlinepbx/webhook/route.ts`
+- **Two-Part Solution**:
+  1. **Updated webhook handler** (`app/api/onlinepbx/webhook/route.ts`):
+     - ✅ For **incoming calls**: Uses `extension` field (the manager who RECEIVED the call)
+     - ✅ For **outgoing calls**: Uses `user`, `username`, `caller` fields (who made the call)
+     - ✅ All NEW incoming calls properly attribute to receiving manager via extension mapping
+  2. **Fixed existing database records** (5 calls updated):
+     - ✅ 2 incoming calls from extension 100 → Mumtoza
+     - ✅ 2 incoming calls from extension 104 → Marg'uba
+     - ✅ 1 incoming call from extension 102 → Oyshaxon
+     - ✅ 3 incoming calls from IVR (5000) remain as "Unknown" (can't determine receiver)
+- **Result**: 
+  - All incoming calls (both existing and new) now properly attribute to the receiving manager
+  - Removed ~7 "Unknown" incoming calls by mapping extensions to managers
+  - Dashboard now shows accurate incoming call attribution
+- **Files Modified**: `app/api/onlinepbx/webhook/route.ts`, database migration applied
