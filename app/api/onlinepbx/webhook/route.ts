@@ -78,13 +78,34 @@ export async function POST(request: Request) {
         callDate = new Date((data.timestamp || Date.now() / 1000) * 1000);
       }
 
-      // Get extension/manager identifier
-      const extensionOrManager =
-        data.user || 
-        data.user_name || 
-        data.username || 
-        data.caller || 
-        "Unknown";
+      // For incoming calls, get the extension/manager who RECEIVED the call
+      // For outgoing calls, get the extension/manager who MADE the call
+      const isIncoming =
+        data.direction === "in" ||
+        data.direction === "1" ||
+        data.direction === "inbound";
+
+      // Try to get the appropriate field based on call direction
+      let extensionOrManager: string;
+      if (isIncoming) {
+        // For incoming calls: receiver is the extension that received it
+        extensionOrManager =
+          data.extension ||
+          data.user ||
+          data.user_name ||
+          data.username ||
+          data.to ||
+          "Unknown";
+      } else {
+        // For outgoing calls: caller is who made the call
+        extensionOrManager =
+          data.user || 
+          data.user_name || 
+          data.username || 
+          data.caller ||
+          data.from ||
+          "Unknown";
+      }
 
       const callRecord = {
         id: data.call_id || data.callId || data.uuid || `${Date.now()}`,

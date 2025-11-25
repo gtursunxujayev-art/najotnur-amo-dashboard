@@ -33,19 +33,12 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 
 ## Recent Changes
 
-### November 25, 2025 - Fixed Manager Attribution & Database Migration
-- **Problem**: Calls page showed phone numbers and unmapped extensions instead of manager names (e.g., 100, 104, 999890811039)
-- **Root Cause**: Existing database records contained old extension numbers and phone numbers from before the extension mapping system was implemented
-- **Solution**: 
-  - ✅ Migrated all 105 existing OnlinePBXCall records to use proper manager names
-  - ✅ Mapped extensions 100-110 to respective managers using extension mapping
-  - ✅ Consolidated "Manager_XXX" format entries to consistent manager names
-  - ✅ Converted invalid extensions and all phone numbers to "Unknown"
-- **Database Changes**:
-  - Extension 100 → Mumtoza (12 records)
-  - Extension 104 → Marg'uba (39 records total, including 30 from Manager_104 format)
-  - Extension 102 → Oyshaxon (22 records total, including 17 from Manager_102 format)
-  - Extension 106 → Matluba (13 records)
-  - Invalid/Phone entries → Unknown (15 records)
-- **Result**: Calls page now shows ONLY proper manager names and "Unknown" for unidentified entries
-- **Files Modified**: `lib/extensionMapping.ts` (completed all 11 managers)
+### November 25, 2025 - Fixed Incoming Call Attribution to Manager Receivers
+- **Problem**: Incoming calls were showing as "Unknown" instead of being attributed to the manager who received them
+- **Root Cause**: Webhook handler was using the same logic for both incoming and outgoing calls. For incoming calls, we need the RECEIVER's extension (who received the call), not the caller's info
+- **Solution**: Updated webhook handler to properly distinguish between call directions:
+  - ✅ **Incoming calls**: Uses `extension` field first (the manager who received the call), falls back to `user`, `username`, `to` fields
+  - ✅ **Outgoing calls**: Uses `user`, `username`, `caller` fields (who made the call)
+  - ✅ All new incoming calls will now properly attribute to receiving manager via extension mapping
+- **Result**: New incoming calls will now display with the correct receiving manager name instead of "Unknown"
+- **Files Modified**: `app/api/onlinepbx/webhook/route.ts`
