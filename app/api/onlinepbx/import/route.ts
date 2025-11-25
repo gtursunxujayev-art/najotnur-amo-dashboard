@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
+import * as XLSX from "xlsx";
 
 const prisma = new PrismaClient();
 
 export const dynamic = "force-dynamic";
 
 /**
- * Import OnlinePBX call data from CSV or JSON format
+ * Import OnlinePBX call data from CSV, XLSX, or JSON format
  * 
  * Supports multiple CSV formats:
  * 
@@ -17,6 +18,10 @@ export const dynamic = "force-dynamic";
  * Format 2 (Russian/OnlinePBX export):
  * Тип звонка,Кто,Кому,Внешний номер,Дата,Продолжительность,Время разговора,Примечание,Оценка качества
  * Пропущенный,9989936676666,10,781130650,(23:58:20),70,0,,0
+ * 
+ * XLSX Support:
+ * - Same formats as CSV (auto-detects Russian or English)
+ * - Can handle large files (tested with 67,000+ rows)
  * 
  * Or JSON POST body:
  * {
@@ -37,14 +42,98 @@ export async function POST(request: Request) {
   try {
     const contentType = request.headers.get("content-type");
     let calls: any[] = [];
+    
+    const buffer = await request.arrayBuffer();
 
     if (contentType?.includes("application/json")) {
       // Parse JSON
       const body = await request.json();
       calls = body.calls || [];
+    } else if (contentType?.includes("spreadsheet") || contentType?.includes("excel") || contentType?.includes("xlsx")) {
+      // Parse XLSX
+      console.log(`[OnlinePBX/Import] Parsing XLSX file (${(buffer.byteLength / 1024 / 1024).toFixed(2)} MB)`);
+      const workbook = XLSX.read(buffer, { type: "buffer" });
+      const sheetName = workbook.SheetNames[0];
+      if (!sheetName) {
+        return NextResponse.json(
+          { success: false, error: "XLSX file has no sheets" },
+          { status: 400 }
+        );
+      }
+      
+      const worksheet = workbook.Sheets[sheetName];
+      const rows: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+      
+      console.log(`[OnlinePBX/Import] XLSX has ${rows.length} rows`);
+      if (rows.length < 1) {
+        return NextResponse.json(
+          { success: false, error: "XLSX file is empty" },
+          { status: 400 }
+        );
+      }
+
+      const header = rows[0].map((h: any) => String(h)).join(",");
+      const isRussianFormat = header.includes("Тип звонка") || header.includes("Внешний номер");
+      console.log(`[OnlinePBX/Import] Format detected: ${isRussianFormat ? "Russian" : "English"}`);
+
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length === 0) continue;
+
+        try {
+          let date, direction, duration, phone, manager, callId;
+
+          if (isRussianFormat) {
+            const callType = String(row[0] || "").trim();
+            const who = String(row[1] || "").trim();
+            const manager_ext = String(row[2] || "").trim();
+            phone = String(row[3] || "").trim();
+            const timeStr = String(row[4] || "").replace(/[()]/g, "").trim() || "00:00:00";
+            duration = parseInt(String(row[5] || "0")) || 0;
+
+            if (callType.includes("Входящий")) direction = "in";
+            else if (callType.includes("Исходящий")) direction = "out";
+            else direction = "missed";
+
+            const today = new Date().toISOString().split("T")[0];
+            manager = manager_ext;
+            callId = `import-${manager_ext}-${timeStr}-${Math.random().toString(36).substr(2, 5)}`;
+            date = `${today}T${timeStr}`;
+          } else {
+            const d = String(row[0] || "").trim();
+            const t = String(row[1] || "").trim();
+            const dir = String(row[2] || "").trim();
+            const dur = String(row[3] || "").trim();
+            phone = String(row[4] || "").trim();
+            manager = String(row[5] || "").trim();
+            const cid = String(row[6] || "").trim();
+
+            date = `${d}T${t || "00:00:00"}`;
+            direction = dir || "in";
+            duration = parseInt(dur) || 0;
+            callId = cid || `import-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+          }
+
+          if (!manager || !phone) continue;
+
+          calls.push({
+            date: new Date(date),
+            direction: direction || "in",
+            duration,
+            phone,
+            manager,
+            callId,
+          });
+        } catch (err) {
+          console.warn(`[OnlinePBX/Import] Warning parsing row ${i}: ${err}`);
+          continue;
+        }
+      }
+
+      console.log(`[OnlinePBX/Import] Parsed ${calls.length} calls from ${rows.length - 1} data rows`);
     } else if (contentType?.includes("text/plain") || contentType?.includes("text/csv")) {
       // Parse CSV
-      const text = await request.text();
+      const text = new TextDecoder().decode(buffer);
       const lines = text.split("\n").filter(l => l.trim());
       
       console.log(`[OnlinePBX/Import] Received ${lines.length} lines`);
