@@ -43,7 +43,10 @@ type ConstructorState = {
 };
 
 export default function AdminPage() {
-  const [tab, setTab] = useState<"info" | "constructor" | "tushum">("info");
+  const [tab, setTab] = useState<"info" | "constructor" | "tushum" | "csv-import">("info");
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvUploading, setCsvUploading] = useState(false);
+  const [csvResult, setCsvResult] = useState<any>(null);
 
   const [meta, setMeta] = useState<MetaResponse | null>(null);
   const [loadingMeta, setLoadingMeta] = useState(false);
@@ -215,6 +218,12 @@ export default function AdminPage() {
         >
           Tushum
         </button>
+        <button
+          onClick={() => setTab("csv-import")}
+          className={`rounded px-3 py-1 ${tab === "csv-import" ? "bg-emerald-600" : "bg-slate-800"}`}
+        >
+          📥 CSV Import
+        </button>
       </div>
 
       {msg && (
@@ -225,6 +234,18 @@ export default function AdminPage() {
       {err && (
         <div className="mb-3 rounded bg-red-900/40 px-3 py-2 text-sm text-red-200">
           {err}
+        </div>
+      )}
+
+      {tab === "csv-import" && (
+        <div className="rounded-xl bg-slate-900/60 p-6">
+          <h2 className="text-xl font-bold mb-4">📥 CSV Import</h2>
+          <div className="space-y-4">
+            <input type="file" accept=".csv" onChange={(e) => { setCsvFile(e.target.files?.[0] || null); setCsvResult(null); }} id="csv-file-input" className="block w-full p-2 bg-slate-800 text-slate-100 rounded" />
+            {csvFile && <p className="text-sm text-slate-300">File: {csvFile.name}</p>}
+            <button onClick={async () => { if (!csvFile) return; setCsvUploading(true); try { const r = await fetch("/api/onlinepbx/import", { method: "POST", body: csvFile, headers: { "Content-Type": "text/csv" } }); const d = await r.json(); setMsg(d.success ? `✅ Imported ${d.data?.imported || 0}` : d.error); setCsvFile(null); } finally { setCsvUploading(false); } }} disabled={!csvFile || csvUploading} className="w-full bg-emerald-600 py-2 rounded font-semibold text-white"> {csvUploading ? "..." : "Upload"} </button>
+            {csvResult && <p className="text-sm text-emerald-100">✅ Imported: {csvResult.imported}</p>}
+          </div>
         </div>
       )}
 
