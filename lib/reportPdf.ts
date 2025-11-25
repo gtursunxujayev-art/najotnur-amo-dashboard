@@ -187,20 +187,28 @@ export async function generateDashboardPdf(
 
     y = cardY - 20;
 
-    // Lead metrics
+    // All metrics (leads and sales)
+    const totalSalesCount = (data.onlineSalesCount || 0) + (data.offlineSalesCount || 0);
     const metrics = [
       { label: "Jami lidlar", value: data.leadsCount },
       { label: "Qualified lidlar", value: data.qualifiedLeadsCount },
       { label: "Sifatsiz lidlar", value: data.nonQualifiedLeadsCount },
+      { label: "Jami sotuvlar", value: totalSalesCount },
+      { label: "Online sotuvlar", value: data.onlineSalesCount || 0 },
+      { label: "Offline sotuvlar", value: data.offlineSalesCount || 0 },
       { label: "Konversiya (qualified → sotuv)", value: `${(data.conversionFromQualified * 100).toFixed(1)}%` },
     ];
+
+    // Calculate metrics section height - 2 columns
+    const metricsPerColumn = Math.ceil(metrics.length / 2);
+    const metricsHeight = metricsPerColumn * 30 + 10;
 
     // Draw metrics section
     page.drawRectangle({
       x: 40,
-      y: y - 70,
+      y: y - metricsHeight,
       width: width - 80,
-      height: 70,
+      height: metricsHeight,
       color: lightGray,
       borderColor: borderColor,
       borderWidth: 1,
@@ -245,7 +253,7 @@ export async function generateDashboardPdf(
       metricY -= 30;
     }
 
-    y -= 90;
+    y -= metricsHeight + 20;
 
     // Section: Sifatsiz lid sabablari
     if (data.nonQualifiedReasons.length > 0) {

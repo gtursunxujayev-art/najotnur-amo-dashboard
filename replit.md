@@ -33,21 +33,24 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 
 ## Recent Changes
 
-### November 25, 2025 - Fixed Manual vs Auto Report Styling Consistency
-- **Problem**: Auto reports came without design ("old style with 0 design"), while manual reports had full styling
-- **Root Cause**: Unclear - both paths used the same PDF generation code, but auto reports might have been experiencing silent errors
+### November 25, 2025 - Fixed Manual vs Auto Report Styling + Added Missing Sales Metrics
+- **Problem 1**: Auto reports came without design ("old style with 0 design"), while manual reports had full styling
+- **Problem 2**: PDF reports were missing key sales metrics (All sales, Offline sales, Online sales)
 - **Solution Implemented**:
   - ✅ Added enhanced logging with source tracking (manual vs auto) to all report endpoints
   - ✅ Added PDF size validation (styled PDFs should be > 5KB) to detect incomplete/corrupted PDFs
   - ✅ Added performance timing metrics for PDF generation debugging
   - ✅ Added data structure validation to ensure dashboard data is complete before PDF generation
   - ✅ Unified all report endpoints (manual, daily, weekly, monthly) to pass source type
-- **Result**: Both manual and auto reports now use identical PDF generation code path
-- **Logging**: All report generation now logs:
-  - PDF source (manual vs auto)
-  - PDF size in bytes
-  - Generation time in milliseconds
-  - Any warnings if PDF size indicates incomplete styling
+  - ✅ **Added missing sales metrics to PDF**:
+    - "Jami sotuvlar" (All sales) = online + offline sales count
+    - "Online sotuvlar" (Online sales) = onlineSalesCount
+    - "Offline sotuvlar" (Offline sales) = offlineSalesCount
+  - ✅ Dynamic metrics section height to accommodate all 7 metrics (2-column layout)
+- **Result**: 
+  - Both manual and auto reports now use identical PDF generation code path
+  - PDF now displays all required metrics: Leads | Qualified leads | Non-qualified leads | All sales | Online sales | Offline sales | Conversion
+- **PDF Metrics Order**: Leads → Qualified → Non-qualified → All Sales → Online Sales → Offline Sales → Conversion (in 2-column layout)
 - **Files Modified**: `lib/reportPdf.ts`, `app/api/reports/manual/route.ts`, `app/api/reports/daily/route.ts`, `app/api/reports/weekly/route.ts`, `app/api/reports/monthly/route.ts`
 
 ### November 25, 2025 - Optimized Dashboard Loading (7-8x Faster)
