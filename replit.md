@@ -33,6 +33,25 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 
 ## Recent Changes
 
+### November 25, 2025 - Separated Calls to Dedicated Page (Improved Dashboard Speed)
+- **Goal**: Improve dashboard loading speed by moving call data to separate page
+- **Implementation**:
+  - ✅ Created `/app/calls/page.tsx` - New dedicated page for all call analytics
+    - Displays amoCRM call data (manager-wise breakdowns)
+    - Displays OnlinePBX call data (real-time call tracking)
+    - Period filters (Today, This Week, This Month)
+  - ✅ Updated navigation - Added "Calls" link in header
+  - ✅ Optimized dashboard - Removed all call sections and loading logic
+  - **Result**: Dashboard now focuses only on sales data (faster loading)
+- **Pages Now**:
+  - `/dashboard` → Sales metrics, leads, conversions, manager sales, lost reasons
+  - `/calls` → amoCRM calls, OnlinePBX calls (both with manager breakdowns)
+- **Page Links**:
+  - Dashboard: `/dashboard`
+  - Calls: `/calls`
+  - Admin: `/admin`
+  - Users: `/users`
+
 ### November 25, 2025 - Investigated Call Data Gap & Built Sync System
 - **Investigation: Why amoCRM calls were old (2022-2023)**
   - ✅ OnlinePBX webhooks: Working perfectly, receiving real-time calls

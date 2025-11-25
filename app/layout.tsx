@@ -34,6 +34,13 @@ export default function RootLayout({
               </Link>
 
               <Link
+                href="/calls"
+                className="hover:text-white transition-colors"
+              >
+                Calls
+              </Link>
+
+              <Link
                 href="/admin"
                 className="hover:text-white transition-colors"
               >

@@ -12,42 +12,12 @@ import {
 
 type PeriodKey = "today" | "week" | "month";
 
-type CallsData = {
-  totalCalls: number;
-  managerCalls: Array<{
-    managerId: number;
-    managerName: string;
-    callsAll: number;
-    callsOutbound: number;
-  }>;
-};
-
-type OnlinePBXCallsData = {
-  totalCalls: number;
-  filteredCount: number;
-  recentCalls: Array<{
-    id: string;
-    type: "in" | "out";
-    date: string;
-    duration: number;
-    phone: string;
-    user: string;
-    source: string;
-    timestamp: number;
-  }>;
-};
 
 type UiState = {
   loading: boolean;
   error: string | null;
   data: DashboardData | null;
   period: PeriodKey;
-  callsLoading: boolean;
-  callsError: string | null;
-  callsData: CallsData | null;
-  onlinepbxLoading: boolean;
-  onlinepbxError: string | null;
-  onlinepbxData: OnlinePBXCallsData | null;
 };
 
 const COLORS = ["#22c55e", "#3b82f6", "#a855f7", "#f97316", "#ef4444", "#eab308"];
@@ -71,130 +41,10 @@ export default function DashboardPage() {
     error: null,
     data: null,
     period: "week",
-    callsLoading: false,
-    callsError: null,
-    callsData: null,
-    onlinepbxLoading: false,
-    onlinepbxError: null,
-    onlinepbxData: null,
   });
 
   const dashboardAbortRef = useRef<AbortController | null>(null);
-  const callsAbortRef = useRef<AbortController | null>(null);
-  const onlinepbxAbortRef = useRef<AbortController | null>(null);
 
-  async function loadCalls(periodKey: PeriodKey) {
-    try {
-      if (callsAbortRef.current) {
-        callsAbortRef.current.abort();
-      }
-      callsAbortRef.current = new AbortController();
-
-      setState((s) => ({ ...s, callsLoading: true, callsError: null, callsData: null }));
-
-      const res = await fetch(`/api/dashboard/calls?period=${periodKey}`, {
-        cache: "no-store",
-        signal: callsAbortRef.current.signal,
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        const msg = body.error || res.statusText || "Failed to load calls";
-        throw new Error(msg);
-      }
-
-      const json = await res.json();
-      const callsData: CallsData = json.data;
-
-      setState((s) => {
-        if (s.period !== periodKey) return s;
-        return {
-          ...s,
-          callsLoading: false,
-          callsError: null,
-          callsData,
-        };
-      });
-    } catch (err: any) {
-      if (err.name === "AbortError") return;
-      console.error("Calls load error", err);
-      setState((s) => {
-        if (s.period !== periodKey) return s;
-        return {
-          ...s,
-          callsLoading: false,
-          callsError: err?.message || "Failed to load calls data",
-          callsData: null,
-        };
-      });
-    }
-  }
-
-  async function loadOnlinePBXCalls(periodKey: PeriodKey) {
-    try {
-      if (onlinepbxAbortRef.current) {
-        onlinepbxAbortRef.current.abort();
-      }
-      onlinepbxAbortRef.current = new AbortController();
-
-      setState((s) => ({ ...s, onlinepbxLoading: true, onlinepbxError: null, onlinepbxData: null }));
-
-      // Calculate date range based on period
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      let fromDate = new Date(today);
-      let toDate = new Date(today);
-      toDate.setHours(23, 59, 59, 999);
-
-      if (periodKey === "week") {
-        const dayOfWeek = today.getDay();
-        fromDate.setDate(today.getDate() - dayOfWeek); // Set to Monday
-        toDate = new Date();
-        toDate.setHours(23, 59, 59, 999);
-      } else if (periodKey === "month") {
-        fromDate.setDate(1); // Set to 1st of month
-        toDate = new Date();
-        toDate.setHours(23, 59, 59, 999);
-      }
-
-      const fromParam = fromDate.toISOString().split("T")[0];
-      const toParam = toDate.toISOString().split("T")[0];
-
-      const res = await fetch(`/api/onlinepbx/calls?limit=1000&from=${fromParam}&to=${toParam}`, {
-        cache: "no-store",
-        signal: onlinepbxAbortRef.current.signal,
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        const msg = body.error || res.statusText || "Failed to load OnlinePBX calls";
-        throw new Error(msg);
-      }
-
-      const json = await res.json();
-      const onlinepbxData: OnlinePBXCallsData = json.data;
-
-      setState((s) => {
-        return {
-          ...s,
-          onlinepbxLoading: false,
-          onlinepbxError: null,
-          onlinepbxData,
-        };
-      });
-    } catch (err: any) {
-      if (err.name === "AbortError") return;
-      console.error("OnlinePBX calls load error", err);
-      setState((s) => {
-        return {
-          ...s,
-          onlinepbxLoading: false,
-          onlinepbxError: err?.message || "Failed to load OnlinePBX data",
-          onlinepbxData: null,
-        };
-      });
-    }
-  }
 
   async function load(periodKey: PeriodKey) {
     try {
@@ -228,9 +78,6 @@ export default function DashboardPage() {
           data,
         };
       });
-
-      loadCalls(periodKey);
-      loadOnlinePBXCalls(periodKey);
     } catch (err: any) {
       if (err.name === "AbortError") return;
       console.error("Dashboard load error", err);
@@ -257,7 +104,7 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { data, loading, error, period, callsLoading, callsError, callsData, onlinepbxLoading, onlinepbxError, onlinepbxData } = state;
+  const { data, loading, error, period } = state;
 
   const handleChangePeriod = (p: PeriodKey) => {
     if (p === period) return;
@@ -572,130 +419,6 @@ export default function DashboardPage() {
                 </table>
               </div>
             )}
-          </section>
-
-          {/* Manager calls (amoCRM) */}
-          <section className="rounded-lg border border-slate-700 bg-slate-900 p-4">
-            <h2 className="mb-3 text-sm font-semibold text-slate-200">
-              Qo&apos;ng&apos;iroqlar bo&apos;yicha menejerlar (amoCRM)
-            </h2>
-            {callsLoading ? (
-              <div className="text-xs text-slate-400 animate-pulse">
-                Qo&apos;ng&apos;iroqlar yuklanmoqda...
-              </div>
-            ) : callsError ? (
-              <div className="text-xs text-red-400">
-                Xato: {callsError}
-              </div>
-            ) : !callsData || callsData.managerCalls.length === 0 ? (
-              <div className="text-xs text-slate-500">
-                Qo&apos;ng&apos;iroqlar statistikasi topilmadi.
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-xs text-slate-200">
-                  <thead>
-                    <tr className="border-b border-slate-700 bg-slate-800/60">
-                      <th className="px-3 py-2">Menejer</th>
-                      <th className="px-3 py-2">Jami qo&apos;ng&apos;iroqlar</th>
-                      <th className="px-3 py-2">Chiquvchi qo&apos;ng&apos;iroqlar</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {callsData.managerCalls.map((m) => (
-                      <tr
-                        key={m.managerId}
-                        className="border-b border-slate-800 last:border-0"
-                      >
-                        <td className="px-3 py-2">{m.managerName}</td>
-                        <td className="px-3 py-2">
-                          {m.callsAll.toLocaleString("ru-RU")}
-                        </td>
-                        <td className="px-3 py-2">
-                          {m.callsOutbound.toLocaleString("ru-RU")}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-
-          {/* OnlinePBX calls (Real-time from webhooks) - Manager summary */}
-          <section className="rounded-lg border border-slate-700 bg-slate-900 p-4">
-            <h2 className="mb-3 text-sm font-semibold text-slate-200">
-              OnlinePBX Qo&apos;ng&apos;iroqlar bo&apos;yicha menejerlar
-            </h2>
-            {onlinepbxLoading ? (
-              <div className="text-xs text-slate-400 animate-pulse">
-                OnlinePBX qo&apos;ng&apos;iroqlari yuklanmoqda...
-              </div>
-            ) : onlinepbxError ? (
-              <div className="text-xs text-red-400">
-                Xato: {onlinepbxError}
-              </div>
-            ) : !onlinepbxData || onlinepbxData.recentCalls.length === 0 ? (
-              <div className="text-xs text-slate-500">
-                Tanlangan davr uchun OnlinePBX qo&apos;ng&apos;iroqlari topilmadi.
-              </div>
-            ) : (() => {
-              // Aggregate calls by manager
-              const managerStats = onlinepbxData.recentCalls.reduce((acc, call) => {
-                const existing = acc.find((m) => m.user === call.user);
-                if (existing) {
-                  existing.totalCalls += 1;
-                  if (call.type === "out") {
-                    existing.outboundCalls += 1;
-                  }
-                  existing.totalDuration += call.duration;
-                } else {
-                  acc.push({
-                    user: call.user,
-                    totalCalls: 1,
-                    outboundCalls: call.type === "out" ? 1 : 0,
-                    totalDuration: call.duration,
-                  });
-                }
-                return acc;
-              }, [] as Array<{ user: string; totalCalls: number; outboundCalls: number; totalDuration: number }>);
-
-              return (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-left text-xs text-slate-200">
-                    <thead>
-                      <tr className="border-b border-slate-700 bg-slate-800/60">
-                        <th className="px-3 py-2">Menejer</th>
-                        <th className="px-3 py-2">Jami qo&apos;ng&apos;iroqlar</th>
-                        <th className="px-3 py-2">Chiquvchi qo&apos;ng&apos;iroqlar</th>
-                        <th className="px-3 py-2">Davomiyligi (s)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {managerStats
-                        .sort((a, b) => b.totalCalls - a.totalCalls)
-                        .map((manager) => (
-                          <tr
-                            key={manager.user}
-                            className="border-b border-slate-800 last:border-0"
-                          >
-                            <td className="px-3 py-2">{manager.user}</td>
-                            <td className="px-3 py-2">
-                              {manager.totalCalls.toLocaleString("ru-RU")}
-                            </td>
-                            <td className="px-3 py-2">
-                              {manager.outboundCalls.toLocaleString("ru-RU")}
-                            </td>
-                            <td className="px-3 py-2 font-semibold">
-                              {manager.totalDuration.toLocaleString("ru-RU")}
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            })()}
           </section>
         </div>
       )}
