@@ -30,3 +30,22 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 *   **Google Sheets API:** Integrates for call statistics and revenue data, specifically for PDF reports.
 *   **Telegram Bot API:** Utilized for sending automated reports and managing user subscriptions.
 *   **PostgreSQL:** The primary database, accessed via Prisma ORM.
+
+## Recent Changes
+
+### November 25, 2025 - Fixed Manager Attribution & Database Migration
+- **Problem**: Calls page showed phone numbers and unmapped extensions instead of manager names (e.g., 100, 104, 999890811039)
+- **Root Cause**: Existing database records contained old extension numbers and phone numbers from before the extension mapping system was implemented
+- **Solution**: 
+  - ✅ Migrated all 105 existing OnlinePBXCall records to use proper manager names
+  - ✅ Mapped extensions 100-110 to respective managers using extension mapping
+  - ✅ Consolidated "Manager_XXX" format entries to consistent manager names
+  - ✅ Converted invalid extensions and all phone numbers to "Unknown"
+- **Database Changes**:
+  - Extension 100 → Mumtoza (12 records)
+  - Extension 104 → Marg'uba (39 records total, including 30 from Manager_104 format)
+  - Extension 102 → Oyshaxon (22 records total, including 17 from Manager_102 format)
+  - Extension 106 → Matluba (13 records)
+  - Invalid/Phone entries → Unknown (15 records)
+- **Result**: Calls page now shows ONLY proper manager names and "Unknown" for unidentified entries
+- **Files Modified**: `lib/extensionMapping.ts` (completed all 11 managers)
