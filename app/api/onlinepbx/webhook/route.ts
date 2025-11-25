@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
+import { getManagerNameFromExtension } from "@/lib/extensionMapping";
 
 const prisma = new PrismaClient();
 
@@ -14,6 +15,7 @@ let webhookErrors: any[] = [];
  * Receives real-time call events from OnlinePBX panel
  * Handles multiple data formats (JSON, form-encoded, URL params)
  * Saves calls to database for persistent historical data
+ * Maps extension numbers to manager names using extension mapping
  */
 export async function POST(request: Request) {
   try {
@@ -76,20 +78,28 @@ export async function POST(request: Request) {
         callDate = new Date((data.timestamp || Date.now() / 1000) * 1000);
       }
 
+      // Get extension/manager identifier
+      const extensionOrManager =
+        data.user || 
+        data.user_name || 
+        data.username || 
+        data.caller || 
+        "Unknown";
+
       const callRecord = {
         id: data.call_id || data.callId || data.uuid || `${Date.now()}`,
-        type: 
-          data.direction === "in" || 
-          data.direction === "1" || 
-          data.direction === "inbound" 
-            ? "in" 
+        type:
+          data.direction === "in" ||
+          data.direction === "1" ||
+          data.direction === "inbound"
+            ? "in"
             : "out",
         date: callDate,
         duration: parseInt(data.call_duration || data.duration || 0),
-        // OnlinePBX sends 'callee' for phone number, but may include '+' prefix
+        // OnlinePBX sends 'callee' for phone number
         phone: data.callee || data.from || data.phone || data.to || "Unknown",
-        // OnlinePBX sends 'caller' as extension number (e.g., '102'), try to map to user name
-        user: data.user || data.user_name || data.username || data.caller || "Unknown",
+        // Map extension number to manager name
+        user: getManagerNameFromExtension(extensionOrManager),
         source: "webhook",
         timestamp: Date.now(),
       };
@@ -134,13 +144,13 @@ export async function POST(request: Request) {
     });
   } catch (error: any) {
     console.error("[OnlinePBX/Webhook] Error:", error);
-    
+
     const errorRecord = {
       timestamp: Date.now(),
       error: error.message,
       stack: error.stack?.substring(0, 200),
     };
-    
+
     webhookErrors.push(errorRecord);
     if (webhookErrors.length > 50) {
       webhookErrors = webhookErrors.slice(-50);
@@ -176,10 +186,10 @@ export async function GET(request: Request) {
       fromDate.setHours(0, 0, 0, 0);
       const toDate = new Date(toDateStr);
       toDate.setHours(23, 59, 59, 999);
-      
+
       const fromTime = fromDate.getTime();
       const toTime = toDate.getTime();
-      
+
       calls = calls.filter((call) => {
         const callTime = new Date(call.date).getTime();
         return callTime >= fromTime && callTime <= toTime;
