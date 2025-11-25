@@ -109,7 +109,7 @@ export default function CallsPage() {
 
       setState((s) => ({ ...s, onlinepbxLoading: true, onlinepbxError: null, onlinepbxData: null }));
 
-      const res = await fetch(`/api/dashboard/calls?period=${periodKey}&source=onlinepbx`, {
+      const res = await fetch(`/api/onlinepbx/calls?period=${periodKey}`, {
         cache: "no-store",
         signal: onlinepbxAbortRef.current.signal,
       });
