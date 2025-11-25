@@ -8,10 +8,7 @@ import {
   AmoLead,
 } from "@/lib/amocrm";
 import { dashboardConfig } from "@/config/dashboardConfig";
-import { getSheetCalls } from "@/lib/googleSheets";
-import { getAmoCalls } from "@/lib/amoCalls";
 import { getSheetRevenue } from "@/lib/revenueSheets";
-import { getOnlinePBXWebhookCalls } from "@/lib/onlinepbx";
 
 export type Period = {
   from: Date;
@@ -115,29 +112,11 @@ export async function buildDashboardData(
   
   const skipCalls = options?.skipCalls ?? false;
 
-  const [users, reasonsMap, leads, sheetCalls, amoCalls, onlinepbxCalls, revenueRows, leadSourceEnums, statusMap, objectionEnums] =
+  const [users, reasonsMap, leads, revenueRows, leadSourceEnums, statusMap, objectionEnums] =
     await Promise.all([
       getUsers(),
-      getLossReasons(), // { [id]: name }
+      getLossReasons(),
       getLeadsByCreatedAt(toUnixSeconds(period.from), toUnixSeconds(period.to)),
-      dashboardConfig.USE_SHEETS_CALLS && !skipCalls
-        ? getSheetCalls(period.from, period.to).catch(err => {
-            console.error("[Dashboard] Error fetching Google Sheets calls:", err);
-            return [];
-          })
-        : Promise.resolve([]),
-      dashboardConfig.USE_AMO_CALLS && !skipCalls
-        ? getAmoCalls(period.from, period.to).catch(err => {
-            console.error("[Dashboard] Error fetching amoCRM calls:", err);
-            return [];
-          })
-        : Promise.resolve([]),
-      !skipCalls
-        ? getOnlinePBXWebhookCalls(period.from, period.to).catch(err => {
-            console.error("[Dashboard] Error fetching OnlinePBX webhook calls:", err);
-            return [];
-          })
-        : Promise.resolve([]),
       getSheetRevenue(period.from, period.to).catch(err => {
         console.error("[Dashboard] Error fetching revenue data:", err);
         return [];
@@ -159,8 +138,6 @@ export async function buildDashboardData(
           })
         : Promise.resolve({}),
     ]);
-
-  console.log(`[Dashboard] Data fetched - Leads: ${leads.length}, Sheet Calls: ${sheetCalls.length}, Amo Calls: ${amoCalls.length}, OnlinePBX Calls: ${onlinepbxCalls.length}, Revenue Rows: ${revenueRows.length}`);
 
   const usersMap = new Map<number, string>();
   users.forEach((u) => usersMap.set(u.id, u.name));
@@ -249,28 +226,6 @@ export async function buildDashboardData(
     const managerName = usersMap.get(managerId) || `User ${managerId}`;
     const price = lead.price || 0;
 
-    // Debug logging - show ALL custom fields for first few leads to diagnose issue
-    if (leadsCount <= 5) {
-      const customFields = (lead as any).custom_fields_values || [];
-      console.log(`[Dashboard] Lead #${leadsCount} (ID: ${lead.id}):`, {
-        status_id: lead.status_id,
-        loss_reason_id: lead.loss_reason_id,
-        price,
-        isWon: isWon(lead),
-        isQualified: isQualified(lead),
-        isLost: isLost(lead),
-      });
-      
-      if (customFields.length > 0) {
-        console.log(`[Dashboard]   Custom fields:`, customFields.map((f: any) => ({
-          field_id: f.field_id,
-          field_name: f.field_name,
-          values: f.values?.map((v: any) => ({ value: v.value, enum_id: v.enum_id }))
-        })));
-      } else {
-        console.log(`[Dashboard]   No custom fields on this lead`);
-      }
-    }
 
     if (!managerSalesMap.has(managerId)) {
       managerSalesMap.set(managerId, {
@@ -333,16 +288,6 @@ export async function buildDashboardData(
       if (lead.status_id === dashboardConfig.PARTIAL_PAYMENT_STATUS_ID && 
           dashboardConfig.PARTIAL_PAYMENT_FIELD_ID != null) {
         dealAmount = getCustomFieldNumber(lead, dashboardConfig.PARTIAL_PAYMENT_FIELD_ID);
-        
-        if (leadsCount <= 5) {
-          console.log(`[Dashboard] Lead #${leadsCount} using partial payment field:`, {
-            lead_id: lead.id,
-            status_id: lead.status_id,
-            price: price,
-            partialPaymentAmount: dealAmount,
-            field_id: dashboardConfig.PARTIAL_PAYMENT_FIELD_ID
-          });
-        }
       }
       
       kelishuvSummasi += dealAmount;
@@ -417,7 +362,6 @@ export async function buildDashboardData(
     })
     .reduce((sum, r) => sum + r.amount, 0);
   
-  // Debug: show course type distribution
   const courseTypeMap = new Map<string, { count: number; sum: number }>();
   revenueRows.forEach(r => {
     const ct = r.courseType.toLowerCase() || '(empty)';
@@ -486,59 +430,8 @@ export async function buildDashboardData(
     ([label, value]) => ({ label, value })
   );
 
-  // Calls per manager
+  // Manager calls have moved to /calls page - dashboard doesn't display call statistics
   const callsPerManager = new Map<string, ManagerCallsStats>();
-
-  const ensureManagerCalls = (managerName: string): ManagerCallsStats => {
-    if (!callsPerManager.has(managerName)) {
-      callsPerManager.set(managerName, {
-        managerName,
-        callsAll: 0,
-        callsSuccess: 0,
-        callSecondsAll: 0,
-        callSecondsSuccess: 0,
-        avgCallSeconds: 0,
-      });
-    }
-    return callsPerManager.get(managerName)!;
-  };
-
-  // 1) amoCRM calls (all calls)
-  if (dashboardConfig.USE_AMO_CALLS) {
-    amoCalls.forEach((c) => {
-      const managerName = usersMap.get(c.managerId) || `User ${c.managerId}`;
-      const cs = ensureManagerCalls(managerName);
-      cs.callsAll++;
-      cs.callSecondsAll += c.durationSec;
-    });
-  }
-
-  // 2) OnlinePBX webhook calls (real-time)
-  if (onlinepbxCalls.length > 0) {
-    onlinepbxCalls.forEach((c) => {
-      const cs = ensureManagerCalls(c.user);
-      cs.callsAll++;
-      cs.callSecondsAll += c.duration;
-      // Note: OnlinePBX doesn't have success tracking, all calls counted as received
-    });
-  }
-
-  // 3) Google Sheets calls (successful)
-  if (dashboardConfig.USE_SHEETS_CALLS) {
-    sheetCalls.forEach((c) => {
-      const cs = ensureManagerCalls(c.managerName);
-      if (c.isSuccess) {
-        cs.callsSuccess++;
-        cs.callSecondsSuccess += c.durationSec;
-      }
-    });
-  }
-
-  // 4) Average call length
-  callsPerManager.forEach((cs) => {
-    cs.avgCallSeconds =
-      cs.callsAll > 0 ? Math.round(cs.callSecondsAll / cs.callsAll) : 0;
-  });
 
   // Calculate revenue per manager from Google Sheets
   revenueRows.forEach((r) => {
