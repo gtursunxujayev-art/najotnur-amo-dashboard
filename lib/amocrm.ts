@@ -4,11 +4,21 @@ const AMO_BASE_URL = process.env.AMO_BASE_URL;
 const AMO_LONG_LIVED_TOKEN = process.env.AMO_LONG_LIVED_TOKEN;
 
 /**
+ * Sleep for specified milliseconds
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
  * Generic request to amoCRM v4 API using long-lived token.
+ * Includes exponential backoff retry on 429 rate limit errors.
  */
 export async function amoRequest(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  retryCount = 0,
+  maxRetries = 3
 ): Promise<any> {
   if (!AMO_BASE_URL || !AMO_LONG_LIVED_TOKEN) {
     throw new Error("AMO_BASE_URL or AMO_LONG_LIVED_TOKEN is not set");
@@ -28,6 +38,16 @@ export async function amoRequest(
     // Vercel edge can reuse connection better with no cache
     cache: "no-store",
   });
+
+  // Handle 429 rate limit with exponential backoff retry
+  if (res.status === 429 && retryCount < maxRetries) {
+    const backoffMs = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s, 8s
+    console.warn(
+      `[amoRequest] Rate limited (429). Retrying in ${backoffMs}ms (attempt ${retryCount + 1}/${maxRetries})`
+    );
+    await sleep(backoffMs);
+    return amoRequest(path, options, retryCount + 1, maxRetries);
+  }
 
   if (!res.ok) {
     const txt = await res.text();

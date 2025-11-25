@@ -33,6 +33,17 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 
 ## Recent Changes
 
+### November 25, 2025 - Added Rate Limit Handling & Exponential Backoff
+- **Problem**: Dashboard crashed with 429 (Too Many Requests) errors from amoCRM
+- **Root Cause**: Multiple concurrent requests hitting amoCRM rate limits
+- **Solution Implemented**:
+  - ✅ Exponential backoff retry logic (1s, 2s, 4s delays, max 3 retries)
+  - ✅ Request throttling (100ms delays between entity fetches & pagination)
+  - ✅ Graceful error handling (no dashboard crash on rate limits)
+  - ✅ Partial data returned if some calls fetch before hitting limit
+- **Result**: Dashboard now resilient to rate limiting, automatically retries on 429 errors
+- **Files Modified**: `lib/amocrm.ts`, `lib/amoCalls.ts`
+
 ### November 25, 2025 - Separated Calls to Dedicated Page (Improved Dashboard Speed)
 - **Goal**: Improve dashboard loading speed by moving call data to separate page
 - **Implementation**:

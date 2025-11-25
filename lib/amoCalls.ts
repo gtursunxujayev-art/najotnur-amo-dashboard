@@ -14,14 +14,21 @@ export type AmoCallRow = {
  * Fetch call notes from a specific entity type endpoint with pagination support.
  * amoCRM API has 250-item limit per page, using _links.next.href for pagination.
  * Limits to 50 pages per entity to prevent timeouts.
+ * Returns empty array on error instead of throwing (prevents dashboard crash on rate limit).
  */
 async function fetchCallsFromEntity(
   entityType: string,
   fromUnix: number,
   toUnix: number,
-  maxPages: number = 50
+  maxPages: number = 50,
+  delayMs: number = 0
 ): Promise<AmoCallRow[]> {
   const result: AmoCallRow[] = [];
+  
+  // Add delay before starting to throttle rapid-fire requests
+  if (delayMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
   
   let url =
     `/api/v4/${entityType}/notes` +
@@ -34,29 +41,37 @@ async function fetchCallsFromEntity(
   let pageCount = 0;
 
   while (url && pageCount < maxPages) {
-    const data = await amoRequest(url);
-    const notes = data?._embedded?.notes || [];
+    try {
+      const data = await amoRequest(url);
+      const notes = data?._embedded?.notes || [];
 
-    for (const n of notes) {
-      const managerId = n.responsible_user_id || n.created_by || 0;
-      const createdAt = new Date(((n.created_at as number) || 0) * 1000);
-      const duration = Number(n.params?.duration || 0);
-      const callUniq = n.params?.uniq;
+      for (const n of notes) {
+        const managerId = n.responsible_user_id || n.created_by || 0;
+        const createdAt = new Date(((n.created_at as number) || 0) * 1000);
+        const duration = Number(n.params?.duration || 0);
+        const callUniq = n.params?.uniq;
 
-      result.push({
-        managerId,
-        datetime: createdAt,
-        durationSec: duration,
-        callUniq,
-      });
-    }
+        result.push({
+          managerId,
+          datetime: createdAt,
+          durationSec: duration,
+          callUniq,
+        });
+      }
 
-    pageCount++;
-    const nextHref: string | undefined = data?._links?.next?.href;
-    if (nextHref && notes.length === 250) {
-      url = nextHref;
-    } else {
-      url = "";
+      pageCount++;
+      const nextHref: string | undefined = data?._links?.next?.href;
+      if (nextHref && notes.length === 250) {
+        url = nextHref;
+        // Add small delay between pagination requests
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      } else {
+        url = "";
+      }
+    } catch (error: any) {
+      console.error(`[AmoCalls] Error fetching calls from ${entityType}:`, error?.message);
+      // Return what we have so far instead of crashing
+      break;
     }
   }
 
