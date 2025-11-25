@@ -25,8 +25,37 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 *   **Deployment:** Configured for autoscale deployment on Replit.
 
 ## External Dependencies
-*   **amoCRM API:** Used for CRM data (leads, sales, manager statistics). Calls cached for 1 hour.
+*   **amoCRM API:** Used for CRM data (leads, sales, manager statistics). Calls cached for 1 hour. Now supports syncing OnlinePBX calls via `/api/onlinepbx/sync-to-amocrm`.
 *   **OnlinePBX Webhooks:** Real-time call events pushed via webhooks to `/api/onlinepbx/webhook`. Stores calls in PostgreSQL and memory (1000-call limit).
 *   **Google Sheets API:** Integrates for call statistics and revenue data.
 *   **Telegram Bot API:** Utilized for sending automated reports and user subscriptions.
 *   **PostgreSQL:** The primary database, accessed via Prisma ORM.
+
+## Recent Changes
+
+### November 25, 2025 - Investigated Call Data Gap & Built Sync System
+- **Investigation: Why amoCRM calls were old (2022-2023)**
+  - ✅ OnlinePBX webhooks: Working perfectly, receiving real-time calls
+  - ❌ amoCRM logging: OnlinePBX NOT configured to auto-log to amoCRM
+  - Result: Fresh calls captured in your system but NOT stored in amoCRM
+- **Solution: New sync system to log OnlinePBX calls to amoCRM**
+  - New Library: `lib/amoLogCalls.ts` - Functions to log calls to amoCRM API
+    - `logCallToAmoCRM(leadId, call)` - Log single call
+    - `logCallsToAmoCRMComplex(leadId, calls)` - Batch log multiple
+    - `logCallsByPhone(phone, calls)` - Find lead by phone & log
+    - `getManagerIdByName(name)` - Get amoCRM user ID
+  - New API Endpoint: `POST /api/onlinepbx/sync-to-amocrm`
+    - Query params: `?days=7&limit=100` (defaults)
+    - Groups calls by phone, finds matching leads, logs as call notes
+    - Returns sync status (synced/failed counts)
+  - Flow: OnlinePBX webhook → Your database → Sync to amoCRM
+- **How to Use**:
+  ```bash
+  # Sync last 7 days of calls (up to 100)
+  curl -X POST "https://your-domain/api/onlinepbx/sync-to-amocrm"
+  
+  # Sync specific period
+  curl -X POST "https://your-domain/api/onlinepbx/sync-to-amocrm?days=30&limit=500"
+  ```
+  - Can be called manually or set up as scheduled job (cron)
+  - Deduplicates using unique call IDs to avoid double-logging
