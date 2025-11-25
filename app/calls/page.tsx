@@ -11,8 +11,17 @@ type CallsData = {
     managerName: string;
     callsAll: number;
     callsOutbound: number;
+    totalDurationSec?: number;
   }>;
 };
+
+// Helper function to format seconds to HH:MM:SS
+function formatDuration(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
 
 type OnlinePBXCallsData = {
   totalCalls: number;
@@ -218,6 +227,7 @@ export default function CallsPage() {
                     <th className="px-3 py-2">Menejer</th>
                     <th className="px-3 py-2">Jami qo&apos;ng&apos;iroqlar</th>
                     <th className="px-3 py-2">Chiquvchi qo&apos;ng&apos;iroqlar</th>
+                    <th className="px-3 py-2">Umumiy davomiyligi</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -232,6 +242,9 @@ export default function CallsPage() {
                       </td>
                       <td className="px-3 py-2">
                         {m.callsOutbound.toLocaleString("ru-RU")}
+                      </td>
+                      <td className="px-3 py-2 font-semibold">
+                        {formatDuration(m.totalDurationSec || 0)}
                       </td>
                     </tr>
                   ))}
@@ -260,24 +273,30 @@ export default function CallsPage() {
             </div>
           ) : (() => {
             // Aggregate calls by manager
+            // Note: call.user is already mapped from extension to manager name by the webhook
             const managerStats = onlinepbxData.recentCalls.reduce((acc, call) => {
-              const existing = acc.find((m) => m.user === call.user);
+              const managerName = call.user || "Unknown";
+              
+              const existing = acc.find((m) => m.user === managerName);
               if (existing) {
                 existing.totalCalls += 1;
                 if (call.type === "out") {
                   existing.outboundCalls += 1;
+                } else if (call.type === "in") {
+                  existing.inboundCalls += 1;
                 }
                 existing.totalDuration += call.duration;
               } else {
                 acc.push({
-                  user: call.user,
+                  user: managerName,
                   totalCalls: 1,
                   outboundCalls: call.type === "out" ? 1 : 0,
+                  inboundCalls: call.type === "in" ? 1 : 0,
                   totalDuration: call.duration,
                 });
               }
               return acc;
-            }, [] as Array<{ user: string; totalCalls: number; outboundCalls: number; totalDuration: number }>);
+            }, [] as Array<{ user: string; totalCalls: number; outboundCalls: number; inboundCalls: number; totalDuration: number }>);
 
             return (
               <div className="overflow-x-auto">
@@ -286,8 +305,9 @@ export default function CallsPage() {
                     <tr className="border-b border-slate-700 bg-slate-800/60">
                       <th className="px-3 py-2">Menejer</th>
                       <th className="px-3 py-2">Jami qo&apos;ng&apos;iroqlar</th>
+                      <th className="px-3 py-2">Kirimchi qo&apos;ng&apos;iroqlar</th>
                       <th className="px-3 py-2">Chiquvchi qo&apos;ng&apos;iroqlar</th>
-                      <th className="px-3 py-2">Davomiyligi (s)</th>
+                      <th className="px-3 py-2">Umumiy davomiyligi</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -303,10 +323,13 @@ export default function CallsPage() {
                             {manager.totalCalls.toLocaleString("ru-RU")}
                           </td>
                           <td className="px-3 py-2">
+                            {manager.inboundCalls.toLocaleString("ru-RU")}
+                          </td>
+                          <td className="px-3 py-2">
                             {manager.outboundCalls.toLocaleString("ru-RU")}
                           </td>
                           <td className="px-3 py-2 font-semibold">
-                            {manager.totalDuration.toLocaleString("ru-RU")}
+                            {formatDuration(manager.totalDuration)}
                           </td>
                         </tr>
                       ))}

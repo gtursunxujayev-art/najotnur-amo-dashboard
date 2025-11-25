@@ -70,14 +70,15 @@ export async function GET(request: Request) {
     }
 
     // Group calls by manager
-    const callsByManager = new Map<number, { callsAll: number; callsOutbound: number }>();
+    const callsByManager = new Map<number, { callsAll: number; callsOutbound: number; totalDurationSec: number }>();
     
     for (const call of calls) {
-      const existing = callsByManager.get(call.managerId) || { callsAll: 0, callsOutbound: 0 };
+      const existing = callsByManager.get(call.managerId) || { callsAll: 0, callsOutbound: 0, totalDurationSec: 0 };
       existing.callsAll++;
       if (call.durationSec > 0) {
         existing.callsOutbound++;
       }
+      existing.totalDurationSec += call.durationSec;
       callsByManager.set(call.managerId, existing);
     }
 
@@ -89,6 +90,7 @@ export async function GET(request: Request) {
         managerName: user?.name || "Unknown",
         callsAll: stats.callsAll,
         callsOutbound: stats.callsOutbound,
+        totalDurationSec: stats.totalDurationSec,
       };
     });
 

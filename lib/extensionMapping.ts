@@ -9,11 +9,19 @@
  */
 
 // Manual extension-to-manager mapping
-// Update this based on your OnlinePBX system
+// Maps OnlinePBX extension numbers to actual manager names
 export const EXTENSION_MAP: Record<string, string> = {
-  "102": "Manager_102",  // Replace with actual name from amoCRM
-  "104": "Manager_104",  // Replace with actual name from amoCRM
-  // Add more extensions as needed
+  "100": "Mumtoza",
+  "101": "Madina",
+  "102": "Oyshaxon",
+  "103": "Zilola",
+  "104": "Marg'uba",
+  "105": "Sabrina",
+  "106": "Matluba",
+  "107": "Sabina",
+  "108": "Mohinur",
+  "109": "Gulchehra",
+  "110": "Orzugul",
 };
 
 /**
