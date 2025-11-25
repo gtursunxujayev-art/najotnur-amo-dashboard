@@ -8,9 +8,15 @@ export const dynamic = "force-dynamic";
 /**
  * Import OnlinePBX call data from CSV or JSON format
  * 
- * Expected CSV format:
+ * Supports multiple CSV formats:
+ * 
+ * Format 1 (English):
  * Date,Time,Direction,Duration,Phone,Manager,CallID
  * 2025-11-24,10:30:45,in,120,+998901234567,Diyorbek,call-123
+ * 
+ * Format 2 (Russian/OnlinePBX export):
+ * Тип звонка,Кто,Кому,Внешний номер,Дата,Продолжительность,Время разговора,Примечание,Оценка качества
+ * Пропущенный,9989936676666,10,781130650,(23:58:20),70,0,,0
  * 
  * Or JSON POST body:
  * {
@@ -39,24 +45,74 @@ export async function POST(request: Request) {
     } else if (contentType?.includes("text/plain") || contentType?.includes("text/csv")) {
       // Parse CSV
       const text = await request.text();
-      const lines = text.split("\n").slice(1); // Skip header
+      const lines = text.split("\n").filter(l => l.trim());
+      
+      if (lines.length < 1) {
+        return NextResponse.json(
+          { success: false, error: "CSV file is empty" },
+          { status: 400 }
+        );
+      }
 
-      for (const line of lines) {
+      const header = lines[0];
+      const isRussianFormat = header.includes("Тип звонка") || header.includes("Внешний номер");
+
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
         if (!line.trim()) continue;
 
-        const [date, time, direction, duration, phone, manager, callId] = line.split(",").map((v) => v.trim());
+        try {
+          let date, time, direction, duration, phone, manager, callId;
 
-        if (!date || !manager || !callId) continue;
+          if (isRussianFormat) {
+            // Parse Russian format: Тип звонка,Кто,Кому,Внешний номер,Дата,Продолжительность,Время разговора,Примечание,Оценка качества
+            const cols = line.split(",").map((v) => v.trim());
+            
+            const callType = cols[0]; // Пропущенный, Входящий, Исходящий
+            const who = cols[1]; // Manager/User ID
+            const komy = cols[2]; // To
+            phone = cols[3]; // External number (customer phone)
+            
+            // Parse date: (23:58:20) - time only, need to use today's date
+            const timeStr = cols[4]?.replace(/[()]/g, "") || "00:00:00";
+            const today = new Date().toISOString().split("T")[0];
+            
+            duration = parseInt(cols[5]) || 0; // Duration in seconds
+            
+            // Map call type to direction
+            if (callType.includes("Входящий")) direction = "in";
+            else if (callType.includes("Исходящий")) direction = "out";
+            else direction = "missed";
+            
+            manager = who; // Use as-is; might be mapped to extension later
+            callId = `import-${who}-${timeStr}-${Math.random().toString(36).substr(2, 5)}`;
+            date = `${today}T${timeStr}`;
+          } else {
+            // Parse English format: Date,Time,Direction,Duration,Phone,Manager,CallID
+            const [d, t, dir, dur, ph, mgr, cid] = line.split(",").map((v) => v.trim());
+            
+            date = `${d}T${t || "00:00:00"}`;
+            direction = dir || "in";
+            duration = parseInt(dur) || 0;
+            phone = ph || "";
+            manager = mgr || "";
+            callId = cid || `import-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+          }
 
-        const dateTime = `${date}T${time || "00:00:00"}`;
-        calls.push({
-          date: new Date(dateTime),
-          direction: direction || "in",
-          duration: parseInt(duration) || 0,
-          phone: phone || "",
-          manager,
-          callId,
-        });
+          if (!manager || !phone) continue;
+
+          calls.push({
+            date: new Date(date),
+            direction: direction || "in",
+            duration,
+            phone,
+            manager,
+            callId,
+          });
+        } catch (err) {
+          console.warn(`[OnlinePBX/Import] Warning parsing line ${i}: ${err}`);
+          continue;
+        }
       }
     } else {
       return NextResponse.json(

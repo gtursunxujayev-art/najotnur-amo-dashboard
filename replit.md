@@ -143,7 +143,10 @@ If you see calls with manager names and phone numbers → webhook is working!
 
 ### CSV Import
 - **URL**: `/admin` → CSV Import tab
-- **File Format**: CSV with columns: call_id, date, direction, duration, phone, user
-- **Usage**: Upload 2871 historical calls from January 1 to today
-- **Result**: All historical calls appear in dashboard immediately
+- **Supported Formats**:
+  - **English Format**: `Date,Time,Direction,Duration,Phone,Manager,CallID`
+  - **Russian Format (OnlinePBX Export)**: `Тип звонка,Кто,Кому,Внешний номер,Дата,Продолжительность,Время разговора,Примечание,Оценка качества`
+- **Usage**: Upload your 2871 historical calls from OnlinePBX CSV export
+- **Auto-Detection**: System automatically detects format and parses accordingly
+- **Result**: All historical calls appear in dashboard immediately with proper manager attribution
 
