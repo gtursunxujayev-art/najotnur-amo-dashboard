@@ -11,12 +11,15 @@ export type AmoCallRow = {
 };
 
 /**
- * Fetch call notes from a specific entity type endpoint
+ * Fetch call notes from a specific entity type endpoint with pagination support.
+ * amoCRM API has 250-item limit per page, using _links.next.href for pagination.
+ * Limits to 50 pages per entity to prevent timeouts.
  */
 async function fetchCallsFromEntity(
   entityType: string,
   fromUnix: number,
-  toUnix: number
+  toUnix: number,
+  maxPages: number = 50
 ): Promise<AmoCallRow[]> {
   const result: AmoCallRow[] = [];
   
@@ -30,7 +33,7 @@ async function fetchCallsFromEntity(
 
   let pageCount = 0;
 
-  while (url) {
+  while (url && pageCount < maxPages) {
     const data = await amoRequest(url);
     const notes = data?._embedded?.notes || [];
 
@@ -48,16 +51,16 @@ async function fetchCallsFromEntity(
       });
     }
 
+    pageCount++;
     const nextHref: string | undefined = data?._links?.next?.href;
-    if (nextHref) {
+    if (nextHref && notes.length === 250) {
       url = nextHref;
-      pageCount++;
     } else {
       url = "";
     }
   }
 
-  console.log(`[AmoCalls] Fetched ${result.length} calls from ${entityType} (${pageCount + 1} page(s))`);
+  console.log(`[AmoCalls] Fetched ${result.length} calls from ${entityType} (${pageCount} page(s)${pageCount >= maxPages ? ' [MAX REACHED]' : ''})`);
   return result;
 }
 
@@ -101,23 +104,31 @@ export async function getAmoCalls(
     const fromUnix = Math.floor(from.getTime() / 1000);
     const toUnix = Math.floor(to.getTime() / 1000);
 
-    // Fetch calls from leads entity only (fastest and most reliable)
-    // Note: Most calls are attached to leads. Fetching from all 4 entity types causes
-    // timeout issues and 429 rate limit errors. Single source is more stable.
-    try {
-      console.log(`[AmoCalls] Fetching calls from leads only (most reliable data source)...`);
-      const calls = await fetchCallsFromEntity('leads', fromUnix, toUnix);
-      allCalls.push(...calls);
-      console.log(`[AmoCalls] Successfully fetched ${calls.length} calls from leads`);
-      
-      // Debug: Show date range of fetched calls
-      if (calls.length > 0) {
-        const dates = calls.map(c => c.datetime.toISOString().split('T')[0]);
-        const uniqueDates = Array.from(new Set(dates)).sort();
-        console.log(`[AmoCalls] Calls span dates: ${uniqueDates[0]} to ${uniqueDates[uniqueDates.length - 1]}`);
+    // Fetch calls from ALL entity types with pagination and rate limiting
+    // amoCRM has 250-item limit per page, pagination uses _links.next.href
+    // Multiple entities (leads, contacts, companies, customers) can have calls attached
+    const entities = ['leads', 'contacts', 'companies', 'customers'];
+    
+    for (const entity of entities) {
+      try {
+        console.log(`[AmoCalls] Fetching calls from ${entity}...`);
+        const calls = await fetchCallsFromEntity(entity, fromUnix, toUnix);
+        allCalls.push(...calls);
+        console.log(`[AmoCalls] Successfully fetched ${calls.length} calls from ${entity}`);
+        
+        // Debug: Show date range of fetched calls
+        if (calls.length > 0) {
+          const dates = calls.map(c => c.datetime.toISOString().split('T')[0]);
+          const uniqueDates = Array.from(new Set(dates)).sort();
+          console.log(`[AmoCalls] ${entity} calls span dates: ${uniqueDates[0]} to ${uniqueDates[uniqueDates.length - 1]}`);
+        }
+        
+        // Small delay to respect rate limits (amoCRM: 1 request per 100ms)
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (error: any) {
+        console.error(`[AmoCalls] Error fetching calls from ${entity}:`, error.message);
+        // Continue with other entities even if one fails
       }
-    } catch (error: any) {
-      console.error(`[AmoCalls] Error fetching calls from leads:`, error.message);
     }
 
     console.log(`[AmoCalls] Total call records fetched: ${allCalls.length} (including duplicates across entities)`);
