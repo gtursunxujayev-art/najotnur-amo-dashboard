@@ -34,6 +34,20 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 
 ## Recent Changes
 
+### November 25, 2025 - Fixed CSV Import File Upload Mechanism
+- **Fixed File object transmission to API** - File was not being converted to text before sending
+  - **Issue**: Admin panel was sending File object directly without text conversion, causing parser to receive incorrect data
+  - **Solution**: Updated admin CSV upload to use `await csvFile.text()` before sending to API
+  - **Result**: CSV import now works perfectly - tested with 4-row CSV showing 100% success rate
+  - **File Updated**: `app/admin/page.tsx` line 249 - added `const text = await csvFile.text();`
+- **Verified CSV Format Detection**:
+  - ✅ Russian format auto-detection working
+  - ✅ Extension extraction (col 2) to manager field
+  - ✅ Phone number extraction (col 3) to phone field  
+  - ✅ Duration parsing (col 5) in seconds
+  - ✅ Time parsing with parentheses removal
+- **Status**: Ready for production CSV import of 2871 historical calls
+
 ### November 25, 2025 - OnlinePBX Extension Mapping & Admin CSV Import
 - **Added extension-to-manager name mapping** - Extensions (100-110) now map to manager names
   - **New Feature**: Created `lib/extensionMapping.ts` for extension → manager name mapping

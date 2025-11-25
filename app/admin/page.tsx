@@ -243,7 +243,7 @@ export default function AdminPage() {
           <div className="space-y-4">
             <input type="file" accept=".csv" onChange={(e) => { setCsvFile(e.target.files?.[0] || null); setCsvResult(null); }} id="csv-file-input" className="block w-full p-2 bg-slate-800 text-slate-100 rounded" />
             {csvFile && <p className="text-sm text-slate-300">File: {csvFile.name}</p>}
-            <button onClick={async () => { if (!csvFile) return; setCsvUploading(true); try { const r = await fetch("/api/onlinepbx/import", { method: "POST", body: csvFile, headers: { "Content-Type": "text/csv" } }); const d = await r.json(); setMsg(d.success ? `✅ Imported ${d.data?.imported || 0}` : d.error); setCsvFile(null); } finally { setCsvUploading(false); } }} disabled={!csvFile || csvUploading} className="w-full bg-emerald-600 py-2 rounded font-semibold text-white"> {csvUploading ? "..." : "Upload"} </button>
+            <button onClick={async () => { if (!csvFile) return; setCsvUploading(true); try { const text = await csvFile.text(); const r = await fetch("/api/onlinepbx/import", { method: "POST", body: text, headers: { "Content-Type": "text/csv" } }); const d = await r.json(); setMsg(d.success ? `✅ Imported ${d.data?.imported || 0}` : d.error); setCsvFile(null); } finally { setCsvUploading(false); } }} disabled={!csvFile || csvUploading} className="w-full bg-emerald-600 py-2 rounded font-semibold text-white"> {csvUploading ? "..." : "Upload"} </button>
             {csvResult && <p className="text-sm text-emerald-100">✅ Imported: {csvResult.imported}</p>}
           </div>
         </div>

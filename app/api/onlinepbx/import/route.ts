@@ -47,6 +47,11 @@ export async function POST(request: Request) {
       const text = await request.text();
       const lines = text.split("\n").filter(l => l.trim());
       
+      console.log(`[OnlinePBX/Import] Received ${lines.length} lines`);
+      if (lines.length > 0) {
+        console.log(`[OnlinePBX/Import] Header: ${lines[0].substring(0, 100)}`);
+      }
+      
       if (lines.length < 1) {
         return NextResponse.json(
           { success: false, error: "CSV file is empty" },
@@ -56,6 +61,7 @@ export async function POST(request: Request) {
 
       const header = lines[0];
       const isRussianFormat = header.includes("Тип звонка") || header.includes("Внешний номер");
+      console.log(`[OnlinePBX/Import] Format detected: ${isRussianFormat ? "Russian" : "English"}`);
 
       for (let i = 1; i < lines.length; i++) {
         const line = lines[i];
@@ -68,9 +74,13 @@ export async function POST(request: Request) {
             // Parse Russian format: Тип звонка,Кто,Кому,Внешний номер,Дата,Продолжительность,Время разговора,Примечание,Оценка качества
             const cols = line.split(",").map((v) => v.trim());
             
+            if (i === 1) {
+              console.log(`[OnlinePBX/Import] Sample data row has ${cols.length} columns:`, cols.slice(0, 6).join(" | "));
+            }
+            
             const callType = cols[0]; // Пропущенный, Входящий, Исходящий
-            const who = cols[1]; // Manager/User ID
-            const komy = cols[2]; // To
+            const who = cols[1]; // Caller phone
+            const manager_ext = cols[2]; // Manager extension (Кому)
             phone = cols[3]; // External number (customer phone)
             
             // Parse date: (23:58:20) - time only, need to use today's date
@@ -84,8 +94,8 @@ export async function POST(request: Request) {
             else if (callType.includes("Исходящий")) direction = "out";
             else direction = "missed";
             
-            manager = who; // Use as-is; might be mapped to extension later
-            callId = `import-${who}-${timeStr}-${Math.random().toString(36).substr(2, 5)}`;
+            manager = manager_ext; // Use extension from column 2
+            callId = `import-${manager_ext}-${timeStr}-${Math.random().toString(36).substr(2, 5)}`;
             date = `${today}T${timeStr}`;
           } else {
             // Parse English format: Date,Time,Direction,Duration,Phone,Manager,CallID
@@ -99,7 +109,10 @@ export async function POST(request: Request) {
             callId = cid || `import-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
           }
 
-          if (!manager || !phone) continue;
+          if (!manager || !phone) {
+            if (i <= 3) console.log(`[OnlinePBX/Import] Skipping line ${i}: manager=${manager}, phone=${phone}`);
+            continue;
+          }
 
           calls.push({
             date: new Date(date),
@@ -114,6 +127,8 @@ export async function POST(request: Request) {
           continue;
         }
       }
+      
+      console.log(`[OnlinePBX/Import] Parsed ${calls.length} calls from ${lines.length - 1} data rows`);
     } else {
       return NextResponse.json(
         { success: false, error: "Invalid content type. Use application/json or text/csv" },
@@ -147,13 +162,21 @@ export async function POST(request: Request) {
           continue;
         }
 
+        // Validate date before insertion
+        const parsedDate = new Date(call.date);
+        if (isNaN(parsedDate.getTime())) {
+          console.error(`[OnlinePBX/Import] Invalid date for call ${call.callId}:`, call.date);
+          errors++;
+          continue;
+        }
+
         // Create new call
         await prisma.onlinePBXCall.create({
           data: {
             id: `import-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             callId: call.callId,
             direction: call.direction,
-            date: new Date(call.date),
+            date: parsedDate,
             duration: call.duration,
             phone: call.phone,
             user: call.manager,
@@ -163,7 +186,7 @@ export async function POST(request: Request) {
 
         imported++;
       } catch (err: any) {
-        console.error(`[OnlinePBX/Import] Error importing call ${call.callId}:`, err.message);
+        console.error(`[OnlinePBX/Import] Error importing call ${call.callId}:`, err.message, call);
         errors++;
       }
     }
