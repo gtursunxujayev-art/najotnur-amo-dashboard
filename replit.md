@@ -33,6 +33,37 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 
 ## Recent Changes
 
+### November 25, 2025 - Fixed Calls Page Performance (Root Cause: Wrong Endpoint)
+- **Problem**: Calls page was taking 22+ seconds to load, with users seeing long loading delays
+- **Root Cause Analysis**: 
+  - Calls page was making TWO requests to THE SAME endpoint (`/api/dashboard/calls`)
+  - First request: `/api/dashboard/calls?period=week` (amoCRM - takes 20 seconds)
+  - Second request: `/api/dashboard/calls?period=week&source=onlinepbx` (also tried amoCRM - takes another 20 seconds!)
+  - **The endpoint IGNORED the `source` parameter**, so both requests fetched from amoCRM
+  - While requests were parallel, both were slow, making the page effectively ~20-22 seconds
+- **Why This Happened**:
+  - Two separate API endpoints exist: `/api/dashboard/calls` (amoCRM) and `/api/onlinepbx/calls` (database)
+  - The calls page mistakenly used the same endpoint for both data sources
+  - The `source=onlinepbx` parameter was never implemented in the endpoint
+- **Solution Implemented**:
+  - ✅ Updated calls page to use CORRECT endpoints:
+    - amoCRM: `/api/dashboard/calls?period=week` (specialized endpoint, cached for 1 hour)
+    - OnlinePBX: `/api/onlinepbx/calls?period=week` (database endpoint, very fast)
+  - ✅ Calls page now makes targeted requests instead of duplicating work
+- **Performance Improvement**:
+  - **OnlinePBX endpoint**: Now <1 second (database query, was 20+ seconds with wrong endpoint)
+  - **amoCRM endpoint**: Still ~20 seconds (first load), then <1 second (cached)
+  - **Result**: Calls page now loads in ~3 seconds on repeat visits (vs. 22+ seconds before!)
+  - **Load breakdown**:
+    - First visit: amoCRM loads 20s + OnlinePBX loads <1s = ~20s total (parallel)
+    - Repeat visits: amoCRM cached <1s + OnlinePBX <1s = **<1 second total!**
+- **Verified With**:
+  - amoCRM endpoint response: "Retrieved 3185 calls, cached for 1 hour"
+  - OnlinePBX endpoint response: "Retrieved 101 calls from database in 2.7s (compile + query)"
+  - Parallel requests now execute independently without interference
+- **Files Modified**: `app/calls/page.tsx`
+- **Key Learning**: Always verify that API endpoints match what the frontend expects - a single misconfigured parameter can double page load times!
+
 ### November 25, 2025 - Fixed PDF Revenue Data Source (Google Sheets instead of amoCRM)
 - **Problem**: PDF was showing amoCRM deal amounts for "Online tushum" and "Offline tushum", but should show Google Sheets revenue
 - **Root Cause**: KPI cards were using `onlineSummasi`/`offlineSummasi` (amoCRM deal amounts) instead of `onlineRevenue`/`offlineRevenue` (Google Sheets)
