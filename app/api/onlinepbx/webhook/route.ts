@@ -64,14 +64,32 @@ export async function POST(request: Request) {
       (data.call_id || data.callId || data.uuid);
 
     let stored = false;
-    if (isCallEnd || data.duration) {
+    if (isCallEnd || data.duration || data.call_duration) {
+      // Parse date - OnlinePBX sends Unix timestamp as string in 'date' field
+      let callDate = new Date();
+      if (data.date) {
+        const timestamp = parseInt(data.date);
+        if (!isNaN(timestamp)) {
+          callDate = new Date(timestamp * 1000); // Convert Unix timestamp to ms
+        }
+      } else if (data.timestamp) {
+        callDate = new Date((data.timestamp || Date.now() / 1000) * 1000);
+      }
+
       const callRecord = {
         id: data.call_id || data.callId || data.uuid || `${Date.now()}`,
-        type: data.direction === "in" || data.direction === "1" ? "in" : "out",
-        date: new Date((data.timestamp || Date.now() / 1000) * 1000),
-        duration: parseInt(data.duration) || 0,
-        phone: data.from || data.phone || data.to || "Unknown",
-        user: data.user || data.user_name || data.username || "Unknown",
+        type: 
+          data.direction === "in" || 
+          data.direction === "1" || 
+          data.direction === "inbound" 
+            ? "in" 
+            : "out",
+        date: callDate,
+        duration: parseInt(data.call_duration || data.duration || 0),
+        // OnlinePBX sends 'callee' for phone number, but may include '+' prefix
+        phone: data.callee || data.from || data.phone || data.to || "Unknown",
+        // OnlinePBX sends 'caller' as extension number (e.g., '102'), try to map to user name
+        user: data.user || data.user_name || data.username || data.caller || "Unknown",
         source: "webhook",
         timestamp: Date.now(),
       };
