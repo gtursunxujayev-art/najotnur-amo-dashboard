@@ -45,3 +45,23 @@ model OnlinePBXCall {
   @@index([user])
   @@index([createdAt])
 }
+
+model GoogleSheetCall {
+  id              String   @id @default(cuid())
+  callType        String   // "Пропущенный" / "Входящий" / "Исходящий" (Missed/Incoming/Outgoing)
+  direction       String   // "missed" / "in" / "out"
+  caller          String   // Caller ID/extension
+  receiver        String   // Call receiver
+  insideNumber    String?  // Inside number/gateway
+  date            DateTime // When the call occurred
+  duration        Int      // Call length in seconds
+  successDuration Int      // Successful call length in seconds
+  source          String   @default("sheet") // Source identifier
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([date])
+  @@index([caller])
+  @@index([receiver])
+  @@index([createdAt])
+}

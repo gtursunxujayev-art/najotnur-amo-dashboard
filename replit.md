@@ -34,6 +34,28 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 
 ## Recent Changes
 
+### November 26, 2025 - Added Google Sheets Call History Integration
+- **New Feature**: Import historical call data from Google Sheets (January 1st onwards)
+- **Implementation**:
+  - ✅ Created `GoogleSheetCall` database model to store imported calls
+  - ✅ Built `lib/googleSheetCalls.ts` to parse sheet data with flexible date/time formats
+  - ✅ Created `/api/sheets/calls` endpoint to fetch and aggregate calls by caller
+  - ✅ Parser handles:
+    - Call types: Пропущенный (Missed), Входящий (Incoming), Исходящий (Outgoing)
+    - Multiple date formats: "23:58:20 2025-11-24" or "2025-10-29 12:22:09"
+    - Duration formats: "00:00:15" (HH:MM:SS) or "79" (seconds)
+  - ✅ Added "Google Sheet Qo'ng'iroqlar bo'yicha abonentlar" section to /calls page
+- **Sheet Columns**:
+  - A: Call type (Пропущенный/Входящий/Исходящий)
+  - B: Caller (phone/extension)
+  - C: Call receiver
+  - D: Inside number (gateway)
+  - E: Date (various formats supported)
+  - F: Call length
+  - G: Successful call length
+- **Display**: Shows by-caller summary with incoming/outgoing/missed counts and total duration
+- **Spreadsheet**: https://docs.google.com/spreadsheets/d/10SpMBUxmNi4_ExGlJJwEycKDjg8VtyoH84CLcMgSbuY
+
 ### November 26, 2025 - Added UTel PBX Integration
 - **New Integration**: Added support for UTel PBX system as second call tracking source
 - **Implementation**:
