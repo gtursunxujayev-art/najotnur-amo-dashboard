@@ -19,6 +19,12 @@ interface CasosiyData {
   totalRecords: number;
   courseTypes: string[];
   selectedCourseType: string | null;
+  kpi?: {
+    tushum: number;
+    qarzdorlik: number;
+    kelishuv: number;
+  };
+  tarifCounts?: Record<string, number>;
   allRecords: CasosiyRecord[];
 }
 
@@ -27,6 +33,26 @@ function formatCurrency(value: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function KPICard({
+  title,
+  value,
+  color,
+}: {
+  title: string;
+  value: number;
+  color: string;
+}) {
+  return (
+    <div className={`rounded-lg border ${color} p-4`}>
+      <p className="text-xs font-semibold text-slate-400 mb-1">{title}</p>
+      <p className="text-2xl font-bold text-slate-100">
+        {formatCurrency(value)}
+      </p>
+      <p className="text-xs text-slate-500 mt-1">so'm</p>
+    </div>
+  );
 }
 
 export default function OfflinePage() {
@@ -133,6 +159,47 @@ export default function OfflinePage() {
             </select>
           )}
         </div>
+
+        {/* KPI Cards - Only show after course selection */}
+        {courseType && !loading && data && data.kpi && (
+          <div className="grid gap-4 md:grid-cols-3">
+            <KPICard
+              title="KELISHUV (Kelishuvga olingan)"
+              value={data.kpi.kelishuv}
+              color="border-slate-700 bg-slate-900/50"
+            />
+            <KPICard
+              title="TUSHUM (To'lov summa)"
+              value={data.kpi.tushum}
+              color="border-slate-700 bg-slate-900/50"
+            />
+            <KPICard
+              title="QARZDORLIK (Qarz summa)"
+              value={data.kpi.qarzdorlik}
+              color="border-red-900/30 bg-red-950/20"
+            />
+          </div>
+        )}
+
+        {/* Tarif Type Counts - Only show after course selection */}
+        {courseType && !loading && data && data.tarifCounts && Object.keys(data.tarifCounts).length > 0 && (
+          <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+            <h2 className="text-sm font-semibold text-slate-200 mb-3">
+              TARIF TURI BO'YICHA HISOB
+            </h2>
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+              {Object.entries(data.tarifCounts).map(([tarif, count]) => (
+                <div
+                  key={tarif}
+                  className="rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-2 text-center"
+                >
+                  <p className="text-xs font-semibold text-slate-300">{tarif}</p>
+                  <p className="text-2xl font-bold text-blue-400">{count}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Data Table - Only show after course selection */}
         {courseType && !loading && data && data.allRecords.length > 0 && (
