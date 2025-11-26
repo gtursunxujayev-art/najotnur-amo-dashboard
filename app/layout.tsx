@@ -48,6 +48,13 @@ export default function RootLayout({
               </Link>
 
               <Link
+                href="/offline"
+                className="hover:text-white transition-colors"
+              >
+                O'quv Kurslar
+              </Link>
+
+              <Link
                 href="/users"
                 className="hover:text-white transition-colors"
               >
