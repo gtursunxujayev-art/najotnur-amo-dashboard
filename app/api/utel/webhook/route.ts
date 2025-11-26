@@ -41,67 +41,90 @@ export async function POST(request: Request) {
       console.error("[Utel/Webhook] Parse error:", parseError);
     }
 
-    console.log("[Utel/Webhook] Received data:", data);
+    console.log("[Utel/Webhook] Received data:", JSON.stringify(data, null, 2).substring(0, 500));
 
-    // Check if this is a call event
-    const isCallEvent = data.event === "call_end" || data.call_id || data.duration;
+    // Check if this is a call_saved event (most reliable for complete call data)
+    const eventName = data.data?.name || data.event || data.name;
+    const callHistory = data.data?.call_history;
+    
+    let isCallEvent = false;
+    let callData: any = null;
 
-    if (isCallEvent) {
+    if (eventName === "call_saved" && callHistory) {
+      // Utel sends complete call data in call_saved event
+      isCallEvent = true;
+      callData = callHistory;
+      console.log("[Utel/Webhook] Processing call_saved event with history:", {
+        id: callHistory.id,
+        src: callHistory.src,
+        dst: callHistory.dst,
+        duration: callHistory.duration,
+        conversation: callHistory.conversation,
+      });
+    } else if (eventName === "call_ended" && data.data?.call) {
+      // Fallback: parse call_ended event
+      isCallEvent = true;
+      callData = data.data.call;
+      console.log("[Utel/Webhook] Processing call_ended event");
+    }
+
+    if (isCallEvent && callData) {
       // Parse timestamp
       let callDate = new Date();
-      if (data.timestamp) {
-        const timestamp = typeof data.timestamp === "string" 
-          ? parseInt(data.timestamp) 
-          : data.timestamp;
+      if (callData.date_time) {
+        // Try parsing the date_time string "2025-11-26 15:50:45"
+        const parsed = new Date(callData.date_time);
+        if (!isNaN(parsed.getTime())) {
+          callDate = parsed;
+        }
+      } else if (callData.timestamp) {
+        const timestamp = typeof callData.timestamp === "string" 
+          ? parseInt(callData.timestamp) 
+          : callData.timestamp;
         if (!isNaN(timestamp)) {
           callDate = new Date(timestamp * 1000);
         }
       }
 
-      // Parse duration (convert to seconds if needed)
+      // Parse duration - use conversation (actual talk time) if available, otherwise total duration
       let duration = 0;
-      if (data.duration) {
-        const dur = typeof data.duration === "string" 
-          ? parseInt(data.duration) 
-          : data.duration;
+      const durationValue = callData.conversation || callData.duration;
+      if (durationValue) {
+        const dur = typeof durationValue === "string" 
+          ? parseInt(durationValue) 
+          : durationValue;
         duration = isNaN(dur) ? 0 : dur;
       }
 
-      // Determine call direction
-      const direction = 
-        (data.direction === "in" || 
-         data.direction === "1" || 
-         data.direction === "inbound" ||
-         data.type === "inbound")
-          ? "in"
-          : "out";
-
-      // Get phone number and extension
-      const phone = data.phone || data.caller || data.from || "Unknown";
-      const extension = data.extension || data.ext || data.user || "Unknown";
+      // Determine call direction based on src field
+      // In call_history: src is the caller, dst is the receiver
+      const src = callData.src || "Unknown";
+      const dst = callData.dst || "Unknown";
+      
+      const direction = isPhoneNumber(src) ? "in" : "out";
 
       // Determine manager attribution
       let managerName = "Unknown";
-      if (direction === "in" && isPhoneNumber(phone)) {
-        // Incoming: attribute to extension (the manager who received)
-        managerName = getManagerNameFromExtension(extension);
-      } else if (direction === "out") {
-        // Outgoing: attribute to extension (the manager who made the call)
-        managerName = getManagerNameFromExtension(extension);
+      if (direction === "in") {
+        // Incoming call: attribute to dst (the manager who received)
+        managerName = getManagerNameFromExtension(dst);
+      } else {
+        // Outgoing call: attribute to src (the manager who made the call)
+        managerName = getManagerNameFromExtension(src);
       }
 
       // Store call
       const callRecord = {
-        id: data.call_id || `${Date.now()}-${extension}`,
+        id: callData.call_id || `utel-${callData.id}`,
         direction,
         date: callDate,
         duration,
-        phone,
-        extension,
+        phone: direction === "in" ? src : (callData.external_number || src),
+        extension: direction === "in" ? dst : src,
         manager: managerName,
         source: "utel_webhook",
         timestamp: Math.floor(Date.now() / 1000),
-        rawData: data,
+        rawData: callData,
       };
 
       utelRecentCalls.unshift(callRecord);
@@ -112,7 +135,7 @@ export async function POST(request: Request) {
       }
 
       console.log(
-        `[Utel/Webhook] Stored call. Total in memory: ${utelRecentCalls.length}`
+        `[Utel/Webhook] ✅ Stored call: ${managerName} - ${direction === "in" ? "Incoming" : "Outgoing"} - ${duration}s. Total: ${utelRecentCalls.length}`
       );
     }
 
