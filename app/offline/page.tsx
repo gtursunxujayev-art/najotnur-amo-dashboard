@@ -56,18 +56,17 @@ function KPICard({
 }
 
 export default function OfflinePage() {
-  const [period, setPeriod] = useState<PeriodKey>('week');
   const [courseType, setCourseType] = useState<string | null>(null);
   const [data, setData] = useState<CasosiyData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function loadData(periodKey: PeriodKey, selectedCourse: string | null) {
+  async function loadData(selectedCourse: string | null) {
     setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams();
-      params.set('period', periodKey);
+      params.set('period', 'month');
       if (selectedCourse) {
         params.set('courseType', selectedCourse);
       }
@@ -97,8 +96,8 @@ export default function OfflinePage() {
   }
 
   useEffect(() => {
-    loadData(period, courseType);
-  }, [period, courseType]);
+    loadData(courseType);
+  }, [courseType]);
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-slate-50">
@@ -110,53 +109,28 @@ export default function OfflinePage() {
       </header>
 
       <div className="space-y-6">
-        {/* Controls */}
-        <div className="grid gap-4 md:grid-cols-2">
-          {/* Period Selector */}
-          <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
-            <label className="block text-xs font-semibold text-slate-400 mb-2">
-              DAVR
-            </label>
-            <div className="flex gap-1">
-              {(['today', 'week', 'month'] as PeriodKey[]).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPeriod(p)}
-                  className={`px-3 py-1 text-xs font-semibold rounded transition-colors ${
-                    period === p
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                  }`}
-                >
-                  {p === 'today' ? 'Bugun' : p === 'week' ? 'Bu hafta' : 'Bu oy'}
-                </button>
+        {/* Course Type Selector */}
+        <div className="rounded-lg border border-slate-700 bg-slate-900 p-4 max-w-sm">
+          <label className="block text-xs font-semibold text-slate-400 mb-2">
+            KURS TURI
+          </label>
+          {loading ? (
+            <div className="text-xs text-slate-500 animate-pulse">Yuklanmoqda...</div>
+          ) : !data || data.courseTypes.length === 0 ? (
+            <div className="text-xs text-slate-500">Kurs topilmadi</div>
+          ) : (
+            <select
+              value={courseType || ''}
+              onChange={(e) => setCourseType(e.target.value || null)}
+              className="w-full px-3 py-2 text-xs bg-slate-800 border border-slate-700 rounded text-slate-100 hover:border-slate-600 focus:border-blue-500 focus:outline-none"
+            >
+              {data.courseTypes.map((ct) => (
+                <option key={ct} value={ct}>
+                  {ct}
+                </option>
               ))}
-            </div>
-          </div>
-
-          {/* Course Type Selector */}
-          <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
-            <label className="block text-xs font-semibold text-slate-400 mb-2">
-              KURS TURI
-            </label>
-            {loading ? (
-              <div className="text-xs text-slate-500 animate-pulse">Yuklanmoqda...</div>
-            ) : !data || data.courseTypes.length === 0 ? (
-              <div className="text-xs text-slate-500">Kurs topilmadi</div>
-            ) : (
-              <select
-                value={courseType || ''}
-                onChange={(e) => setCourseType(e.target.value || null)}
-                className="w-full px-3 py-2 text-xs bg-slate-800 border border-slate-700 rounded text-slate-100 hover:border-slate-600 focus:border-blue-500 focus:outline-none"
-              >
-                {data.courseTypes.map((ct) => (
-                  <option key={ct} value={ct}>
-                    {ct}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
+            </select>
+          )}
         </div>
 
         {/* KPI Cards */}
