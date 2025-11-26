@@ -38,6 +38,22 @@ type OnlinePBXCallsData = {
   }>;
 };
 
+type UtelCallsData = {
+  success: boolean;
+  data?: {
+    source: string;
+    totalCalls: number;
+    managerSummary: Array<{
+      manager: string;
+      totalCalls: number;
+      incomingCount: number;
+      outgoingCount: number;
+      totalDurationSec: number;
+      formattedDuration: string;
+    }>;
+  };
+};
+
 type UiState = {
   period: PeriodKey;
   callsLoading: boolean;
@@ -46,6 +62,9 @@ type UiState = {
   onlinepbxLoading: boolean;
   onlinepbxError: string | null;
   onlinepbxData: OnlinePBXCallsData | null;
+  utelLoading: boolean;
+  utelError: string | null;
+  utelData: UtelCallsData | null;
 };
 
 export default function CallsPage() {
@@ -57,10 +76,14 @@ export default function CallsPage() {
     onlinepbxLoading: false,
     onlinepbxError: null,
     onlinepbxData: null,
+    utelLoading: false,
+    utelError: null,
+    utelData: null,
   });
 
   const callsAbortRef = useRef<AbortController | null>(null);
   const onlinepbxAbortRef = useRef<AbortController | null>(null);
+  const utelAbortRef = useRef<AbortController | null>(null);
 
   async function loadCalls(periodKey: PeriodKey) {
     try {
@@ -154,9 +177,55 @@ export default function CallsPage() {
     }
   }
 
+  async function loadUtelCalls(periodKey: PeriodKey) {
+    try {
+      if (utelAbortRef.current) {
+        utelAbortRef.current.abort();
+      }
+      utelAbortRef.current = new AbortController();
+
+      setState((s) => ({ ...s, utelLoading: true, utelError: null, utelData: null }));
+
+      const res = await fetch(`/api/utel/calls?period=${periodKey}`, {
+        cache: "no-store",
+        signal: utelAbortRef.current.signal,
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const msg = body.error || res.statusText || "Failed to load UTel data";
+        throw new Error(msg);
+      }
+
+      const json = await res.json();
+      const utelData: UtelCallsData = json;
+
+      setState((s) => {
+        return {
+          ...s,
+          utelLoading: false,
+          utelError: null,
+          utelData,
+        };
+      });
+    } catch (err: any) {
+      if (err.name === "AbortError") return;
+      console.error("UTel calls load error", err);
+      setState((s) => {
+        return {
+          ...s,
+          utelLoading: false,
+          utelError: err?.message || "Failed to load UTel data",
+          utelData: null,
+        };
+      });
+    }
+  }
+
   async function load(periodKey: PeriodKey) {
     loadCalls(periodKey);
     loadOnlinePBXCalls(periodKey);
+    loadUtelCalls(periodKey);
   }
 
   useEffect(() => {
@@ -164,7 +233,7 @@ export default function CallsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { period, callsLoading, callsError, callsData, onlinepbxLoading, onlinepbxError, onlinepbxData } = state;
+  const { period, callsLoading, callsError, callsData, onlinepbxLoading, onlinepbxError, onlinepbxData, utelLoading, utelError, utelData } = state;
 
   const handleChangePeriod = (p: PeriodKey) => {
     if (p === period) return;
@@ -178,7 +247,7 @@ export default function CallsPage() {
         <div>
           <h1 className="text-3xl font-bold">Qo&apos;ng&apos;iroqlar – Tahlil</h1>
           <p className="text-sm text-slate-400">
-            amoCRM va OnlinePBX qo&apos;ng&apos;iroqlari
+            amoCRM, OnlinePBX va UTel qo&apos;ng&apos;iroqlari
           </p>
         </div>
 
@@ -338,6 +407,64 @@ export default function CallsPage() {
               </div>
             );
           })()}
+        </section>
+
+        {/* UTel PBX calls - Manager summary */}
+        <section className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+          <h2 className="mb-3 text-sm font-semibold text-slate-200">
+            UTel PBX Qo&apos;ng&apos;iroqlar bo&apos;yicha menejerlar
+          </h2>
+          {utelLoading ? (
+            <div className="text-xs text-slate-400 animate-pulse">
+              UTel qo&apos;ng&apos;iroqlari yuklanmoqda...
+            </div>
+          ) : utelError ? (
+            <div className="text-xs text-red-400">
+              Xato: {utelError}
+            </div>
+          ) : !utelData?.success || !utelData?.data || utelData.data.managerSummary.length === 0 ? (
+            <div className="text-xs text-slate-500">
+              Tanlangan davr uchun UTel qo&apos;ng&apos;iroqlari topilmadi.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-xs text-slate-200">
+                <thead>
+                  <tr className="border-b border-slate-700 bg-slate-800/60">
+                    <th className="px-3 py-2">Menejer</th>
+                    <th className="px-3 py-2">Jami qo&apos;ng&apos;iroqlar</th>
+                    <th className="px-3 py-2">Kirimchi qo&apos;ng&apos;iroqlar</th>
+                    <th className="px-3 py-2">Chiquvchi qo&apos;ng&apos;iroqlar</th>
+                    <th className="px-3 py-2">Umumiy davomiyligi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {utelData.data.managerSummary
+                    .sort((a, b) => b.totalCalls - a.totalCalls)
+                    .map((manager) => (
+                      <tr
+                        key={manager.manager}
+                        className="border-b border-slate-800 last:border-0"
+                      >
+                        <td className="px-3 py-2">{manager.manager}</td>
+                        <td className="px-3 py-2">
+                          {manager.totalCalls.toLocaleString("ru-RU")}
+                        </td>
+                        <td className="px-3 py-2">
+                          {manager.incomingCount.toLocaleString("ru-RU")}
+                        </td>
+                        <td className="px-3 py-2">
+                          {manager.outgoingCount.toLocaleString("ru-RU")}
+                        </td>
+                        <td className="px-3 py-2 font-semibold">
+                          {manager.formattedDuration}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
       </div>
     </main>
