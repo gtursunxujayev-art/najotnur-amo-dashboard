@@ -4,9 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 interface CasosiyRecord {
-  date: Date;
   manager: string;
-  courseType: string;
   paymentType: string;
   paymentSum: number;
   debtSum: number;
@@ -15,10 +13,8 @@ interface CasosiyRecord {
 }
 
 interface CasosiyData {
-  source: string;
   totalRecords: number;
   courseTypes: string[];
-  selectedCourseType: string | null;
   kpi?: {
     tushum: number;
     qarzdorlik: number;
@@ -67,7 +63,7 @@ export default function OfflinePage() {
 
   async function loadCourseTypes() {
     try {
-      const res = await fetch(`/api/casosiy`, {
+      const res = await fetch(`/api/casosiy?types=true`, {
         cache: 'no-store',
       });
 

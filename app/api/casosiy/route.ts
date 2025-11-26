@@ -3,48 +3,33 @@ import { getCasosiyData } from "@/lib/casosiySheets";
 
 export const dynamic = "force-dynamic";
 
-type PeriodKey = "today" | "week" | "month";
-
-function getPeriodDates(
-  period: PeriodKey
-): { from: Date; to: Date; label: string } {
-  const now = new Date();
-  const todayStart = new Date(now);
-  todayStart.setHours(0, 0, 0, 0);
-
-  if (period === "today") {
-    return { from: todayStart, to: now, label: "Bugun" };
-  }
-
-  if (period === "week") {
-    const from = new Date(todayStart);
-    const day = from.getDay();
-    const diffToMonday = (day + 6) % 7;
-    from.setDate(from.getDate() - diffToMonday);
-    return { from, to: now, label: "Bu hafta" };
-  }
-
-  const from = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
-  return { from, to: now, label: "Bu oy" };
-}
-
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const courseTypeFilter = searchParams.get("courseType") || null;
+    const typesOnly = searchParams.get("types") === "true";
 
     // Fetch all data without date filtering
     const fromDate = new Date("2025-01-01");
     const toDate = new Date("2099-12-31");
 
-    console.log(
-      `[CasosiyAPI] Fetching all data from ${fromDate.toISOString()} to ${toDate.toISOString()}`
-    );
-
     const allData = await getCasosiyData(fromDate, toDate);
     
     // Get unique course types
     const courseTypes = Array.from(new Set(allData.map(r => r.courseType))).sort();
+
+    // If only requesting course types list (for initial dropdown), return immediately
+    if (typesOnly) {
+      console.log(`[CasosiyAPI] Returning ${courseTypes.length} course types`);
+      return NextResponse.json({
+        success: true,
+        data: {
+          courseTypes,
+          totalRecords: 0,
+          allRecords: [],
+        },
+      });
+    }
 
     // Filter by course type if specified
     const data = courseTypeFilter 
@@ -69,10 +54,8 @@ export async function GET(request: Request) {
     return NextResponse.json({
       success: true,
       data: {
-        source: "casosiy",
         totalRecords: data.length,
         courseTypes,
-        selectedCourseType: courseTypeFilter,
         kpi: {
           tushum,
           qarzdorlik,
