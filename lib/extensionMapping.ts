@@ -11,6 +11,7 @@
 // Manual extension-to-manager mapping
 // Maps OnlinePBX/Utel/GoogleSheets extension numbers to actual manager names
 export const EXTENSION_MAP: Record<string, string> = {
+  "100": "System/IVR",
   "101": "Mumtoza",
   "102": "Madina",
   "103": "Matluba",
