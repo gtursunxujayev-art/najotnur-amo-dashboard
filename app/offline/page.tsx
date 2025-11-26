@@ -11,6 +11,7 @@ interface CasosiyRecord {
   paymentSum: number;
   debtSum: number;
   kelishuv: number;
+  client: string;
 }
 
 interface CasosiyData {
@@ -18,12 +19,6 @@ interface CasosiyData {
   totalRecords: number;
   courseTypes: string[];
   selectedCourseType: string | null;
-  kpi: {
-    tushum: number;
-    qarzdorlik: number;
-    kelishuv: number;
-  };
-  tarifCounts: Record<string, number>;
   allRecords: CasosiyRecord[];
 }
 
@@ -34,26 +29,6 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-function KPICard({
-  title,
-  value,
-  color,
-}: {
-  title: string;
-  value: number;
-  color: string;
-}) {
-  return (
-    <div className={`rounded-lg border ${color} p-4`}>
-      <p className="text-xs font-semibold text-slate-400 mb-1">{title}</p>
-      <p className="text-2xl font-bold text-slate-100">
-        {formatCurrency(value)}
-      </p>
-      <p className="text-xs text-slate-500 mt-1">so'm</p>
-    </div>
-  );
-}
-
 export default function OfflinePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -62,14 +37,30 @@ export default function OfflinePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function loadData(selectedCourse: string | null) {
+  async function loadCourseTypes() {
+    try {
+      const res = await fetch(`/api/casosiy`, {
+        cache: 'no-store',
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to load course types');
+      }
+
+      const json = await res.json();
+      setData(json.data);
+    } catch (err: any) {
+      console.error('Error loading course types:', err);
+      setError(err?.message || 'Failed to load course types');
+    }
+  }
+
+  async function loadData(selectedCourse: string) {
     setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams();
-      if (selectedCourse) {
-        params.set('courseType', selectedCourse);
-      }
+      params.set('courseType', selectedCourse);
       
       const res = await fetch(`/api/casosiy?${params.toString()}`, {
         cache: 'no-store',
@@ -82,11 +73,6 @@ export default function OfflinePage() {
 
       const json = await res.json();
       setData(json.data);
-      
-      // Set first course type as default if not already selected
-      if (!selectedCourse && json.data.courseTypes.length > 0) {
-        setCourseType(json.data.courseTypes[0]);
-      }
     } catch (err: any) {
       console.error('Error loading casosiy data:', err);
       setError(err?.message || 'Failed to load data');
@@ -96,27 +82,29 @@ export default function OfflinePage() {
   }
 
   useEffect(() => {
-    const urlCourseType = searchParams.get('courseType');
-    if (urlCourseType) {
-      setCourseType(urlCourseType);
-    } else {
-      loadData(null);
-    }
+    loadCourseTypes();
   }, []);
 
   useEffect(() => {
-    loadData(courseType);
-    if (courseType) {
-      router.push(`/offline?courseType=${encodeURIComponent(courseType)}`);
+    const urlCourseType = searchParams.get('courseType');
+    if (urlCourseType) {
+      setCourseType(urlCourseType);
+      loadData(urlCourseType);
     }
-  }, [courseType, router]);
+  }, [searchParams]);
+
+  const handleCourseChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selected = e.target.value;
+    setCourseType(selected);
+    router.push(`/offline?courseType=${encodeURIComponent(selected)}`);
+  };
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-slate-50">
       <header className="mb-6">
         <h1 className="text-3xl font-bold mb-2">O'quv Kurslar – Ofline</h1>
         <p className="text-sm text-slate-400">
-          To'lovlar, qarzdorlik va kelishuv statistikasi
+          To'lovlar va qarzdorlik ma'lumotlari
         </p>
       </header>
 
@@ -126,16 +114,17 @@ export default function OfflinePage() {
           <label className="block text-xs font-semibold text-slate-400 mb-2">
             KURS TURI
           </label>
-          {loading ? (
+          {loading && !data ? (
             <div className="text-xs text-slate-500 animate-pulse">Yuklanmoqda...</div>
           ) : !data || data.courseTypes.length === 0 ? (
             <div className="text-xs text-slate-500">Kurs topilmadi</div>
           ) : (
             <select
-              value={courseType || data.courseTypes[0] || ''}
-              onChange={(e) => setCourseType(e.target.value)}
+              value={courseType || ''}
+              onChange={handleCourseChange}
               className="w-full px-3 py-2 text-xs bg-slate-800 border border-slate-700 rounded text-slate-100 hover:border-slate-600 focus:border-blue-500 focus:outline-none"
             >
+              <option value="">Kurni tanlang</option>
               {data.courseTypes.map((ct) => (
                 <option key={ct} value={ct}>
                   {ct}
@@ -145,83 +134,36 @@ export default function OfflinePage() {
           )}
         </div>
 
-        {/* KPI Cards */}
-        {!loading && data && (
-          <div className="grid gap-4 md:grid-cols-3">
-            <KPICard
-              title="TUSHUM (To'lov summa)"
-              value={data.kpi.tushum}
-              color="border-slate-700 bg-slate-900/50"
-            />
-            <KPICard
-              title="QARZDORLIK (Qarz summa)"
-              value={data.kpi.qarzdorlik}
-              color="border-red-900/30 bg-red-950/20"
-            />
-            <KPICard
-              title="KELISHUV (Kelishuvga olingan)"
-              value={data.kpi.kelishuv}
-              color="border-green-900/30 bg-green-950/20"
-            />
-          </div>
-        )}
-
-        {/* Tarif Type Counts */}
-        {!loading && data && Object.keys(data.tarifCounts).length > 0 && (
-          <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
-            <h2 className="text-sm font-semibold text-slate-200 mb-3">
-              TARIF TURI BO'YICHA HISOB
-            </h2>
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-              {Object.entries(data.tarifCounts).map(([tarif, count]) => (
-                <div
-                  key={tarif}
-                  className="rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-2 text-center"
-                >
-                  <p className="text-xs font-semibold text-slate-300">{tarif}</p>
-                  <p className="text-2xl font-bold text-blue-400">{count}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Error Message */}
-        {error && (
-          <div className="rounded-lg border border-red-700/50 bg-red-950/30 p-4 text-sm text-red-400">
-            Xato: {error}
-          </div>
-        )}
-
-        {/* Recent Records Table */}
-        {!loading && data && data.allRecords.length > 0 && (
+        {/* Data Table - Only show after course selection */}
+        {courseType && !loading && data && data.allRecords.length > 0 && (
           <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
             <h2 className="text-sm font-semibold text-slate-200 mb-4">
-              SO'NGGI YOZUVLAR
+              {data.totalRecords} ta yozuv
             </h2>
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-xs text-slate-200">
                 <thead>
                   <tr className="border-b border-slate-700 bg-slate-800/60">
-                    <th className="px-3 py-2">Sana</th>
                     <th className="px-3 py-2">Menejer</th>
+                    <th className="px-3 py-2">Mijoz</th>
                     <th className="px-3 py-2">Tarif Turi</th>
-                    <th className="px-3 py-2 text-right">Tushum</th>
-                    <th className="px-3 py-2 text-right">Qarz</th>
                     <th className="px-3 py-2 text-right">Kelishuv</th>
+                    <th className="px-3 py-2 text-right">To'lov</th>
+                    <th className="px-3 py-2 text-right">Qarzi</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data.allRecords.slice(0, 50).map((record, idx) => (
+                  {data.allRecords.map((record, idx) => (
                     <tr
                       key={idx}
                       className="border-b border-slate-800 hover:bg-slate-800/30 last:border-0"
                     >
-                      <td className="px-3 py-2 text-slate-400">
-                        {new Date(record.date).toLocaleDateString('ru-RU')}
-                      </td>
                       <td className="px-3 py-2">{record.manager}</td>
+                      <td className="px-3 py-2">{record.client}</td>
                       <td className="px-3 py-2 text-slate-400">{record.paymentType}</td>
+                      <td className="px-3 py-2 text-right font-semibold">
+                        {formatCurrency(record.kelishuv)}
+                      </td>
                       <td className="px-3 py-2 text-right text-green-400 font-semibold">
                         {formatCurrency(record.paymentSum)}
                       </td>
@@ -234,9 +176,6 @@ export default function OfflinePage() {
                           <span className="text-slate-600">—</span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-right font-semibold">
-                        {formatCurrency(record.kelishuv)}
-                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -245,9 +184,17 @@ export default function OfflinePage() {
           </div>
         )}
 
-        {!loading && data && data.allRecords.length === 0 && (
+        {/* Empty State */}
+        {courseType && !loading && (!data || data.allRecords.length === 0) && (
           <div className="rounded-lg border border-slate-700 bg-slate-900 p-4 text-center text-sm text-slate-500">
-            Tanlangan davr uchun "{data.selectedCourseType || 'barcha'}" ma'lumot topilmadi.
+            "{courseType}" uchun ma'lumot topilmadi.
+          </div>
+        )}
+
+        {/* Error Message */}
+        {error && (
+          <div className="rounded-lg border border-red-700/50 bg-red-950/30 p-4 text-sm text-red-400">
+            Xato: {error}
           </div>
         )}
       </div>

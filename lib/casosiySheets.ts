@@ -8,6 +8,7 @@ export type CasosiyRow = {
   paymentSum: number;
   debtSum: number;
   kelishuv: number;
+  client: string;
 };
 
 /**
@@ -22,13 +23,14 @@ export type CasosiyRow = {
  * E - Sum of payment (Tushum)
  * F - Sum of debt (Qarzdorlik)
  * G - Kelishuv (Agreement amount)
+ * H - Client/Mijoz (Customer name)
  */
 export async function getCasosiyData(
   from: Date,
   to: Date
 ): Promise<CasosiyRow[]> {
   const SPREADSHEET_ID = "1WmYVOW6surq2eG03WBE8mJGn2CnTaB-cgeQTrsqJnZo";
-  const RANGE = "Casosiy!A:G";
+  const RANGE = "Casosiy!A:H";
 
   try {
     console.log(`[CasosiySheets] Fetching data from spreadsheet ${SPREADSHEET_ID}`);
@@ -50,7 +52,7 @@ export async function getCasosiyData(
     const processedRows: CasosiyRow[] = rows
       .slice(1) // Skip header
       .map((row) => {
-        const [dateStr, manager, courseType, paymentType, paymentSumStr, debtSumStr, kelishuvStr] = row;
+        const [dateStr, manager, courseType, paymentType, paymentSumStr, debtSumStr, kelishuvStr, client] = row;
         
         try {
           const date = new Date(dateStr);
@@ -66,6 +68,7 @@ export async function getCasosiyData(
             paymentSum,
             debtSum,
             kelishuv,
+            client: client?.trim() || "Unknown",
           };
         } catch (err) {
           console.error(`[CasosiySheets] Error parsing row:`, row, err);
