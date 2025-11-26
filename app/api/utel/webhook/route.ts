@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     let callData: any = null;
 
     if (eventName === "call_saved" && callHistory) {
-      // Utel sends complete call data in call_saved event
+      // Utel sends complete call data in call_saved event - use this as primary source
       isCallEvent = true;
       callData = callHistory;
       console.log("[Utel/Webhook] Processing call_saved event with history:", {
@@ -62,12 +62,9 @@ export async function POST(request: Request) {
         duration: callHistory.duration,
         conversation: callHistory.conversation,
       });
-    } else if (eventName === "call_ended" && data.data?.call) {
-      // Fallback: parse call_ended event
-      isCallEvent = true;
-      callData = data.data.call;
-      console.log("[Utel/Webhook] Processing call_ended event");
     }
+    // Skip call_ended event - it doesn't have duration and overwrites call_saved data
+    // Only process call_saved events which have complete call information
 
     if (isCallEvent && callData) {
       // Parse timestamp
