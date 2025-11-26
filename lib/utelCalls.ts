@@ -4,6 +4,8 @@
  * Fetches call data from UTel API (second PBX system alongside OnlinePBX)
  */
 
+import { getManagerNameFromExtension, isPhoneNumber } from "@/lib/extensionMapping";
+
 export interface UtelCallData {
   id: string;
   direction: "in" | "out"; // incoming or outgoing
@@ -11,7 +13,7 @@ export interface UtelCallData {
   duration: number; // in seconds
   phone: string;
   extension: string; // manager extension
-  name?: string; // manager name if available
+  name: string; // manager name
 }
 
 /**
@@ -158,8 +160,29 @@ function parseUtelResponse(data: any[]): UtelCallData[] {
             ? "in"
             : "out";
 
+        const phone =
+          call.phone ||
+          call.caller ||
+          call.called ||
+          call.from ||
+          call.to ||
+          "Unknown";
+        const extension = call.extension || call.ext || call.user || "Unknown";
+        
+        // Determine manager attribution
+        // If phone is a phone number (not extension), it's incoming - attribute to extension (receiver)
+        // Otherwise attribute to phone (the one who made the call)
+        let managerName = "Unknown";
+        if (direction === "in" && isPhoneNumber(phone)) {
+          // Incoming: attribute to extension (the manager who received)
+          managerName = getManagerNameFromExtension(extension);
+        } else if (direction === "out") {
+          // Outgoing: attribute to extension (the manager who made the call)
+          managerName = getManagerNameFromExtension(extension);
+        }
+
         return {
-          id: call.id || call.call_id || `${timestamp}-${call.extension}`,
+          id: call.id || call.call_id || `${timestamp}-${extension}`,
           direction,
           date: new Date(
             typeof timestamp === "number"
@@ -167,19 +190,9 @@ function parseUtelResponse(data: any[]): UtelCallData[] {
               : new Date(timestamp)
           ),
           duration: parseInt(duration) || 0,
-          phone:
-            call.phone ||
-            call.caller ||
-            call.called ||
-            call.from ||
-            call.to ||
-            "Unknown",
-          extension: call.extension || call.ext || call.user || "Unknown",
-          name:
-            call.name ||
-            call.extension_name ||
-            call.user_name ||
-            call.manager,
+          phone,
+          extension,
+          name: managerName,
         };
       } catch (parseError) {
         console.error("[UtelCalls] Error parsing call record:", parseError);

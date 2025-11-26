@@ -12,12 +12,14 @@
  */
 
 import { getGoogleSheetsClient } from "@/lib/googleSheetsClient";
+import { getManagerNameFromExtension, isPhoneNumber } from "@/lib/extensionMapping";
 
 export type GoogleSheetCallRow = {
   callType: string;
   direction: "missed" | "in" | "out";
   caller: string;
   receiver: string;
+  manager: string; // Manager name attributed to this call
   insideNumber?: string;
   date: Date;
   duration: number;
@@ -170,12 +172,28 @@ export async function fetchGoogleSheetCalls(
         const duration = parseDuration(durationStr);
         const successDuration = parseDuration(successDurationStr);
         const direction = parseCallType(typeStr);
+        
+        const caller = callerStr?.trim() || "Unknown";
+        const receiver = receiverStr?.trim() || "Unknown";
+        
+        // Determine who handled the call
+        // If caller is a phone number (not extension), it's incoming - attribute to receiver
+        // Otherwise attribute to caller
+        let manager = "Unknown";
+        if (direction === "missed" || isPhoneNumber(caller)) {
+          // Incoming or missed: attribute to receiver (the manager who got/missed the call)
+          manager = getManagerNameFromExtension(receiver);
+        } else {
+          // Outgoing: attribute to caller (the manager who made the call)
+          manager = getManagerNameFromExtension(caller);
+        }
 
         result.push({
           callType: typeStr || "Unknown",
           direction,
-          caller: callerStr?.trim() || "Unknown",
-          receiver: receiverStr?.trim() || "Unknown",
+          caller,
+          receiver,
+          manager,
           insideNumber: insideNumStr?.trim(),
           date,
           duration,

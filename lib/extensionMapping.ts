@@ -9,19 +9,19 @@
  */
 
 // Manual extension-to-manager mapping
-// Maps OnlinePBX extension numbers to actual manager names
+// Maps OnlinePBX/Utel/GoogleSheets extension numbers to actual manager names
 export const EXTENSION_MAP: Record<string, string> = {
-  "100": "Mumtoza",
-  "101": "Madina",
-  "102": "Oyshaxon",
-  "103": "Zilola",
-  "104": "Marg'uba",
-  "105": "Sabrina",
-  "106": "Matluba",
-  "107": "Sabina",
+  "101": "Mumtoza",
+  "102": "Madina",
+  "103": "Matluba",
+  "104": "Zilola",
+  "105": "Oyshaxon",
+  "106": "Sabrina",
+  "107": "Marg'uba",
   "108": "Mohinur",
-  "109": "Gulchehra",
-  "110": "Orzugul",
+  "109": "Sabina",
+  "110": "Gulchehra",
+  "111": "Orzugul",
 };
 
 /**
@@ -54,4 +54,32 @@ export function updateExtensionMapping(extension: string, managerName: string): 
  */
 export function getAllExtensionMappings(): Record<string, string> {
   return { ...EXTENSION_MAP };
+}
+
+/**
+ * Check if a string is a phone number (not an extension)
+ * Extensions are typically 3-4 digits (101-111)
+ * Phone numbers are longer or have special formatting
+ */
+export function isPhoneNumber(caller: string): boolean {
+  if (!caller) return false;
+  
+  const normalized = caller.trim();
+  
+  // If it's a known extension, it's not a phone number
+  if (EXTENSION_MAP[normalized]) {
+    return false;
+  }
+  
+  // Extensions are typically 2-3 digits in 100-999 range
+  // Phone numbers are longer (7+ digits) or have formatting
+  const asNum = parseInt(normalized);
+  
+  // If it's a number 100-999, it's likely an extension
+  if (!isNaN(asNum) && asNum >= 100 && asNum <= 999) {
+    return false;
+  }
+  
+  // If it's 4 digits or longer, or has non-numeric characters, it's likely a phone number
+  return normalized.length > 4 || /[^\d]/.test(normalized);
 }
