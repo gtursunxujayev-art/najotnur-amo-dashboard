@@ -222,14 +222,14 @@ export default function CallsPage() {
       }
 
       const json = await res.json();
-      const utelData: UtelCallsData = json;
+      const utelData: UtelCallsData = json;  // API returns full response with success and data fields
 
       setState((s) => {
         return {
           ...s,
           utelLoading: false,
           utelError: null,
-          utelData,
+          utelData,  // Store full response object
         };
       });
     } catch (err: any) {

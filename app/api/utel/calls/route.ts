@@ -64,32 +64,32 @@ export async function GET(request: Request) {
       `[UtelCalls/API] Fetching calls from ${fromDate.toISOString()} to ${toDate.toISOString()}`
     );
 
-    // Fetch from database
+    // Fetch from database - NO date filtering, just get all calls and filter in memory
     let utelCalls: any[] = [];
     try {
       const dbCalls = await prisma.utelCall.findMany({
-        where: {
-          date: {
-            gte: fromDate,
-            lte: toDate,
-          },
-        },
         orderBy: {
           date: "desc",
         },
       });
 
-      utelCalls = dbCalls.map((call: any) => ({
-        id: call.id,
-        direction: call.direction as "in" | "out",
-        date: call.date,
-        duration: call.duration,
-        phone: call.phone,
-        extension: call.extension,
-        name: call.manager,
-      }));
+      // Filter by date in memory to avoid timezone issues
+      utelCalls = dbCalls
+        .filter((call) => {
+          const callDate = new Date(call.date);
+          return callDate >= fromDate && callDate <= toDate;
+        })
+        .map((call: any) => ({
+          id: call.id,
+          direction: call.direction as "in" | "out",
+          date: call.date,
+          duration: call.duration,
+          phone: call.phone,
+          extension: call.extension,
+          name: call.manager,
+        }));
 
-      console.log(`[UtelCalls/API] Found ${utelCalls.length} calls in database`);
+      console.log(`[UtelCalls/API] Found ${utelCalls.length} calls in database (fetched ${dbCalls.length} total)`);
     } catch (dbErr) {
       console.error("[UtelCalls/API] Error fetching from database:", dbErr);
     }
