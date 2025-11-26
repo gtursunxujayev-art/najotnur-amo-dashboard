@@ -27,11 +27,29 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 ## External Dependencies
 *   **amoCRM API:** Used for CRM data (leads, sales, manager statistics). Calls are cached for 1 hour. Supports syncing OnlinePBX calls.
 *   **OnlinePBX Webhooks:** Receives real-time call events, stores data, and provides endpoints for call analysis.
+*   **UTel PBX API:** Fetches CDR/call data from second PBX system. Integrates alongside OnlinePBX for comprehensive call tracking.
 *   **Google Sheets API:** Integrates for call statistics and revenue data, specifically for PDF reports.
 *   **Telegram Bot API:** Utilized for sending automated reports and managing user subscriptions.
 *   **PostgreSQL:** The primary database, accessed via Prisma ORM.
 
 ## Recent Changes
+
+### November 26, 2025 - Added UTel PBX Integration
+- **New Integration**: Added support for UTel PBX system as second call tracking source
+- **Implementation**:
+  - ✅ Created `lib/utelCalls.ts` with flexible API endpoint detection (tries /cdr, /api/cdr, /v1/cdr, /calls)
+  - ✅ Built `/api/utel/calls` endpoint that mirrors OnlinePBX API structure
+  - ✅ Supports multiple UTel response formats (flat array, data wrapper, calls wrapper, records wrapper)
+  - ✅ Manager attribution via extension mapping (same system as OnlinePBX)
+  - ✅ Call aggregation by manager with duration formatting
+  - ✅ Stored secrets: UTEL_API_TOKEN, UTEL_API_URL
+- **Features**:
+  - Automatic period filtering (today/week/month)
+  - Manager summary with incoming/outgoing/total call counts
+  - Formatted duration display (HH:MM:SS)
+  - Recent calls list (last 100)
+- **Files Created**: `lib/utelCalls.ts`, `app/api/utel/calls/route.ts`
+- **Next Steps**: Calls page frontend component can now fetch from `/api/utel/calls` to display UTel data alongside OnlinePBX
 
 ### November 25, 2025 - Fixed Incoming Call Attribution to Manager Receivers
 - **Problem**: Incoming calls were showing as "Unknown" instead of being attributed to the manager who received them
