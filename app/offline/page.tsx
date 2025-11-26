@@ -11,23 +11,20 @@ interface CasosiyRecord {
   paymentType: string;
   paymentSum: number;
   debtSum: number;
-}
-
-interface ManagerStat {
-  manager: string;
-  totalPayment: number;
-  totalDebt: number;
-  courses: {
-    courseType: string;
-    totalPayment: number;
-    totalDebt: number;
-  }[];
+  kelishuv: number;
 }
 
 interface CasosiyData {
   source: string;
   totalRecords: number;
-  managerSummary: ManagerStat[];
+  courseTypes: string[];
+  selectedCourseType: string | null;
+  kpi: {
+    tushum: number;
+    qarzdorlik: number;
+    kelishuv: number;
+  };
+  tarifCounts: Record<string, number>;
   allRecords: CasosiyRecord[];
 }
 
@@ -38,45 +35,44 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('ru-RU');
-}
-
-function PeriodButton({
-  label,
-  active,
-  onClick,
+function KPICard({
+  title,
+  value,
+  color,
 }: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
+  title: string;
+  value: number;
+  color: string;
 }) {
   return (
-    <button
-      onClick={onClick}
-      className={`px-4 py-1 rounded transition-colors ${
-        active
-          ? 'bg-blue-600 text-white'
-          : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-      }`}
-    >
-      {label}
-    </button>
+    <div className={`rounded-lg border ${color} p-4`}>
+      <p className="text-xs font-semibold text-slate-400 mb-1">{title}</p>
+      <p className="text-2xl font-bold text-slate-100">
+        {formatCurrency(value)}
+      </p>
+      <p className="text-xs text-slate-500 mt-1">so'm</p>
+    </div>
   );
 }
 
 export default function OfflinePage() {
   const [period, setPeriod] = useState<PeriodKey>('week');
+  const [courseType, setCourseType] = useState<string | null>(null);
   const [data, setData] = useState<CasosiyData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function loadData(periodKey: PeriodKey) {
+  async function loadData(periodKey: PeriodKey, selectedCourse: string | null) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/casosiy?period=${periodKey}`, {
+      const params = new URLSearchParams();
+      params.set('period', periodKey);
+      if (selectedCourse) {
+        params.set('courseType', selectedCourse);
+      }
+      
+      const res = await fetch(`/api/casosiy?${params.toString()}`, {
         cache: 'no-store',
       });
 
@@ -87,6 +83,11 @@ export default function OfflinePage() {
 
       const json = await res.json();
       setData(json.data);
+      
+      // Set first course type as default if not already selected
+      if (!selectedCourse && json.data.courseTypes.length > 0) {
+        setCourseType(json.data.courseTypes[0]);
+      }
     } catch (err: any) {
       console.error('Error loading casosiy data:', err);
       setError(err?.message || 'Failed to load data');
@@ -96,153 +97,145 @@ export default function OfflinePage() {
   }
 
   useEffect(() => {
-    loadData(period);
-  }, [period]);
-
-  const handlePeriodChange = (p: PeriodKey) => {
-    if (p !== period) {
-      setPeriod(p);
-    }
-  };
+    loadData(period, courseType);
+  }, [period, courseType]);
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-slate-50">
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">O'quv Kurslar – Ofline</h1>
-          <p className="text-sm text-slate-400">
-            To'lovlar va qarzdorlik statistikasi
-          </p>
-        </div>
-
-        <div className="inline-flex rounded-lg bg-slate-800 p-1 text-xs font-semibold gap-1">
-          <PeriodButton
-            label="Bugun"
-            active={period === 'today'}
-            onClick={() => handlePeriodChange('today')}
-          />
-          <PeriodButton
-            label="Bu hafta"
-            active={period === 'week'}
-            onClick={() => handlePeriodChange('week')}
-          />
-          <PeriodButton
-            label="Bu oy"
-            active={period === 'month'}
-            onClick={() => handlePeriodChange('month')}
-          />
-        </div>
+      <header className="mb-6">
+        <h1 className="text-3xl font-bold mb-2">O'quv Kurslar – Ofline</h1>
+        <p className="text-sm text-slate-400">
+          To'lovlar, qarzdorlik va kelishuv statistikasi
+        </p>
       </header>
 
       <div className="space-y-6">
-        {/* Manager Summary */}
-        <section className="rounded-lg border border-slate-700 bg-slate-900 p-4">
-          <h2 className="mb-4 text-lg font-semibold text-slate-200">
-            Menejer Bo'yicha Statistika
-          </h2>
-
-          {loading ? (
-            <div className="text-sm text-slate-400 animate-pulse">
-              Ma'lumotlar yuklanmoqda...
-            </div>
-          ) : error ? (
-            <div className="text-sm text-red-400">Xato: {error}</div>
-          ) : !data || data.managerSummary.length === 0 ? (
-            <div className="text-sm text-slate-500">
-              Tanlangan davr uchun ma'lumot topilmadi.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {data.managerSummary.map((manager) => (
-                <div
-                  key={manager.manager}
-                  className="rounded-lg border border-slate-700 bg-slate-800/50 p-4"
+        {/* Controls */}
+        <div className="grid gap-4 md:grid-cols-2">
+          {/* Period Selector */}
+          <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+            <label className="block text-xs font-semibold text-slate-400 mb-2">
+              DAVR
+            </label>
+            <div className="flex gap-1">
+              {(['today', 'week', 'month'] as PeriodKey[]).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPeriod(p)}
+                  className={`px-3 py-1 text-xs font-semibold rounded transition-colors ${
+                    period === p
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  }`}
                 >
-                  <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-slate-100">
-                      {manager.manager}
-                    </h3>
-                    <div className="text-xs text-slate-400">
-                      Jami: {formatCurrency(manager.totalPayment)} so'm
-                    </div>
-                  </div>
+                  {p === 'today' ? 'Bugun' : p === 'week' ? 'Bu hafta' : 'Bu oy'}
+                </button>
+              ))}
+            </div>
+          </div>
 
-                  <div className="grid gap-2 text-xs">
-                    {manager.courses.map((course) => (
-                      <div
-                        key={course.courseType}
-                        className="flex justify-between rounded bg-slate-700/50 px-3 py-2"
-                      >
-                        <span className="text-slate-300">{course.courseType}</span>
-                        <div className="space-x-3">
-                          <span className="text-green-400">
-                            {formatCurrency(course.totalPayment)}
-                          </span>
-                          {course.totalDebt > 0 && (
-                            <span className="text-red-400">
-                              Qarz: {formatCurrency(course.totalDebt)}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+          {/* Course Type Selector */}
+          <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+            <label className="block text-xs font-semibold text-slate-400 mb-2">
+              KURS TURI
+            </label>
+            {loading ? (
+              <div className="text-xs text-slate-500 animate-pulse">Yuklanmoqda...</div>
+            ) : !data || data.courseTypes.length === 0 ? (
+              <div className="text-xs text-slate-500">Kurs topilmadi</div>
+            ) : (
+              <select
+                value={courseType || ''}
+                onChange={(e) => setCourseType(e.target.value || null)}
+                className="w-full px-3 py-2 text-xs bg-slate-800 border border-slate-700 rounded text-slate-100 hover:border-slate-600 focus:border-blue-500 focus:outline-none"
+              >
+                {data.courseTypes.map((ct) => (
+                  <option key={ct} value={ct}>
+                    {ct}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
 
-                  <div className="mt-3 flex items-center justify-between border-t border-slate-700 pt-2 text-xs">
-                    <span className="text-slate-400">Umumiy qarz</span>
-                    <span className="font-semibold text-red-400">
-                      {formatCurrency(manager.totalDebt)}
-                    </span>
-                  </div>
+        {/* KPI Cards */}
+        {!loading && data && (
+          <div className="grid gap-4 md:grid-cols-3">
+            <KPICard
+              title="TUSHUM (To'lov summa)"
+              value={data.kpi.tushum}
+              color="border-slate-700 bg-slate-900/50"
+            />
+            <KPICard
+              title="QARZDORLIK (Qarz summa)"
+              value={data.kpi.qarzdorlik}
+              color="border-red-900/30 bg-red-950/20"
+            />
+            <KPICard
+              title="KELISHUV (Kelishuvga olingan)"
+              value={data.kpi.kelishuv}
+              color="border-green-900/30 bg-green-950/20"
+            />
+          </div>
+        )}
+
+        {/* Tarif Type Counts */}
+        {!loading && data && Object.keys(data.tarifCounts).length > 0 && (
+          <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+            <h2 className="text-sm font-semibold text-slate-200 mb-3">
+              TARIF TURI BO'YICHA HISOB
+            </h2>
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+              {Object.entries(data.tarifCounts).map(([tarif, count]) => (
+                <div
+                  key={tarif}
+                  className="rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-2 text-center"
+                >
+                  <p className="text-xs font-semibold text-slate-300">{tarif}</p>
+                  <p className="text-2xl font-bold text-blue-400">{count}</p>
                 </div>
               ))}
             </div>
-          )}
-        </section>
+          </div>
+        )}
 
-        {/* Recent Records */}
-        <section className="rounded-lg border border-slate-700 bg-slate-900 p-4">
-          <h2 className="mb-4 text-lg font-semibold text-slate-200">
-            So'nggi Yozuvlar
-          </h2>
+        {/* Error Message */}
+        {error && (
+          <div className="rounded-lg border border-red-700/50 bg-red-950/30 p-4 text-sm text-red-400">
+            Xato: {error}
+          </div>
+        )}
 
-          {loading ? (
-            <div className="text-sm text-slate-400 animate-pulse">
-              Ma'lumotlar yuklanmoqda...
-            </div>
-          ) : error ? (
-            <div className="text-sm text-red-400">Xato: {error}</div>
-          ) : !data || data.allRecords.length === 0 ? (
-            <div className="text-sm text-slate-500">
-              Tanlangan davr uchun ma'lumot topilmadi.
-            </div>
-          ) : (
+        {/* Recent Records Table */}
+        {!loading && data && data.allRecords.length > 0 && (
+          <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+            <h2 className="text-sm font-semibold text-slate-200 mb-4">
+              SO'NGGI YOZUVLAR
+            </h2>
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-xs text-slate-200">
                 <thead>
                   <tr className="border-b border-slate-700 bg-slate-800/60">
                     <th className="px-3 py-2">Sana</th>
                     <th className="px-3 py-2">Menejer</th>
-                    <th className="px-3 py-2">Kurs Turi</th>
-                    <th className="px-3 py-2">To'lov Turi</th>
-                    <th className="px-3 py-2 text-right">To'lov Summa</th>
+                    <th className="px-3 py-2">Tarif Turi</th>
+                    <th className="px-3 py-2 text-right">Tushum</th>
                     <th className="px-3 py-2 text-right">Qarz</th>
+                    <th className="px-3 py-2 text-right">Kelishuv</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data.allRecords.slice(0, 100).map((record, idx) => (
+                  {data.allRecords.slice(0, 50).map((record, idx) => (
                     <tr
                       key={idx}
                       className="border-b border-slate-800 hover:bg-slate-800/30 last:border-0"
                     >
                       <td className="px-3 py-2 text-slate-400">
-                        {formatDate(record.date as any)}
+                        {new Date(record.date).toLocaleDateString('ru-RU')}
                       </td>
                       <td className="px-3 py-2">{record.manager}</td>
-                      <td className="px-3 py-2">{record.courseType}</td>
-                      <td className="px-3 py-2 text-slate-400">
-                        {record.paymentType}
-                      </td>
+                      <td className="px-3 py-2 text-slate-400">{record.paymentType}</td>
                       <td className="px-3 py-2 text-right text-green-400 font-semibold">
                         {formatCurrency(record.paymentSum)}
                       </td>
@@ -252,16 +245,25 @@ export default function OfflinePage() {
                             {formatCurrency(record.debtSum)}
                           </span>
                         ) : (
-                          <span className="text-slate-500">—</span>
+                          <span className="text-slate-600">—</span>
                         )}
+                      </td>
+                      <td className="px-3 py-2 text-right font-semibold">
+                        {formatCurrency(record.kelishuv)}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          )}
-        </section>
+          </div>
+        )}
+
+        {!loading && data && data.allRecords.length === 0 && (
+          <div className="rounded-lg border border-slate-700 bg-slate-900 p-4 text-center text-sm text-slate-500">
+            Tanlangan davr uchun "{data.selectedCourseType || 'barcha'}" ma'lumot topilmadi.
+          </div>
+        )}
       </div>
     </main>
   );

@@ -7,6 +7,7 @@ export type CasosiyRow = {
   paymentType: string;
   paymentSum: number;
   debtSum: number;
+  kelishuv: number;
 };
 
 /**
@@ -18,15 +19,16 @@ export type CasosiyRow = {
  * B - Managers
  * C - Course type (Ofline/Online)
  * D - Type of tarif/Payment type
- * E - Sum of payment
- * F - Sum of debt
+ * E - Sum of payment (Tushum)
+ * F - Sum of debt (Qarzdorlik)
+ * G - Kelishuv (Agreement amount)
  */
 export async function getCasosiyData(
   from: Date,
   to: Date
 ): Promise<CasosiyRow[]> {
   const SPREADSHEET_ID = "1WmYVOW6surq2eG03WBE8mJGn2CnTaB-cgeQTrsqJnZo";
-  const RANGE = "Casosiy!A:F";
+  const RANGE = "Casosiy!A:G";
 
   try {
     console.log(`[CasosiySheets] Fetching data from spreadsheet ${SPREADSHEET_ID}`);
@@ -48,12 +50,13 @@ export async function getCasosiyData(
     const processedRows: CasosiyRow[] = rows
       .slice(1) // Skip header
       .map((row) => {
-        const [dateStr, manager, courseType, paymentType, paymentSumStr, debtSumStr] = row;
+        const [dateStr, manager, courseType, paymentType, paymentSumStr, debtSumStr, kelishuvStr] = row;
         
         try {
           const date = new Date(dateStr);
           const paymentSum = parseInt(paymentSumStr?.replace(/\s+/g, "") || "0", 10);
           const debtSum = parseInt(debtSumStr?.replace(/\s+/g, "") || "0", 10);
+          const kelishuv = parseInt(kelishuvStr?.replace(/\s+/g, "") || "0", 10);
           
           return {
             date,
@@ -62,6 +65,7 @@ export async function getCasosiyData(
             paymentType: paymentType?.trim() || "Unknown",
             paymentSum,
             debtSum,
+            kelishuv,
           };
         } catch (err) {
           console.error(`[CasosiySheets] Error parsing row:`, row, err);

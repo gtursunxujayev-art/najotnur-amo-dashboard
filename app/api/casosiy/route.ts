@@ -32,6 +32,7 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const periodParam = searchParams.get("period") as PeriodKey | null;
+    const courseTypeFilter = searchParams.get("courseType") || null;
     const fromParam = searchParams.get("from");
     const toParam = searchParams.get("to");
 
@@ -55,66 +56,44 @@ export async function GET(request: Request) {
       `[CasosiyAPI] Fetching data from ${fromDate.toISOString()} to ${toDate.toISOString()}`
     );
 
-    const data = await getCasosiyData(fromDate, toDate);
+    const allData = await getCasosiyData(fromDate, toDate);
+    
+    // Get unique course types
+    const courseTypes = Array.from(new Set(allData.map(r => r.courseType))).sort();
 
-    // Group by manager and course type
-    const managerStats = new Map<
-      string,
-      {
-        manager: string;
-        courseTypes: Map<
-          string,
-          { courseType: string; totalPayment: number; totalDebt: number }
-        >;
-        totalPayment: number;
-        totalDebt: number;
-      }
-    >();
+    // Filter by course type if specified
+    const data = courseTypeFilter 
+      ? allData.filter(r => r.courseType === courseTypeFilter)
+      : allData;
+
+    // Calculate KPIs for selected course type
+    let tushum = 0, qarzdorlik = 0, kelishuv = 0;
+    const tarifCounts = new Map<string, number>();
 
     for (const row of data) {
-      if (!managerStats.has(row.manager)) {
-        managerStats.set(row.manager, {
-          manager: row.manager,
-          courseTypes: new Map(),
-          totalPayment: 0,
-          totalDebt: 0,
-        });
-      }
-
-      const manager = managerStats.get(row.manager)!;
-      manager.totalPayment += row.paymentSum;
-      manager.totalDebt += row.debtSum;
-
-      if (!manager.courseTypes.has(row.courseType)) {
-        manager.courseTypes.set(row.courseType, {
-          courseType: row.courseType,
-          totalPayment: 0,
-          totalDebt: 0,
-        });
-      }
-
-      const course = manager.courseTypes.get(row.courseType)!;
-      course.totalPayment += row.paymentSum;
-      course.totalDebt += row.debtSum;
+      tushum += row.paymentSum;
+      qarzdorlik += row.debtSum;
+      kelishuv += row.kelishuv;
+      
+      const tarif = row.paymentType || "Unknown";
+      tarifCounts.set(tarif, (tarifCounts.get(tarif) || 0) + 1);
     }
 
-    const managerSummary = Array.from(managerStats.values())
-      .map((m) => ({
-        manager: m.manager,
-        totalPayment: m.totalPayment,
-        totalDebt: m.totalDebt,
-        courses: Array.from(m.courseTypes.values()),
-      }))
-      .sort((a, b) => b.totalPayment - a.totalPayment);
-
-    console.log(`[CasosiyAPI] Returning ${data.length} records for ${managerSummary.length} managers`);
+    console.log(`[CasosiyAPI] Returning ${data.length} records for course type: ${courseTypeFilter || "all"}`);
 
     return NextResponse.json({
       success: true,
       data: {
         source: "casosiy",
         totalRecords: data.length,
-        managerSummary,
+        courseTypes,
+        selectedCourseType: courseTypeFilter,
+        kpi: {
+          tushum,
+          qarzdorlik,
+          kelishuv,
+        },
+        tarifCounts: Object.fromEntries(tarifCounts),
         allRecords: data.sort((a, b) => b.date.getTime() - a.date.getTime()),
       },
     });
