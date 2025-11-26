@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { fetchUtelCalls } from "@/lib/utelCalls";
 import { getManagerNameFromExtension } from "@/lib/extensionMapping";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -63,38 +64,39 @@ export async function GET(request: Request) {
       `[UtelCalls/API] Fetching calls from ${fromDate.toISOString()} to ${toDate.toISOString()}`
     );
 
-    // Fetch from webhook endpoint to get stored calls
-    const domain = request.headers.get("x-forwarded-host") || request.headers.get("host") || "localhost:5000";
-    const protocol = request.headers.get("x-forwarded-proto") || "http";
-    const webhookUrl = `${protocol}://${domain}/api/utel/webhook`;
-    
+    // Fetch from database
     let utelCalls: any[] = [];
     try {
-      const webhookResponse = await fetch(webhookUrl);
-      if (webhookResponse.ok) {
-        const webhookData = await webhookResponse.json();
-        utelCalls = (webhookData.recentCalls || [])
-          .filter((call: any) => {
-            const callDate = new Date(call.date);
-            return callDate >= fromDate && callDate <= toDate;
-          })
-          .map((call: any) => ({
-            id: call.id,
-            direction: call.direction as "in" | "out",
-            date: new Date(call.date),
-            duration: call.duration,
-            phone: call.phone,
-            extension: call.extension,
-            name: call.manager,
-          }));
-      }
-    } catch (err) {
-      console.error("[UtelCalls/API] Error fetching from webhook:", err);
+      const dbCalls = await prisma.utelCall.findMany({
+        where: {
+          date: {
+            gte: fromDate,
+            lte: toDate,
+          },
+        },
+        orderBy: {
+          date: "desc",
+        },
+      });
+
+      utelCalls = dbCalls.map((call) => ({
+        id: call.id,
+        direction: call.direction as "in" | "out",
+        date: call.date,
+        duration: call.duration,
+        phone: call.phone,
+        extension: call.extension,
+        name: call.manager,
+      }));
+
+      console.log(`[UtelCalls/API] Found ${utelCalls.length} calls in database`);
+    } catch (dbErr) {
+      console.error("[UtelCalls/API] Error fetching from database:", dbErr);
     }
 
-    // If no webhook calls found, try API as fallback
+    // If no database calls, try API as fallback
     if (utelCalls.length === 0) {
-      console.log("[UtelCalls/API] No webhook calls found, trying API fallback...");
+      console.log("[UtelCalls/API] No database calls found, trying API fallback...");
       const apiCalls = await fetchUtelCalls(fromDate, toDate);
       utelCalls = apiCalls;
     }

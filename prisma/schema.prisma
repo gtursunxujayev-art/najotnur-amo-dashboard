@@ -65,3 +65,22 @@ model GoogleSheetCall {
   @@index([receiver])
   @@index([createdAt])
 }
+
+model UtelCall {
+  id        String   @id @default(cuid())
+  callId    String   @unique // Original call ID from Utel
+  direction String   // "in" or "out"
+  date      DateTime // When the call occurred
+  duration  Int      // Duration in seconds (conversation time)
+  phone     String   // Phone number (external for incoming, dst for outgoing)
+  extension String   // Extension of the manager
+  manager   String   // Manager name
+  source    String   @default("webhook") // "webhook" or "api"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+  @@index([manager])
+  @@index([extension])
+  @@index([createdAt])
+}

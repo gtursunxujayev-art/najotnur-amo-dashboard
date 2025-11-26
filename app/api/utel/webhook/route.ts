@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getManagerNameFromExtension, isPhoneNumber } from "@/lib/extensionMapping";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -113,30 +114,52 @@ export async function POST(request: Request) {
         managerName = getManagerNameFromExtension(src);
       }
 
-      // Store call
+      // Determine extension properly
+      const extensionNum = direction === "in" ? dst : src;
+      
+      // Store to database
+      try {
+        const dbCall = await prisma.utelCall.upsert({
+          where: { callId: callData.call_id || `utel-${callData.id}` },
+          update: {
+            duration,
+            date: callDate,
+          },
+          create: {
+            callId: callData.call_id || `utel-${callData.id}`,
+            direction,
+            date: callDate,
+            duration,
+            phone: direction === "in" ? src : (callData.external_number || dst),
+            extension: extensionNum,
+            manager: managerName,
+            source: "webhook",
+          },
+        });
+        
+        console.log(
+          `[Utel/Webhook] ✅ Stored to DB: ${managerName} - ${direction === "in" ? "Incoming" : "Outgoing"} - ${duration}s`
+        );
+      } catch (dbError) {
+        console.error("[Utel/Webhook] Error saving to database:", dbError);
+      }
+
+      // Also store in memory for immediate access
       const callRecord = {
         id: callData.call_id || `utel-${callData.id}`,
         direction,
         date: callDate,
         duration,
-        phone: direction === "in" ? src : (callData.external_number || src),
-        extension: direction === "in" ? dst : src,
+        phone: direction === "in" ? src : (callData.external_number || dst),
+        extension: extensionNum,
         manager: managerName,
-        source: "utel_webhook",
-        timestamp: Math.floor(Date.now() / 1000),
-        rawData: callData,
+        source: "webhook",
       };
 
       utelRecentCalls.unshift(callRecord);
-      
-      // Keep only last 1000 calls in memory
-      if (utelRecentCalls.length > 1000) {
-        utelRecentCalls = utelRecentCalls.slice(0, 1000);
+      if (utelRecentCalls.length > 100) {
+        utelRecentCalls = utelRecentCalls.slice(0, 100);
       }
-
-      console.log(
-        `[Utel/Webhook] ✅ Stored call: ${managerName} - ${direction === "in" ? "Incoming" : "Outgoing"} - ${duration}s. Total: ${utelRecentCalls.length}`
-      );
     }
 
     return NextResponse.json({
