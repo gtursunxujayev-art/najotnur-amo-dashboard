@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchUtelCalls } from "@/lib/utelCalls";
 import { getManagerNameFromExtension } from "@/lib/extensionMapping";
-import { utelRecentCalls } from "@/app/api/utel/webhook/route";
 
 export const dynamic = "force-dynamic";
 
@@ -64,21 +63,34 @@ export async function GET(request: Request) {
       `[UtelCalls/API] Fetching calls from ${fromDate.toISOString()} to ${toDate.toISOString()}`
     );
 
-    // Use webhook calls (most reliable) + fallback to API calls
-    let utelCalls = utelRecentCalls
-      .filter((call) => {
-        const callDate = new Date(call.date);
-        return callDate >= fromDate && callDate <= toDate;
-      })
-      .map((call) => ({
-        id: call.id,
-        direction: call.direction as "in" | "out",
-        date: new Date(call.date),
-        duration: call.duration,
-        phone: call.phone,
-        extension: call.extension,
-        name: call.manager,
-      }));
+    // Fetch from webhook endpoint to get stored calls
+    const domain = request.headers.get("x-forwarded-host") || request.headers.get("host") || "localhost:5000";
+    const protocol = request.headers.get("x-forwarded-proto") || "http";
+    const webhookUrl = `${protocol}://${domain}/api/utel/webhook`;
+    
+    let utelCalls: any[] = [];
+    try {
+      const webhookResponse = await fetch(webhookUrl);
+      if (webhookResponse.ok) {
+        const webhookData = await webhookResponse.json();
+        utelCalls = (webhookData.recentCalls || [])
+          .filter((call: any) => {
+            const callDate = new Date(call.date);
+            return callDate >= fromDate && callDate <= toDate;
+          })
+          .map((call: any) => ({
+            id: call.id,
+            direction: call.direction as "in" | "out",
+            date: new Date(call.date),
+            duration: call.duration,
+            phone: call.phone,
+            extension: call.extension,
+            name: call.manager,
+          }));
+      }
+    } catch (err) {
+      console.error("[UtelCalls/API] Error fetching from webhook:", err);
+    }
 
     // If no webhook calls found, try API as fallback
     if (utelCalls.length === 0) {
