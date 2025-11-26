@@ -34,7 +34,7 @@ export async function fetchUtelCalls(
     const toUnix = Math.floor(toDate.getTime() / 1000);
 
     console.log(
-      `[UtelCalls] Fetching calls from ${fromDate.toISOString()} to ${toDate.toISOString()}`
+      `[UtelCalls] Fetching calls from ${fromDate.toISOString()} to ${toDate.toISOString()} (Unix: ${fromUnix} to ${toUnix})`
     );
 
     // Try multiple common UTel API endpoints
@@ -50,6 +50,8 @@ export async function fetchUtelCalls(
     for (const endpoint of endpoints) {
       try {
         const url = `${baseUrl}${endpoint}`;
+        console.log(`[UtelCalls] Trying endpoint: ${url}`);
+        
         const response = await fetch(url, {
           method: "GET",
           headers: {
@@ -58,19 +60,43 @@ export async function fetchUtelCalls(
           },
         });
 
+        console.log(`[UtelCalls] Response status: ${response.status}`);
+
         if (response.ok) {
           const data = await response.json();
-          console.log(`[UtelCalls] Successfully fetched from ${endpoint}`);
+          console.log(
+            `[UtelCalls] Successfully fetched from ${endpoint}. Response type: ${typeof data}, isArray: ${Array.isArray(data)}`
+          );
+          console.log(
+            `[UtelCalls] Raw response keys: ${Object.keys(data).join(", ")}`
+          );
+          console.log(`[UtelCalls] Raw response (first 1000 chars): ${JSON.stringify(data).substring(0, 1000)}`);
 
           // Parse response based on common formats
           if (Array.isArray(data)) {
+            console.log(
+              `[UtelCalls] Data is direct array with ${data.length} items`
+            );
             calls = parseUtelResponse(data);
           } else if (data.data && Array.isArray(data.data)) {
+            console.log(
+              `[UtelCalls] Data found in .data property with ${data.data.length} items`
+            );
             calls = parseUtelResponse(data.data);
           } else if (data.calls && Array.isArray(data.calls)) {
+            console.log(
+              `[UtelCalls] Data found in .calls property with ${data.calls.length} items`
+            );
             calls = parseUtelResponse(data.calls);
           } else if (data.records && Array.isArray(data.records)) {
+            console.log(
+              `[UtelCalls] Data found in .records property with ${data.records.length} items`
+            );
             calls = parseUtelResponse(data.records);
+          } else {
+            console.log(
+              `[UtelCalls] No recognized array format in response from ${endpoint}`
+            );
           }
 
           if (calls.length > 0) {
@@ -79,9 +105,16 @@ export async function fetchUtelCalls(
             );
             return calls;
           }
+        } else {
+          const text = await response.text();
+          console.log(
+            `[UtelCalls] Endpoint ${endpoint} returned status ${response.status}: ${text.substring(0, 500)}`
+          );
         }
       } catch (endpointError) {
-        console.log(`[UtelCalls] Endpoint ${endpoint} failed, trying next...`);
+        console.log(
+          `[UtelCalls] Endpoint ${endpoint} failed: ${endpointError}`
+        );
         continue;
       }
     }
