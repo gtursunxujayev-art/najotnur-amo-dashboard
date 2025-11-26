@@ -79,7 +79,7 @@ export async function GET(request: Request) {
         },
       });
 
-      utelCalls = dbCalls.map((call) => ({
+      utelCalls = dbCalls.map((call: any) => ({
         id: call.id,
         direction: call.direction as "in" | "out",
         date: call.date,
