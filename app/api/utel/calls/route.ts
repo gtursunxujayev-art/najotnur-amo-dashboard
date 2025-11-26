@@ -76,8 +76,11 @@ export async function GET(request: Request) {
       // Filter by date in memory to avoid timezone issues
       utelCalls = dbCalls
         .filter((call) => {
+          // Date is stored as local time (UTC+5), need to convert to UTC for comparison
           const callDate = new Date(call.date);
-          return callDate >= fromDate && callDate <= toDate;
+          // Subtract 5 hours to convert from local time to UTC
+          const callDateUTC = new Date(callDate.getTime() - 5 * 60 * 60 * 1000);
+          return callDateUTC >= fromDate && callDateUTC <= toDate;
         })
         .map((call: any) => ({
           id: call.id,
