@@ -34,6 +34,23 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 
 ## Recent Changes
 
+### November 26, 2025 - Fixed Utel Call Duration Storage
+- **Problem**: Utel calls were showing 0 seconds duration on calls page
+- **Root Cause**: 
+  - Webhook was processing both `call_saved` (with proper duration) and `call_ended` (with 0 seconds), creating duplicate records
+  - The 0-second record was overwriting the good one via upsert logic
+- **Solution**:
+  - ✅ Disabled `call_ended` event processing in webhook - now only processes `call_saved` events
+  - ✅ Created `UtelCall` database table for persistent storage (survives server restarts)
+  - ✅ Updated `/api/utel/calls` endpoint to fetch from database instead of in-memory
+  - ✅ Deleted legacy duplicate records with 0-second duration from database
+  - ✅ Added debug logging to trace duration calculation
+- **Result**:
+  - New Utel calls are stored only once with correct conversation duration
+  - Call history persists across server restarts
+  - Calls page displays accurate duration (HH:MM:SS format)
+  - Both OnlinePBX and Utel are now reliable persistent call tracking sources
+
 ### November 26, 2025 - Added Google Sheets Call History Integration
 - **New Feature**: Import historical call data from Google Sheets (January 1st onwards)
 - **Implementation**:
