@@ -58,10 +58,12 @@ function KPICard({
 export default function OfflinePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [courseTypes, setCourseTypes] = useState<string[]>([]);
   const [courseType, setCourseType] = useState<string | null>(null);
   const [data, setData] = useState<CasosiyData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [typesLoaded, setTypesLoaded] = useState(false);
 
   async function loadCourseTypes() {
     try {
@@ -74,10 +76,12 @@ export default function OfflinePage() {
       }
 
       const json = await res.json();
-      setData(json.data);
+      setCourseTypes(json.data.courseTypes);
+      setTypesLoaded(true);
     } catch (err: any) {
       console.error('Error loading course types:', err);
       setError(err?.message || 'Failed to load course types');
+      setTypesLoaded(true);
     }
   }
 
@@ -108,21 +112,25 @@ export default function OfflinePage() {
   }
 
   useEffect(() => {
-    loadCourseTypes();
-  }, []);
+    if (!typesLoaded) {
+      loadCourseTypes();
+    }
+  }, [typesLoaded]);
 
   useEffect(() => {
     const urlCourseType = searchParams.get('courseType');
-    if (urlCourseType) {
+    if (urlCourseType && typesLoaded) {
       setCourseType(urlCourseType);
       loadData(urlCourseType);
     }
-  }, [searchParams]);
+  }, [searchParams, typesLoaded]);
 
   const handleCourseChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selected = e.target.value;
-    setCourseType(selected);
-    router.push(`/offline?courseType=${encodeURIComponent(selected)}`);
+    if (selected) {
+      setCourseType(selected);
+      router.push(`/offline?courseType=${encodeURIComponent(selected)}`);
+    }
   };
 
   return (
@@ -140,9 +148,9 @@ export default function OfflinePage() {
           <label className="block text-xs font-semibold text-slate-400 mb-2">
             KURS TURI
           </label>
-          {loading && !data ? (
+          {!typesLoaded ? (
             <div className="text-xs text-slate-500 animate-pulse">Yuklanmoqda...</div>
-          ) : !data || data.courseTypes.length === 0 ? (
+          ) : courseTypes.length === 0 ? (
             <div className="text-xs text-slate-500">Kurs topilmadi</div>
           ) : (
             <select
@@ -151,7 +159,7 @@ export default function OfflinePage() {
               className="w-full px-3 py-2 text-xs bg-slate-800 border border-slate-700 rounded text-slate-100 hover:border-slate-600 focus:border-blue-500 focus:outline-none"
             >
               <option value="">Kurni tanlang</option>
-              {data.courseTypes.map((ct) => (
+              {courseTypes.map((ct) => (
                 <option key={ct} value={ct}>
                   {ct}
                 </option>
