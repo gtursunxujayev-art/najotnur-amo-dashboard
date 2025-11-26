@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-
-type PeriodKey = 'today' | 'week' | 'month';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 interface CasosiyRecord {
   date: Date;
@@ -56,6 +55,8 @@ function KPICard({
 }
 
 export default function OfflinePage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [courseType, setCourseType] = useState<string | null>(null);
   const [data, setData] = useState<CasosiyData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -95,8 +96,20 @@ export default function OfflinePage() {
   }
 
   useEffect(() => {
+    const urlCourseType = searchParams.get('courseType');
+    if (urlCourseType) {
+      setCourseType(urlCourseType);
+    } else {
+      loadData(null);
+    }
+  }, []);
+
+  useEffect(() => {
     loadData(courseType);
-  }, [courseType]);
+    if (courseType) {
+      router.push(`/offline?courseType=${encodeURIComponent(courseType)}`);
+    }
+  }, [courseType, router]);
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-slate-50">
@@ -119,8 +132,8 @@ export default function OfflinePage() {
             <div className="text-xs text-slate-500">Kurs topilmadi</div>
           ) : (
             <select
-              value={courseType || ''}
-              onChange={(e) => setCourseType(e.target.value || null)}
+              value={courseType || data.courseTypes[0] || ''}
+              onChange={(e) => setCourseType(e.target.value)}
               className="w-full px-3 py-2 text-xs bg-slate-800 border border-slate-700 rounded text-slate-100 hover:border-slate-600 focus:border-blue-500 focus:outline-none"
             >
               {data.courseTypes.map((ct) => (
