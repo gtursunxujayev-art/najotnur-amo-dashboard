@@ -31,29 +31,14 @@ function getPeriodDates(
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const periodParam = searchParams.get("period") as PeriodKey | null;
     const courseTypeFilter = searchParams.get("courseType") || null;
-    const fromParam = searchParams.get("from");
-    const toParam = searchParams.get("to");
 
-    let fromDate: Date;
-    let toDate: Date;
-
-    if (fromParam && toParam) {
-      fromDate = new Date(fromParam);
-      fromDate.setHours(0, 0, 0, 0);
-      toDate = new Date(toParam);
-      toDate.setHours(23, 59, 59, 999);
-    } else {
-      const period: PeriodKey =
-        periodParam === "today" || periodParam === "month" ? periodParam : "week";
-      const periodDates = getPeriodDates(period);
-      fromDate = periodDates.from;
-      toDate = periodDates.to;
-    }
+    // Fetch all data without date filtering
+    const fromDate = new Date("2025-01-01");
+    const toDate = new Date("2099-12-31");
 
     console.log(
-      `[CasosiyAPI] Fetching data from ${fromDate.toISOString()} to ${toDate.toISOString()}`
+      `[CasosiyAPI] Fetching all data from ${fromDate.toISOString()} to ${toDate.toISOString()}`
     );
 
     const allData = await getCasosiyData(fromDate, toDate);

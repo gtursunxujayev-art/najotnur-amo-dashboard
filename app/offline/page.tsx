@@ -66,7 +66,6 @@ export default function OfflinePage() {
     setError(null);
     try {
       const params = new URLSearchParams();
-      params.set('period', 'month');
       if (selectedCourse) {
         params.set('courseType', selectedCourse);
       }
