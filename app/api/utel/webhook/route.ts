@@ -87,12 +87,14 @@ export async function POST(request: Request) {
       // Parse duration - use conversation (actual talk time) if available, otherwise total duration
       let duration = 0;
       const durationValue = callData.conversation || callData.duration;
+      console.log(`[Utel/Webhook] Duration calculation - conversation: ${callData.conversation}, duration: ${callData.duration}, selected: ${durationValue}`);
       if (durationValue) {
         const dur = typeof durationValue === "string" 
           ? parseInt(durationValue) 
           : durationValue;
         duration = isNaN(dur) ? 0 : dur;
       }
+      console.log(`[Utel/Webhook] Final duration value: ${duration}`);
 
       // Determine call direction based on src field
       // In call_history: src is the caller, dst is the receiver
