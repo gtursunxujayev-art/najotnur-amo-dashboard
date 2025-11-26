@@ -257,9 +257,8 @@ export default function CallsPage() {
 
       // Replace with your actual Google Sheet ID
       const spreadsheetId = "10SpMBUxmNi4_ExGlJJwEycKDjg8VtyoH84CLcMgSbuY";
-      const sheetName = "Sheet1";
 
-      const res = await fetch(`/api/sheets/calls?spreadsheetId=${spreadsheetId}&sheetName=${sheetName}&period=${periodKey}`, {
+      const res = await fetch(`/api/sheets/calls?spreadsheetId=${spreadsheetId}&period=${periodKey}`, {
         cache: "no-store",
         signal: sheetAbortRef.current.signal,
       });

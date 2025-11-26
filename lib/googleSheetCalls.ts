@@ -117,18 +117,25 @@ function parseCallType(
 
 export async function fetchGoogleSheetCalls(
   spreadsheetId: string,
-  sheetName: string = "Sheet1",
+  sheetName: string = "",
   from: Date,
   to: Date
 ): Promise<GoogleSheetCallRow[]> {
   try {
     console.log(
-      `[GoogleSheetCalls] Fetching from spreadsheet ${spreadsheetId}, sheet "${sheetName}"`
+      `[GoogleSheetCalls] Fetching from spreadsheet ${spreadsheetId}${sheetName ? `, sheet "${sheetName}"` : ""}`
     );
 
     const sheets = await getGoogleSheetsClient();
-    const range = `${sheetName}!A:G`;
+    
+    // Try different range formats
+    let range = "A:G"; // Default: just columns
+    if (sheetName && sheetName.trim()) {
+      range = `'${sheetName}'!A:G`; // Use quoted sheet name for special characters
+    }
 
+    console.log(`[GoogleSheetCalls] Trying range: ${range}`);
+    
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
       range,
