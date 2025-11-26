@@ -65,11 +65,11 @@ export async function GET(request: Request) {
       toDate
     );
 
-    // Group by caller/direction for summary
-    const callerStats = new Map<
+    // Group by manager name (not caller number)
+    const managerStats = new Map<
       string,
       {
-        caller: string;
+        manager: string;
         incomingCount: number;
         outgoingCount: number;
         missedCount: number;
@@ -78,11 +78,11 @@ export async function GET(request: Request) {
     >();
 
     for (const call of sheetCalls) {
-      const callerName = call.caller;
+      const managerName = call.manager;
 
-      if (!callerStats.has(callerName)) {
-        callerStats.set(callerName, {
-          caller: callerName,
+      if (!managerStats.has(managerName)) {
+        managerStats.set(managerName, {
+          manager: managerName,
           incomingCount: 0,
           outgoingCount: 0,
           missedCount: 0,
@@ -90,7 +90,7 @@ export async function GET(request: Request) {
         });
       }
 
-      const stats = callerStats.get(callerName)!;
+      const stats = managerStats.get(managerName)!;
       stats.totalDurationSec += call.duration;
       if (call.direction === "in") {
         stats.incomingCount++;
@@ -101,7 +101,7 @@ export async function GET(request: Request) {
       }
     }
 
-    const callerSummary = Array.from(callerStats.values()).sort(
+    const managerSummary = Array.from(managerStats.values()).sort(
       (a, b) =>
         b.incomingCount +
         b.outgoingCount +
@@ -114,7 +114,7 @@ export async function GET(request: Request) {
       data: {
         source: "google_sheet",
         totalCalls: sheetCalls.length,
-        callerSummary: callerSummary.map((c) => ({
+        managerSummary: managerSummary.map((c) => ({
           ...c,
           totalCalls: c.incomingCount + c.outgoingCount + c.missedCount,
           formattedDuration: formatDuration(c.totalDurationSec),

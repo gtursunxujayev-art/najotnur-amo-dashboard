@@ -59,8 +59,8 @@ type SheetCallsData = {
   data?: {
     source: string;
     totalCalls: number;
-    callerSummary: Array<{
-      caller: string;
+    managerSummary: Array<{
+      manager: string;
       incomingCount: number;
       outgoingCount: number;
       missedCount: number;
@@ -553,7 +553,7 @@ export default function CallsPage() {
             <div className="text-xs text-red-400">
               Xato: {sheetError}
             </div>
-          ) : !sheetData?.success || !sheetData?.data || sheetData.data.callerSummary.length === 0 ? (
+          ) : !sheetData?.success || !sheetData?.data || sheetData.data.managerSummary.length === 0 ? (
             <div className="text-xs text-slate-500">
               Tanlangan davr uchun Google Sheet qo&apos;ng&apos;iroqlari topilmadi.
             </div>
@@ -562,7 +562,7 @@ export default function CallsPage() {
               <table className="min-w-full text-left text-xs text-slate-200">
                 <thead>
                   <tr className="border-b border-slate-700 bg-slate-800/60">
-                    <th className="px-3 py-2">Abonent</th>
+                    <th className="px-3 py-2">Menejer</th>
                     <th className="px-3 py-2">Jami qo&apos;ng&apos;iroqlar</th>
                     <th className="px-3 py-2">Kirimchi</th>
                     <th className="px-3 py-2">Chiquvchi</th>
@@ -571,28 +571,28 @@ export default function CallsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sheetData.data.callerSummary
+                  {sheetData.data.managerSummary
                     .sort((a, b) => b.totalCalls - a.totalCalls)
-                    .map((caller) => (
+                    .map((manager) => (
                       <tr
-                        key={caller.caller}
+                        key={manager.manager}
                         className="border-b border-slate-800 last:border-0"
                       >
-                        <td className="px-3 py-2">{caller.caller}</td>
+                        <td className="px-3 py-2">{manager.manager}</td>
                         <td className="px-3 py-2">
-                          {caller.totalCalls.toLocaleString("ru-RU")}
+                          {manager.totalCalls.toLocaleString("ru-RU")}
                         </td>
                         <td className="px-3 py-2">
-                          {caller.incomingCount.toLocaleString("ru-RU")}
+                          {manager.incomingCount.toLocaleString("ru-RU")}
                         </td>
                         <td className="px-3 py-2">
-                          {caller.outgoingCount.toLocaleString("ru-RU")}
+                          {manager.outgoingCount.toLocaleString("ru-RU")}
                         </td>
                         <td className="px-3 py-2">
-                          {caller.missedCount.toLocaleString("ru-RU")}
+                          {manager.missedCount.toLocaleString("ru-RU")}
                         </td>
                         <td className="px-3 py-2 font-semibold">
-                          {caller.formattedDuration}
+                          {manager.formattedDuration}
                         </td>
                       </tr>
                     ))}
