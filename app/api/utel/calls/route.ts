@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { fetchUtelCalls } from "@/lib/utelCalls";
 import { getManagerNameFromExtension } from "@/lib/extensionMapping";
+import { utelRecentCalls } from "@/app/api/utel/webhook/route";
 
 export const dynamic = "force-dynamic";
 
@@ -63,8 +64,28 @@ export async function GET(request: Request) {
       `[UtelCalls/API] Fetching calls from ${fromDate.toISOString()} to ${toDate.toISOString()}`
     );
 
-    // Fetch from UTel API
-    const utelCalls = await fetchUtelCalls(fromDate, toDate);
+    // Use webhook calls (most reliable) + fallback to API calls
+    let utelCalls = utelRecentCalls
+      .filter((call) => {
+        const callDate = new Date(call.date);
+        return callDate >= fromDate && callDate <= toDate;
+      })
+      .map((call) => ({
+        id: call.id,
+        direction: call.direction as "in" | "out",
+        date: new Date(call.date),
+        duration: call.duration,
+        phone: call.phone,
+        extension: call.extension,
+        name: call.manager,
+      }));
+
+    // If no webhook calls found, try API as fallback
+    if (utelCalls.length === 0) {
+      console.log("[UtelCalls/API] No webhook calls found, trying API fallback...");
+      const apiCalls = await fetchUtelCalls(fromDate, toDate);
+      utelCalls = apiCalls;
+    }
 
     // Group by manager (extension -> name mapping)
     const managerStats = new Map<
