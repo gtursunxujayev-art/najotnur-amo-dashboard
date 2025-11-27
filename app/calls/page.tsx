@@ -413,8 +413,13 @@ export default function CallsPage() {
               });
             }
 
-            const mergedData = Array.from(mergedManagers.values())
+            let mergedData = Array.from(mergedManagers.values())
               .sort((a, b) => b.totalCalls - a.totalCalls);
+
+            // Filter out IVR system calls (5000, 5001, Unknown)
+            mergedData = mergedData.filter(
+              (m) => m.manager !== "5000" && m.manager !== "5001" && m.manager !== "Unknown"
+            );
 
             if (mergedData.length === 0) {
               return (
@@ -432,15 +437,23 @@ export default function CallsPage() {
             const totalOutgoing = mergedData.reduce((sum, m) => sum + m.outgoingCalls, 0);
             const totalDuration = mergedData.reduce((sum, m) => sum + m.totalDurationSec, 0);
 
-            // Split into above and below average
-            const aboveAverage = mergedData.filter((m) => m.totalCalls > avgCalls);
-            const belowAverage = mergedData.filter((m) => m.totalCalls <= avgCalls);
+            // Split into above and below average (using filtered average)
+            const aboveAverage = mergedData.filter((m) => m.totalCalls > filteredAvgCalls);
+            const belowAverage = mergedData.filter((m) => m.totalCalls <= filteredAvgCalls);
+
+            // Recalculate summary after filtering
+            const filteredTotalCalls = mergedData.reduce((sum, m) => sum + m.totalCalls, 0);
+            const filteredTotalManagers = mergedData.length;
+            const filteredAvgCalls = filteredTotalManagers > 0 ? filteredTotalCalls / filteredTotalManagers : 0;
+            const filteredTotalIncoming = mergedData.reduce((sum, m) => sum + m.incomingCalls, 0);
+            const filteredTotalOutgoing = mergedData.reduce((sum, m) => sum + m.outgoingCalls, 0);
+            const filteredTotalDuration = mergedData.reduce((sum, m) => sum + m.totalDurationSec, 0);
 
             return (
               <div className="space-y-4">
-                {/* Column Headers */}
-                <div className="overflow-x-auto mb-3">
-                  <table className="min-w-full text-left text-xs font-semibold text-slate-400">
+                {/* Summary Row */}
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-left text-xs text-slate-200">
                     <thead>
                       <tr className="border-b border-slate-700 bg-slate-800/50">
                         <th className="px-3 py-2">#</th>
@@ -452,20 +465,15 @@ export default function CallsPage() {
                         <th className="px-3 py-2">Subhbatlar umumiy vaqti</th>
                       </tr>
                     </thead>
-                  </table>
-                </div>
-
-                {/* Summary Row */}
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-left text-xs text-slate-200">
                     <tbody>
                       <tr className="border-b-2 border-slate-700 bg-slate-800">
-                        <td className="px-3 py-2 font-semibold">Barcha xodimlar ({totalManagers})</td>
-                        <td className="px-3 py-2 font-semibold">{totalCalls}</td>
-                        <td className="px-3 py-2">{avgCalls.toFixed(1)}</td>
-                        <td className="px-3 py-2">{totalIncoming}</td>
-                        <td className="px-3 py-2">{totalOutgoing}</td>
-                        <td className="px-3 py-2 font-semibold">{formatDuration(totalDuration)}</td>
+                        <td className="px-3 py-2"></td>
+                        <td className="px-3 py-2 font-semibold">Barcha xodimlar ({filteredTotalManagers})</td>
+                        <td className="px-3 py-2 font-semibold">{filteredTotalCalls}</td>
+                        <td className="px-3 py-2">{filteredAvgCalls.toFixed(1)}</td>
+                        <td className="px-3 py-2">{filteredTotalIncoming}</td>
+                        <td className="px-3 py-2">{filteredTotalOutgoing}</td>
+                        <td className="px-3 py-2 font-semibold">{formatDuration(filteredTotalDuration)}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -482,11 +490,11 @@ export default function CallsPage() {
                             <tr key={manager.manager} className="border-b border-slate-800 hover:bg-slate-800/30">
                               <td className="px-3 py-2">{idx + 1}</td>
                               <td className="px-3 py-2">{manager.manager}</td>
-                              <td className="px-3 py-2">{manager.totalCalls}</td>
-                              <td className="px-3 py-2">{manager.totalCalls.toFixed(1)}</td>
-                              <td className="px-3 py-2">{manager.incomingCalls}</td>
-                              <td className="px-3 py-2">{manager.outgoingCalls}</td>
-                              <td className="px-3 py-2">{formatDuration(manager.totalDurationSec)}</td>
+                              <td className="px-3 py-2 text-center">{manager.totalCalls}</td>
+                              <td className="px-3 py-2 text-center">{manager.totalCalls.toFixed(1)}</td>
+                              <td className="px-3 py-2 text-center">{manager.incomingCalls}</td>
+                              <td className="px-3 py-2 text-center">{manager.outgoingCalls}</td>
+                              <td className="px-3 py-2 text-center">{formatDuration(manager.totalDurationSec)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -506,11 +514,11 @@ export default function CallsPage() {
                             <tr key={manager.manager} className="border-b border-slate-800 hover:bg-slate-800/30">
                               <td className="px-3 py-2">{aboveAverage.length + idx + 1}</td>
                               <td className="px-3 py-2">{manager.manager}</td>
-                              <td className="px-3 py-2">{manager.totalCalls}</td>
-                              <td className="px-3 py-2">{manager.totalCalls.toFixed(1)}</td>
-                              <td className="px-3 py-2">{manager.incomingCalls}</td>
-                              <td className="px-3 py-2">{manager.outgoingCalls}</td>
-                              <td className="px-3 py-2">{formatDuration(manager.totalDurationSec)}</td>
+                              <td className="px-3 py-2 text-center">{manager.totalCalls}</td>
+                              <td className="px-3 py-2 text-center">{manager.totalCalls.toFixed(1)}</td>
+                              <td className="px-3 py-2 text-center">{manager.incomingCalls}</td>
+                              <td className="px-3 py-2 text-center">{manager.outgoingCalls}</td>
+                              <td className="px-3 py-2 text-center">{formatDuration(manager.totalDurationSec)}</td>
                             </tr>
                           ))}
                         </tbody>
