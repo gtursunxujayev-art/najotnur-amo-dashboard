@@ -15,12 +15,13 @@ interface ManagerStats {
   totalCallLength: number;
   dailyAvgCalls: number;
   dailyAvgCallLength: number;
+  revenue: number;
   lostLeadReasons: { reason: string; count: number }[];
 }
 
 export async function GET(request: NextRequest) {
   try {
-    // Mock data for Sotuvchilar page
+    // Mock data for Sotuvchilar page with revenue
     const mockManagers: ManagerStats[] = [
       {
         name: 'Matluba',
@@ -35,6 +36,7 @@ export async function GET(request: NextRequest) {
         totalCallLength: 10380,
         dailyAvgCalls: 54.5,
         dailyAvgCallLength: 5190,
+        revenue: 2400000,
         lostLeadReasons: [
           { reason: 'Narx ortiq', count: 5 },
           { reason: 'Vaqt yo\'q', count: 3 },
@@ -54,6 +56,7 @@ export async function GET(request: NextRequest) {
         totalCallLength: 3927,
         dailyAvgCalls: 27.0,
         dailyAvgCallLength: 1963.5,
+        revenue: 1600000,
         lostLeadReasons: [
           { reason: 'Narx ortiq', count: 4 },
           { reason: 'Boshqa kompaniya tanladi', count: 2 },
@@ -72,6 +75,7 @@ export async function GET(request: NextRequest) {
         totalCallLength: 1932,
         dailyAvgCalls: 10.0,
         dailyAvgCallLength: 966,
+        revenue: 800000,
         lostLeadReasons: [
           { reason: 'Vaqt yo\'q', count: 5 },
           { reason: 'Narx ortiq', count: 3 },

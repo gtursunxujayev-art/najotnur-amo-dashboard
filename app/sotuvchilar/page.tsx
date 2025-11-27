@@ -17,6 +17,7 @@ interface ManagerStats {
   totalCallLength: number;
   dailyAvgCalls: number;
   dailyAvgCallLength: number;
+  revenue: number;
   lostLeadReasons: { reason: string; count: number }[];
 }
 
@@ -212,6 +213,10 @@ export default function SotuvchilarPage() {
                     {
                       label: 'Konversiya umumiy',
                       value: `${selectedManagerData.conversionToAllLeads.toFixed(1)}%`,
+                    },
+                    {
+                      label: 'Tushum',
+                      value: `${(selectedManagerData.revenue / 1000000).toFixed(1)}M`,
                     },
                   ].map((item, idx) => (
                     <div key={idx} className="rounded-lg bg-slate-800/50 p-4">
