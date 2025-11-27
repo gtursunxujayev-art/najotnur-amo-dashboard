@@ -429,25 +429,17 @@ export default function CallsPage() {
               );
             }
 
-            // Calculate summary statistics
-            const totalCalls = mergedData.reduce((sum, m) => sum + m.totalCalls, 0);
-            const totalManagers = mergedData.length;
-            const avgCalls = totalManagers > 0 ? totalCalls / totalManagers : 0;
-            const totalIncoming = mergedData.reduce((sum, m) => sum + m.incomingCalls, 0);
-            const totalOutgoing = mergedData.reduce((sum, m) => sum + m.outgoingCalls, 0);
-            const totalDuration = mergedData.reduce((sum, m) => sum + m.totalDurationSec, 0);
-
-            // Split into above and below average (using filtered average)
-            const aboveAverage = mergedData.filter((m) => m.totalCalls > filteredAvgCalls);
-            const belowAverage = mergedData.filter((m) => m.totalCalls <= filteredAvgCalls);
-
-            // Recalculate summary after filtering
+            // Calculate summary statistics after filtering
             const filteredTotalCalls = mergedData.reduce((sum, m) => sum + m.totalCalls, 0);
             const filteredTotalManagers = mergedData.length;
             const filteredAvgCalls = filteredTotalManagers > 0 ? filteredTotalCalls / filteredTotalManagers : 0;
             const filteredTotalIncoming = mergedData.reduce((sum, m) => sum + m.incomingCalls, 0);
             const filteredTotalOutgoing = mergedData.reduce((sum, m) => sum + m.outgoingCalls, 0);
             const filteredTotalDuration = mergedData.reduce((sum, m) => sum + m.totalDurationSec, 0);
+
+            // Split into above and below average (using filtered average)
+            const aboveAverage = mergedData.filter((m) => m.totalCalls > filteredAvgCalls);
+            const belowAverage = mergedData.filter((m) => m.totalCalls <= filteredAvgCalls);
 
             return (
               <div className="space-y-4">
