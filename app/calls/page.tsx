@@ -443,9 +443,9 @@ export default function CallsPage() {
 
             return (
               <div className="space-y-4">
-                {/* Summary Row */}
                 <div className="overflow-x-auto">
-                  <table className="min-w-full text-left text-xs text-slate-200">
+                  <table className="min-w-full text-left text-xs text-slate-200 border-collapse">
+                    {/* Table Header */}
                     <thead>
                       <tr className="border-b border-slate-700 bg-slate-800/50">
                         <th className="px-3 py-2">#</th>
@@ -457,67 +457,62 @@ export default function CallsPage() {
                         <th className="px-3 py-2">Subhbatlar umumiy vaqti</th>
                       </tr>
                     </thead>
+
+                    {/* Table Body */}
                     <tbody>
+                      {/* Summary Row */}
                       <tr className="border-b-2 border-slate-700 bg-slate-800">
                         <td className="px-3 py-2"></td>
                         <td className="px-3 py-2 font-semibold">Barcha xodimlar ({filteredTotalManagers})</td>
-                        <td className="px-3 py-2 font-semibold">{filteredTotalCalls}</td>
-                        <td className="px-3 py-2">{filteredAvgCalls.toFixed(1)}</td>
-                        <td className="px-3 py-2">{filteredTotalIncoming}</td>
-                        <td className="px-3 py-2">{filteredTotalOutgoing}</td>
-                        <td className="px-3 py-2 font-semibold">{formatDuration(filteredTotalDuration)}</td>
+                        <td className="px-3 py-2 font-semibold text-center">{filteredTotalCalls}</td>
+                        <td className="px-3 py-2 text-center">{filteredAvgCalls.toFixed(1)}</td>
+                        <td className="px-3 py-2 text-center">{filteredTotalIncoming}</td>
+                        <td className="px-3 py-2 text-center">{filteredTotalOutgoing}</td>
+                        <td className="px-3 py-2 font-semibold text-center">{formatDuration(filteredTotalDuration)}</td>
                       </tr>
+
+                      {/* Above Average Header */}
+                      {aboveAverage.length > 0 && (
+                        <tr className="border-t-2 border-slate-700 bg-slate-900/50">
+                          <td colSpan={7} className="px-3 py-2 font-semibold text-slate-300">O&apos;rtachadan yuqori:</td>
+                        </tr>
+                      )}
+
+                      {/* Above Average Rows */}
+                      {aboveAverage.map((manager, idx) => (
+                        <tr key={manager.manager} className="border-b border-slate-800 hover:bg-slate-800/30">
+                          <td className="px-3 py-2">{idx + 1}</td>
+                          <td className="px-3 py-2">{manager.manager}</td>
+                          <td className="px-3 py-2 text-center">{manager.totalCalls}</td>
+                          <td className="px-3 py-2 text-center">{manager.totalCalls.toFixed(1)}</td>
+                          <td className="px-3 py-2 text-center">{manager.incomingCalls}</td>
+                          <td className="px-3 py-2 text-center">{manager.outgoingCalls}</td>
+                          <td className="px-3 py-2 text-center">{formatDuration(manager.totalDurationSec)}</td>
+                        </tr>
+                      ))}
+
+                      {/* Below Average Header */}
+                      {belowAverage.length > 0 && (
+                        <tr className="border-t-2 border-slate-700 bg-slate-900/50">
+                          <td colSpan={7} className="px-3 py-2 font-semibold text-slate-300">O&apos;rtachadan past:</td>
+                        </tr>
+                      )}
+
+                      {/* Below Average Rows */}
+                      {belowAverage.map((manager, idx) => (
+                        <tr key={manager.manager} className="border-b border-slate-800 hover:bg-slate-800/30">
+                          <td className="px-3 py-2">{aboveAverage.length + idx + 1}</td>
+                          <td className="px-3 py-2">{manager.manager}</td>
+                          <td className="px-3 py-2 text-center">{manager.totalCalls}</td>
+                          <td className="px-3 py-2 text-center">{manager.totalCalls.toFixed(1)}</td>
+                          <td className="px-3 py-2 text-center">{manager.incomingCalls}</td>
+                          <td className="px-3 py-2 text-center">{manager.outgoingCalls}</td>
+                          <td className="px-3 py-2 text-center">{formatDuration(manager.totalDurationSec)}</td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
-
-                {/* Above Average */}
-                {aboveAverage.length > 0 && (
-                  <div className="space-y-2">
-                    <h3 className="text-xs font-semibold text-slate-300">O&apos;rtachadan yuqori:</h3>
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full text-left text-xs text-slate-200">
-                        <tbody>
-                          {aboveAverage.map((manager, idx) => (
-                            <tr key={manager.manager} className="border-b border-slate-800 hover:bg-slate-800/30">
-                              <td className="px-3 py-2">{idx + 1}</td>
-                              <td className="px-3 py-2">{manager.manager}</td>
-                              <td className="px-3 py-2 text-center">{manager.totalCalls}</td>
-                              <td className="px-3 py-2 text-center">{manager.totalCalls.toFixed(1)}</td>
-                              <td className="px-3 py-2 text-center">{manager.incomingCalls}</td>
-                              <td className="px-3 py-2 text-center">{manager.outgoingCalls}</td>
-                              <td className="px-3 py-2 text-center">{formatDuration(manager.totalDurationSec)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {/* Below Average */}
-                {belowAverage.length > 0 && (
-                  <div className="space-y-2">
-                    <h3 className="text-xs font-semibold text-slate-300">O&apos;rtachadan past:</h3>
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full text-left text-xs text-slate-200">
-                        <tbody>
-                          {belowAverage.map((manager, idx) => (
-                            <tr key={manager.manager} className="border-b border-slate-800 hover:bg-slate-800/30">
-                              <td className="px-3 py-2">{aboveAverage.length + idx + 1}</td>
-                              <td className="px-3 py-2">{manager.manager}</td>
-                              <td className="px-3 py-2 text-center">{manager.totalCalls}</td>
-                              <td className="px-3 py-2 text-center">{manager.totalCalls.toFixed(1)}</td>
-                              <td className="px-3 py-2 text-center">{manager.incomingCalls}</td>
-                              <td className="px-3 py-2 text-center">{manager.outgoingCalls}</td>
-                              <td className="px-3 py-2 text-center">{formatDuration(manager.totalDurationSec)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
               </div>
             );
           })()}
