@@ -226,17 +226,21 @@ export default function SotuvchilarPage() {
                   <h3 className="mb-4 text-lg font-semibold text-white">Qo'ng'iroq ma'lumotlari</h3>
                   <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                     <div>
+                      <p className="text-xs text-slate-400">Jami qo'ng'iroqlar</p>
+                      <p className="text-2xl font-bold text-white">{selectedManagerData.totalCalls}</p>
+                    </div>
+                    <div>
                       <p className="text-xs text-slate-400">Kunlik o'rtacha</p>
                       <p className="text-2xl font-bold text-white">{selectedManagerData.dailyAvgCalls.toFixed(1)}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-slate-400">Jami vaqti (soat)</p>
+                      <p className="text-xs text-slate-400">Qo'ng'iroqlardavomiyligi</p>
                       <p className="text-2xl font-bold text-white">
-                        {(selectedManagerData.totalCallLength / 3600).toFixed(1)}
+                        {formatDuration(selectedManagerData.totalCallLength)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-slate-400">O'rtacha kunlik vaqti</p>
+                      <p className="text-xs text-slate-400">O'rtacha Kunlik</p>
                       <p className="text-2xl font-bold text-white">
                         {formatDuration(selectedManagerData.dailyAvgCallLength)}
                       </p>
