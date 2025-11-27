@@ -6,21 +6,23 @@
  * 1. Update the EXTENSION_MAP below with your extensions
  * 2. Extensions will be automatically looked up when storing webhook calls
  * 3. If an extension is not in the map, it will be stored as-is (number)
+ * 
+ * Last Updated: Nov 27, 2025
  */
 
 // Manual extension-to-manager mapping
 // Maps OnlinePBX/Utel/GoogleSheets extension numbers to actual manager names
 export const EXTENSION_MAP: Record<string, string> = {
-  "100": "System/IVR",
-  "101": "Mumtoza",
-  "102": "Madina",
-  "103": "Matluba",
-  "104": "Zilola",
-  "105": "Oyshaxon",
-  "106": "Sabrina",
-  "107": "Marg'uba",
+  "100": "Admin",
+  "101": "Madina",
+  "102": "Oyshaxon",
+  "103": "Zilola",
+  "104": "Marg'uba",
+  "105": "Sabrina",
+  "106": "Mumtoza",
+  "107": "Matluba",
   "108": "Mohinur",
-  "109": "Sabina",
+  "109": "sabina",
   "110": "Gulchehra",
   "111": "Orzugul",
 };
