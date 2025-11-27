@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { buildDashboardData, Period } from '@/lib/dashboard';
-import { prisma } from '@/lib/prisma';
-import { getManagerNameFromExtension } from '@/lib/extensionMapping';
-import { getLeadsByCreatedAt, getUsers, AmoLead } from '@/lib/amocrm';
+import { getAmoCalls, getUsers } from '@/lib/amocrm';
 import { dashboardConfig } from '@/config/dashboardConfig';
 
 export const dynamic = 'force-dynamic';
@@ -117,48 +115,28 @@ export async function GET(request: NextRequest) {
       activeLeadsByManager.set(ms.managerName, activeLeads);
     });
 
-    // Fetch call data from OnlinePBX database
-    const onlinepbxCalls = await prisma.onlinePBXCall.findMany({
-      where: {
-        date: {
-          gte: fromDate,
-          lte: toDate,
-        },
-      },
+    // Fetch calls from amoCRM (same source as calls page for consistency)
+    const calls = await getAmoCalls(fromDate, toDate).catch(() => []);
+    const users = await getUsers().catch(() => []);
+
+    // Map users by ID for quick lookup
+    const usersMap = new Map<number, string>();
+    users.forEach((u: any) => {
+      usersMap.set(u.id, u.name);
     });
 
-    // Fetch call data from Utel database
-    const utelCalls = await prisma.utelCall.findMany({
-      where: {
-        date: {
-          gte: fromDate,
-          lte: toDate,
-        },
-      },
-    });
-
-    // Aggregate calls by manager
+    // Aggregate calls by manager (using amoCRM data for consistency with calls page)
     const callsByManager = new Map<string, {
       totalCalls: number;
       totalDurationSec: number;
     }>();
 
-    // Process OnlinePBX calls
-    onlinepbxCalls.forEach((call) => {
-      const manager = call.user || 'Unknown';
-      const existing = callsByManager.get(manager) || { totalCalls: 0, totalDurationSec: 0 };
+    calls.forEach((call: any) => {
+      const managerName = usersMap.get(call.managerId) || `Manager ${call.managerId}`;
+      const existing = callsByManager.get(managerName) || { totalCalls: 0, totalDurationSec: 0 };
       existing.totalCalls += 1;
-      existing.totalDurationSec += call.duration || 0;
-      callsByManager.set(manager, existing);
-    });
-
-    // Process Utel calls
-    utelCalls.forEach((call) => {
-      const manager = call.manager || 'Unknown';
-      const existing = callsByManager.get(manager) || { totalCalls: 0, totalDurationSec: 0 };
-      existing.totalCalls += 1;
-      existing.totalDurationSec += call.duration || 0;
-      callsByManager.set(manager, existing);
+      existing.totalDurationSec += (call.durationSec || 0);
+      callsByManager.set(managerName, existing);
     });
 
     // Calculate number of days in period for daily averages
