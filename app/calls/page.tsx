@@ -346,9 +346,6 @@ export default function CallsPage() {
       <div className="space-y-6">
         {/* Combined Call Information - OnlinePBX + Utel by Manager */}
         <section className="rounded-lg border border-slate-700 bg-slate-900 p-4">
-          <h2 className="mb-3 text-sm font-semibold text-slate-200">
-            Qo&apos;ng&apos;iroqlar ma'lumoti – Menejerlar bo&apos;yicha (OnlinePBX + UTel)
-          </h2>
           {(onlinepbxLoading || utelLoading) ? (
             <div className="text-xs text-slate-400 animate-pulse">
               Qo&apos;ng&apos;iroqlar yuklanmoqda...
@@ -427,307 +424,88 @@ export default function CallsPage() {
               );
             }
 
+            // Calculate summary statistics
+            const totalCalls = mergedData.reduce((sum, m) => sum + m.totalCalls, 0);
+            const totalManagers = mergedData.length;
+            const avgCalls = totalManagers > 0 ? totalCalls / totalManagers : 0;
+            const totalIncoming = mergedData.reduce((sum, m) => sum + m.incomingCalls, 0);
+            const totalOutgoing = mergedData.reduce((sum, m) => sum + m.outgoingCalls, 0);
+            const totalDuration = mergedData.reduce((sum, m) => sum + m.totalDurationSec, 0);
+
+            // Split into above and below average
+            const aboveAverage = mergedData.filter((m) => m.totalCalls > avgCalls);
+            const belowAverage = mergedData.filter((m) => m.totalCalls <= avgCalls);
+
             return (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-xs text-slate-200">
-                  <thead>
-                    <tr className="border-b border-slate-700 bg-slate-800/60">
-                      <th className="px-3 py-2">Menejer</th>
-                      <th className="px-3 py-2">Jami qo&apos;ng&apos;iroqlar</th>
-                      <th className="px-3 py-2">Kirimchi</th>
-                      <th className="px-3 py-2">Chiquvchi</th>
-                      <th className="px-3 py-2">Umumiy davomiyligi</th>
-                      <th className="px-3 py-2">Manba</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {mergedData.map((manager) => (
-                      <tr
-                        key={manager.manager}
-                        className="border-b border-slate-800 last:border-0"
-                      >
-                        <td className="px-3 py-2">{manager.manager}</td>
-                        <td className="px-3 py-2">
-                          {manager.totalCalls.toLocaleString("ru-RU")}
-                        </td>
-                        <td className="px-3 py-2">
-                          {manager.incomingCalls.toLocaleString("ru-RU")}
-                        </td>
-                        <td className="px-3 py-2">
-                          {manager.outgoingCalls.toLocaleString("ru-RU")}
-                        </td>
-                        <td className="px-3 py-2 font-semibold">
-                          {formatDuration(manager.totalDurationSec)}
-                        </td>
-                        <td className="px-3 py-2 text-xs text-slate-400">
-                          {manager.sources.join(", ")}
-                        </td>
+              <div className="space-y-4">
+                {/* Summary Row */}
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-left text-xs text-slate-200">
+                    <tbody>
+                      <tr className="border-b-2 border-slate-700 bg-slate-800">
+                        <td className="px-3 py-2 font-semibold">Barcha xodimlar ({totalManagers})</td>
+                        <td className="px-3 py-2 font-semibold">{totalCalls}</td>
+                        <td className="px-3 py-2">{avgCalls.toFixed(1)}</td>
+                        <td className="px-3 py-2">{totalIncoming}</td>
+                        <td className="px-3 py-2">{totalOutgoing}</td>
+                        <td className="px-3 py-2 font-semibold">{formatDuration(totalDuration)}</td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Above Average */}
+                {aboveAverage.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="text-xs font-semibold text-slate-300">O&apos;rtachadan yuqori:</h3>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-left text-xs text-slate-200">
+                        <tbody>
+                          {aboveAverage.map((manager, idx) => (
+                            <tr key={manager.manager} className="border-b border-slate-800 hover:bg-slate-800/30">
+                              <td className="px-3 py-2">{idx + 1}</td>
+                              <td className="px-3 py-2">{manager.manager}</td>
+                              <td className="px-3 py-2">{manager.totalCalls}</td>
+                              <td className="px-3 py-2">{manager.totalCalls.toFixed(1)}</td>
+                              <td className="px-3 py-2">{manager.incomingCalls}</td>
+                              <td className="px-3 py-2">{manager.outgoingCalls}</td>
+                              <td className="px-3 py-2">{formatDuration(manager.totalDurationSec)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Below Average */}
+                {belowAverage.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="text-xs font-semibold text-slate-300">O&apos;rtachadan past:</h3>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-left text-xs text-slate-200">
+                        <tbody>
+                          {belowAverage.map((manager, idx) => (
+                            <tr key={manager.manager} className="border-b border-slate-800 hover:bg-slate-800/30">
+                              <td className="px-3 py-2">{aboveAverage.length + idx + 1}</td>
+                              <td className="px-3 py-2">{manager.manager}</td>
+                              <td className="px-3 py-2">{manager.totalCalls}</td>
+                              <td className="px-3 py-2">{manager.totalCalls.toFixed(1)}</td>
+                              <td className="px-3 py-2">{manager.incomingCalls}</td>
+                              <td className="px-3 py-2">{manager.outgoingCalls}</td>
+                              <td className="px-3 py-2">{formatDuration(manager.totalDurationSec)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })()}
         </section>
 
-        {/* Manager calls (amoCRM) */}
-        <section className="rounded-lg border border-slate-700 bg-slate-900 p-4">
-          <h2 className="mb-3 text-sm font-semibold text-slate-200">
-            Qo&apos;ng&apos;iroqlar bo&apos;yicha menejerlar (amoCRM)
-          </h2>
-          {callsLoading ? (
-            <div className="text-xs text-slate-400 animate-pulse">
-              Qo&apos;ng&apos;iroqlar yuklanmoqda...
-            </div>
-          ) : callsError ? (
-            <div className="text-xs text-red-400">
-              Xato: {callsError}
-            </div>
-          ) : !callsData || callsData.managerCalls.length === 0 ? (
-            <div className="text-xs text-slate-500">
-              Qo&apos;ng&apos;iroqlar statistikasi topilmadi.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-xs text-slate-200">
-                <thead>
-                  <tr className="border-b border-slate-700 bg-slate-800/60">
-                    <th className="px-3 py-2">Menejer</th>
-                    <th className="px-3 py-2">Jami qo&apos;ng&apos;iroqlar</th>
-                    <th className="px-3 py-2">Chiquvchi qo&apos;ng&apos;iroqlar</th>
-                    <th className="px-3 py-2">Umumiy davomiyligi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {callsData.managerCalls.map((m) => (
-                    <tr
-                      key={m.managerId}
-                      className="border-b border-slate-800 last:border-0"
-                    >
-                      <td className="px-3 py-2">{m.managerName}</td>
-                      <td className="px-3 py-2">
-                        {m.callsAll.toLocaleString("ru-RU")}
-                      </td>
-                      <td className="px-3 py-2">
-                        {m.callsOutbound.toLocaleString("ru-RU")}
-                      </td>
-                      <td className="px-3 py-2 font-semibold">
-                        {formatDuration(m.totalDurationSec || 0)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        {/* OnlinePBX calls (Real-time from webhooks) - Manager summary */}
-        <section className="rounded-lg border border-slate-700 bg-slate-900 p-4">
-          <h2 className="mb-3 text-sm font-semibold text-slate-200">
-            OnlinePBX Qo&apos;ng&apos;iroqlar bo&apos;yicha menejerlar
-          </h2>
-          {onlinepbxLoading ? (
-            <div className="text-xs text-slate-400 animate-pulse">
-              OnlinePBX qo&apos;ng&apos;iroqlari yuklanmoqda...
-            </div>
-          ) : onlinepbxError ? (
-            <div className="text-xs text-red-400">
-              Xato: {onlinepbxError}
-            </div>
-          ) : !onlinepbxData || onlinepbxData.recentCalls.length === 0 ? (
-            <div className="text-xs text-slate-500">
-              Tanlangan davr uchun OnlinePBX qo&apos;ng&apos;iroqlari topilmadi.
-            </div>
-          ) : (() => {
-            // Aggregate calls by manager
-            // Note: call.user is already mapped from extension to manager name by the webhook
-            const managerStats = onlinepbxData.recentCalls.reduce((acc, call) => {
-              const managerName = call.user || "Unknown";
-              
-              const existing = acc.find((m) => m.user === managerName);
-              if (existing) {
-                existing.totalCalls += 1;
-                if (call.type === "out") {
-                  existing.outboundCalls += 1;
-                } else if (call.type === "in") {
-                  existing.inboundCalls += 1;
-                }
-                existing.totalDuration += call.duration;
-              } else {
-                acc.push({
-                  user: managerName,
-                  totalCalls: 1,
-                  outboundCalls: call.type === "out" ? 1 : 0,
-                  inboundCalls: call.type === "in" ? 1 : 0,
-                  totalDuration: call.duration,
-                });
-              }
-              return acc;
-            }, [] as Array<{ user: string; totalCalls: number; outboundCalls: number; inboundCalls: number; totalDuration: number }>);
-
-            return (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-xs text-slate-200">
-                  <thead>
-                    <tr className="border-b border-slate-700 bg-slate-800/60">
-                      <th className="px-3 py-2">Menejer</th>
-                      <th className="px-3 py-2">Jami qo&apos;ng&apos;iroqlar</th>
-                      <th className="px-3 py-2">Kirimchi qo&apos;ng&apos;iroqlar</th>
-                      <th className="px-3 py-2">Chiquvchi qo&apos;ng&apos;iroqlar</th>
-                      <th className="px-3 py-2">Umumiy davomiyligi</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {managerStats
-                      .sort((a, b) => b.totalCalls - a.totalCalls)
-                      .map((manager) => (
-                        <tr
-                          key={manager.user}
-                          className="border-b border-slate-800 last:border-0"
-                        >
-                          <td className="px-3 py-2">{manager.user}</td>
-                          <td className="px-3 py-2">
-                            {manager.totalCalls.toLocaleString("ru-RU")}
-                          </td>
-                          <td className="px-3 py-2">
-                            {manager.inboundCalls.toLocaleString("ru-RU")}
-                          </td>
-                          <td className="px-3 py-2">
-                            {manager.outboundCalls.toLocaleString("ru-RU")}
-                          </td>
-                          <td className="px-3 py-2 font-semibold">
-                            {formatDuration(manager.totalDuration)}
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-            );
-          })()}
-        </section>
-
-        {/* UTel PBX calls - Manager summary */}
-        <section className="rounded-lg border border-slate-700 bg-slate-900 p-4">
-          <h2 className="mb-3 text-sm font-semibold text-slate-200">
-            UTel PBX Qo&apos;ng&apos;iroqlar bo&apos;yicha menejerlar
-          </h2>
-          {utelLoading ? (
-            <div className="text-xs text-slate-400 animate-pulse">
-              UTel qo&apos;ng&apos;iroqlari yuklanmoqda...
-            </div>
-          ) : utelError ? (
-            <div className="text-xs text-red-400">
-              Xato: {utelError}
-            </div>
-          ) : !utelData?.success || !utelData?.data || utelData.data.managerSummary.length === 0 ? (
-            <div className="text-xs text-slate-500">
-              Tanlangan davr uchun UTel qo&apos;ng&apos;iroqlari topilmadi.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-xs text-slate-200">
-                <thead>
-                  <tr className="border-b border-slate-700 bg-slate-800/60">
-                    <th className="px-3 py-2">Menejer</th>
-                    <th className="px-3 py-2">Jami qo&apos;ng&apos;iroqlar</th>
-                    <th className="px-3 py-2">Kirimchi qo&apos;ng&apos;iroqlar</th>
-                    <th className="px-3 py-2">Chiquvchi qo&apos;ng&apos;iroqlar</th>
-                    <th className="px-3 py-2">Umumiy davomiyligi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {utelData.data.managerSummary
-                    .sort((a, b) => b.totalCalls - a.totalCalls)
-                    .map((manager) => (
-                      <tr
-                        key={manager.manager}
-                        className="border-b border-slate-800 last:border-0"
-                      >
-                        <td className="px-3 py-2">{manager.manager}</td>
-                        <td className="px-3 py-2">
-                          {manager.totalCalls.toLocaleString("ru-RU")}
-                        </td>
-                        <td className="px-3 py-2">
-                          {manager.incomingCount.toLocaleString("ru-RU")}
-                        </td>
-                        <td className="px-3 py-2">
-                          {manager.outgoingCount.toLocaleString("ru-RU")}
-                        </td>
-                        <td className="px-3 py-2 font-semibold">
-                          {manager.formattedDuration}
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        {/* Google Sheet calls - Caller summary */}
-        <section className="rounded-lg border border-slate-700 bg-slate-900 p-4">
-          <h2 className="mb-3 text-sm font-semibold text-slate-200">
-            Google Sheet Qo&apos;ng&apos;iroqlar bo&apos;yicha abonentlar
-          </h2>
-          {sheetLoading ? (
-            <div className="text-xs text-slate-400 animate-pulse">
-              Google Sheet qo&apos;ng&apos;iroqlari yuklanmoqda...
-            </div>
-          ) : sheetError ? (
-            <div className="text-xs text-red-400">
-              Xato: {sheetError}
-            </div>
-          ) : !sheetData?.success || !sheetData?.data || sheetData.data.managerSummary.length === 0 ? (
-            <div className="text-xs text-slate-500">
-              Tanlangan davr uchun Google Sheet qo&apos;ng&apos;iroqlari topilmadi.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-xs text-slate-200">
-                <thead>
-                  <tr className="border-b border-slate-700 bg-slate-800/60">
-                    <th className="px-3 py-2">Menejer</th>
-                    <th className="px-3 py-2">Jami qo&apos;ng&apos;iroqlar</th>
-                    <th className="px-3 py-2">Kirimchi</th>
-                    <th className="px-3 py-2">Chiquvchi</th>
-                    <th className="px-3 py-2">Pропущенный</th>
-                    <th className="px-3 py-2">Umumiy davomiyligi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sheetData.data.managerSummary
-                    .sort((a, b) => b.totalCalls - a.totalCalls)
-                    .map((manager) => (
-                      <tr
-                        key={manager.manager}
-                        className="border-b border-slate-800 last:border-0"
-                      >
-                        <td className="px-3 py-2">{manager.manager}</td>
-                        <td className="px-3 py-2">
-                          {manager.totalCalls.toLocaleString("ru-RU")}
-                        </td>
-                        <td className="px-3 py-2">
-                          {manager.incomingCount.toLocaleString("ru-RU")}
-                        </td>
-                        <td className="px-3 py-2">
-                          {manager.outgoingCount.toLocaleString("ru-RU")}
-                        </td>
-                        <td className="px-3 py-2">
-                          {manager.missedCount.toLocaleString("ru-RU")}
-                        </td>
-                        <td className="px-3 py-2 font-semibold">
-                          {manager.formattedDuration}
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
       </div>
     </main>
   );
