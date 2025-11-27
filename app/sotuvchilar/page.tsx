@@ -195,6 +195,10 @@ export default function SotuvchilarPage() {
                 {/* Detailed Metrics Grid */}
                 <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                   {[
+                    {
+                      label: 'Tushum',
+                      value: `${(selectedManagerData.revenue).toLocaleString()}`,
+                    },
                     { label: 'Faol lidlar', value: selectedManagerData.activeLeads },
                     { label: 'Yangi lidlar', value: selectedManagerData.newLeads },
                     { label: 'Sotuvlar', value: selectedManagerData.sales },
@@ -213,10 +217,6 @@ export default function SotuvchilarPage() {
                     {
                       label: 'Konversiya umumiy',
                       value: `${selectedManagerData.conversionToAllLeads.toFixed(1)}%`,
-                    },
-                    {
-                      label: 'Tushum',
-                      value: `${(selectedManagerData.revenue / 1000000).toFixed(1)}M`,
                     },
                   ].map((item, idx) => (
                     <div key={idx} className="rounded-lg bg-slate-800/50 p-4">

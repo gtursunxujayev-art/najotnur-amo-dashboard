@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { buildDashboardData, Period } from '@/lib/dashboard';
 import { prisma } from '@/lib/prisma';
 import { getManagerNameFromExtension } from '@/lib/extensionMapping';
+import { getLeadsByCreatedAt, getUsers, AmoLead } from '@/lib/amocrm';
+import { dashboardConfig } from '@/config/dashboardConfig';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,6 +77,30 @@ export async function GET(request: NextRequest) {
       periodParam,
       { skipCalls: true }
     );
+
+    // Fetch ALL leads to calculate active leads (not closed/not won/not lost)
+    const [allLeads, users] = await Promise.all([
+      getLeadsByCreatedAt(0, Math.floor(Date.now() / 1000)).catch(() => []),
+      getUsers(),
+    ]);
+
+    const usersMap = new Map<number, string>();
+    users.forEach((u: any) => {
+      usersMap.set(u.id, u.name);
+    });
+
+    // Build active leads count by manager (all leads that are not won and not lost)
+    const activeLeadsByManager = new Map<string, number>();
+    const isWonStatus = (lead: AmoLead) => dashboardConfig.WON_STATUS_IDS.includes(lead.status_id || 0);
+    const isLostStatus = (lead: AmoLead) => dashboardConfig.LOST_STATUS_IDS.includes(lead.status_id || 0);
+
+    allLeads.forEach((lead: AmoLead) => {
+      if (!isWonStatus(lead) && !isLostStatus(lead)) {
+        const managerId = lead.responsible_user_id || 0;
+        const managerName = usersMap.get(managerId) || `User ${managerId}`;
+        activeLeadsByManager.set(managerName, (activeLeadsByManager.get(managerName) || 0) + 1);
+      }
+    });
 
     // Fetch call data from OnlinePBX database
     const onlinepbxCalls = await prisma.onlinePBXCall.findMany({
@@ -152,7 +178,7 @@ export async function GET(request: NextRequest) {
 
       return {
         name: managerSale.managerName,
-        activeLeads: Math.max(0, totalLeads - wonDeals),
+        activeLeads: activeLeadsByManager.get(managerSale.managerName) || 0,
         newLeads: totalLeads,
         sales: wonDeals,
         qualifiedLeads,
