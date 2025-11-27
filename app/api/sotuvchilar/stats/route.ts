@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { buildDashboardData, Period } from '@/lib/dashboard';
+import { prisma } from '@/lib/prisma';
+import { getManagerNameFromExtension } from '@/lib/extensionMapping';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,75 +22,158 @@ interface ManagerStats {
   lostLeadReasons: { reason: string; count: number }[];
 }
 
+function getPeriodDates(period: string): { from: Date; to: Date; label: string } {
+  const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+
+  if (period === 'today') {
+    return { from: todayStart, to: now, label: 'Bugun' };
+  }
+
+  if (period === 'week') {
+    const from = new Date(todayStart);
+    const day = from.getDay();
+    const diffToMonday = (day + 6) % 7;
+    from.setDate(from.getDate() - diffToMonday);
+    return { from, to: now, label: 'Bu hafta' };
+  }
+
+  if (period === 'custom') {
+    // Will be handled by caller with start/end params
+    return { from: todayStart, to: now, label: 'Maxsus davr' };
+  }
+
+  const from = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
+  return { from, to: now, label: 'Bu oy' };
+}
+
 export async function GET(request: NextRequest) {
   try {
-    // Mock data for Sotuvchilar page with revenue
-    const mockManagers: ManagerStats[] = [
-      {
-        name: 'Matluba',
-        activeLeads: 45,
-        newLeads: 8,
-        sales: 6,
-        qualifiedLeads: 30,
-        nonQualifiedLeads: 15,
-        conversionToQualified: 66.7,
-        conversionToAllLeads: 13.3,
-        totalCalls: 109,
-        totalCallLength: 10380,
-        dailyAvgCalls: 54.5,
-        dailyAvgCallLength: 5190,
-        revenue: 2400000,
-        lostLeadReasons: [
-          { reason: 'Narx ortiq', count: 5 },
-          { reason: 'Vaqt yo\'q', count: 3 },
-          { reason: 'Raqamni o\'zgartirdi', count: 2 },
-        ],
-      },
-      {
-        name: 'Mumtoza',
-        activeLeads: 32,
-        newLeads: 5,
-        sales: 4,
-        qualifiedLeads: 22,
-        nonQualifiedLeads: 10,
-        conversionToQualified: 68.8,
-        conversionToAllLeads: 12.5,
-        totalCalls: 54,
-        totalCallLength: 3927,
-        dailyAvgCalls: 27.0,
-        dailyAvgCallLength: 1963.5,
-        revenue: 1600000,
-        lostLeadReasons: [
-          { reason: 'Narx ortiq', count: 4 },
-          { reason: 'Boshqa kompaniya tanladi', count: 2 },
-        ],
-      },
-      {
-        name: 'Marg\'uba',
-        activeLeads: 28,
-        newLeads: 3,
-        sales: 2,
-        qualifiedLeads: 18,
-        nonQualifiedLeads: 10,
-        conversionToQualified: 64.3,
-        conversionToAllLeads: 7.1,
-        totalCalls: 20,
-        totalCallLength: 1932,
-        dailyAvgCalls: 10.0,
-        dailyAvgCallLength: 966,
-        revenue: 800000,
-        lostLeadReasons: [
-          { reason: 'Vaqt yo\'q', count: 5 },
-          { reason: 'Narx ortiq', count: 3 },
-        ],
-      },
-    ];
+    const { searchParams } = new URL(request.url);
+    const periodParam = searchParams.get('period') || 'week';
+    const startParam = searchParams.get('start');
+    const endParam = searchParams.get('end');
 
-    return NextResponse.json({ managers: mockManagers });
+    let fromDate: Date;
+    let toDate: Date;
+
+    if (periodParam === 'custom' && startParam && endParam) {
+      fromDate = new Date(startParam);
+      toDate = new Date(endParam);
+    } else {
+      const dates = getPeriodDates(periodParam);
+      fromDate = dates.from;
+      toDate = dates.to;
+    }
+
+    console.log(`[Sotuvchilar/Stats] Fetching stats for period: ${periodParam} (${fromDate.toISOString()} to ${toDate.toISOString()})`);
+
+    // Build dashboard data to get manager sales stats
+    const dashboardData = await buildDashboardData(
+      { from: fromDate, to: toDate },
+      periodParam,
+      { skipCalls: true }
+    );
+
+    // Fetch call data from OnlinePBX database
+    const onlinepbxCalls = await prisma.onlinePBXCall.findMany({
+      where: {
+        date: {
+          gte: fromDate,
+          lte: toDate,
+        },
+      },
+    });
+
+    // Fetch call data from Utel database
+    const utelCalls = await prisma.utelCall.findMany({
+      where: {
+        date: {
+          gte: fromDate,
+          lte: toDate,
+        },
+      },
+    });
+
+    // Aggregate calls by manager
+    const callsByManager = new Map<string, {
+      totalCalls: number;
+      totalDurationSec: number;
+    }>();
+
+    // Process OnlinePBX calls
+    onlinepbxCalls.forEach((call) => {
+      const manager = call.user || 'Unknown';
+      const existing = callsByManager.get(manager) || { totalCalls: 0, totalDurationSec: 0 };
+      existing.totalCalls += 1;
+      existing.totalDurationSec += call.duration || 0;
+      callsByManager.set(manager, existing);
+    });
+
+    // Process Utel calls
+    utelCalls.forEach((call) => {
+      const manager = call.manager || 'Unknown';
+      const existing = callsByManager.get(manager) || { totalCalls: 0, totalDurationSec: 0 };
+      existing.totalCalls += 1;
+      existing.totalDurationSec += call.duration || 0;
+      callsByManager.set(manager, existing);
+    });
+
+    // Calculate number of days in period for daily averages
+    const daysDiff = Math.max(1, Math.ceil((toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24)));
+
+    // Build manager stats combining dashboard data with calls
+    const managers: ManagerStats[] = dashboardData.managerSales.map((managerSale) => {
+      const callData = callsByManager.get(managerSale.managerName) || { totalCalls: 0, totalDurationSec: 0 };
+      
+      // Calculate conversions
+      const totalLeads = managerSale.totalLeads || 1;
+      const qualifiedLeads = managerSale.qualifiedLeads || 0;
+      const wonDeals = managerSale.wonDeals || 0;
+      const nonQualifiedLeads = Math.max(0, totalLeads - qualifiedLeads);
+
+      const conversionToQualified = qualifiedLeads > 0 
+        ? (wonDeals / qualifiedLeads) * 100 
+        : 0;
+
+      const conversionToAllLeads = totalLeads > 0
+        ? (wonDeals / totalLeads) * 100
+        : 0;
+
+      // Lost reasons from dashboard
+      const lostReasons: { reason: string; count: number }[] = [];
+      dashboardData.nonQualifiedReasons.forEach((reason) => {
+        lostReasons.push({
+          reason: reason.label,
+          count: reason.value,
+        });
+      });
+
+      return {
+        name: managerSale.managerName,
+        activeLeads: Math.max(0, totalLeads - wonDeals),
+        newLeads: totalLeads,
+        sales: wonDeals,
+        qualifiedLeads,
+        nonQualifiedLeads,
+        conversionToQualified: parseFloat(conversionToQualified.toFixed(1)),
+        conversionToAllLeads: parseFloat(conversionToAllLeads.toFixed(1)),
+        totalCalls: callData.totalCalls,
+        totalCallLength: callData.totalDurationSec,
+        dailyAvgCalls: callData.totalCalls / daysDiff,
+        dailyAvgCallLength: callData.totalDurationSec / daysDiff,
+        revenue: managerSale.revenue || 0,
+        lostLeadReasons: lostReasons,
+      };
+    });
+
+    console.log(`[Sotuvchilar/Stats] Returning stats for ${managers.length} managers`);
+    return NextResponse.json({ managers });
   } catch (error) {
     console.error('[SotuvchilarAPI] Error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch manager statistics' },
+      { error: 'Failed to fetch manager statistics', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }
