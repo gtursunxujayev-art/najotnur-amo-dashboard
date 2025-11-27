@@ -33,12 +33,43 @@ function getPeriodDates(period: string): { from: Date; to: Date; label: string }
     return { from: todayStart, to: now, label: 'Bugun' };
   }
 
+  if (period === 'yesterday') {
+    const yesterday = new Date(todayStart);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayEnd = new Date(yesterday);
+    yesterdayEnd.setHours(23, 59, 59, 999);
+    return { from: yesterday, to: yesterdayEnd, label: 'Kecha' };
+  }
+
   if (period === 'week') {
     const from = new Date(todayStart);
     const day = from.getDay();
     const diffToMonday = (day + 6) % 7;
     from.setDate(from.getDate() - diffToMonday);
     return { from, to: now, label: 'Bu hafta' };
+  }
+
+  if (period === 'lastweek') {
+    const from = new Date(todayStart);
+    const day = from.getDay();
+    const diffToMonday = (day + 6) % 7;
+    from.setDate(from.getDate() - diffToMonday - 7);
+    const to = new Date(from);
+    to.setDate(to.getDate() + 6);
+    to.setHours(23, 59, 59, 999);
+    return { from, to, label: "O'tgan hafta" };
+  }
+
+  if (period === 'month') {
+    const from = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
+    return { from, to: now, label: 'Bu oy' };
+  }
+
+  if (period === 'lastmonth') {
+    const from = new Date(todayStart.getFullYear(), todayStart.getMonth() - 1, 1);
+    const to = new Date(todayStart.getFullYear(), todayStart.getMonth(), 0);
+    to.setHours(23, 59, 59, 999);
+    return { from, to, label: "O'tgan oy" };
   }
 
   if (period === 'custom') {

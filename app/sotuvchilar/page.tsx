@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 
-type Period = 'today' | 'week' | 'month' | 'custom';
+type Period = 'today' | 'yesterday' | 'week' | 'lastweek' | 'month' | 'lastmonth' | 'custom';
 
 interface ManagerStats {
   name: string;
@@ -77,12 +77,12 @@ export default function SotuvchilarPage() {
         <h1 className="text-3xl font-bold text-white">Sotuvchilar</h1>
 
         {/* Period Selection */}
-        <div className="flex flex-wrap gap-2 rounded-lg bg-slate-800/50 p-4">
-          {(['today', 'week', 'month', 'custom'] as const).map((p) => (
+        <div className="flex flex-wrap gap-2 rounded-lg bg-slate-800/50 p-3">
+          {(['today', 'yesterday', 'week', 'lastweek', 'month', 'lastmonth', 'custom'] as const).map((p) => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
-              className={`rounded-md px-4 py-2 transition-colors ${
+              className={`rounded px-2 py-1 text-xs transition-colors ${
                 period === p
                   ? 'bg-blue-600 text-white'
                   : 'bg-slate-700 text-slate-200 hover:bg-slate-600'
@@ -90,11 +90,17 @@ export default function SotuvchilarPage() {
             >
               {p === 'today'
                 ? 'Bugun'
-                : p === 'week'
-                  ? 'Bu hafta'
-                  : p === 'month'
-                    ? 'Bu oy'
-                    : 'Maxsus davr'}
+                : p === 'yesterday'
+                  ? 'Kecha'
+                  : p === 'week'
+                    ? 'Bu hafta'
+                    : p === 'lastweek'
+                      ? "O'tgan hafta"
+                      : p === 'month'
+                        ? 'Bu oy'
+                        : p === 'lastmonth'
+                          ? "O'tgan oy"
+                          : 'Maxsus davr'}
             </button>
           ))}
         </div>
