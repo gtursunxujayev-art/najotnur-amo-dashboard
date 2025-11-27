@@ -11,24 +11,27 @@ type PeriodKey = "today" | "week" | "month";
 function getPeriodDates(
   period: PeriodKey
 ): { from: Date; to: Date; label: string } {
+  // Use UTC dates for consistent database queries
   const now = new Date();
-  const todayStart = new Date(now);
-  todayStart.setHours(0, 0, 0, 0);
+  
+  // Today in UTC
+  const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+  const todayEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
 
   if (period === "today") {
-    return { from: todayStart, to: now, label: "Bugun" };
+    return { from: todayStart, to: todayEnd, label: "Bugun" };
   }
 
   if (period === "week") {
-    const from = new Date(todayStart);
-    const day = from.getDay();
+    const weekStart = new Date(todayStart);
+    const day = weekStart.getUTCDay();
     const diffToMonday = (day + 6) % 7;
-    from.setDate(from.getDate() - diffToMonday);
-    return { from, to: now, label: "Bu hafta" };
+    weekStart.setUTCDate(weekStart.getUTCDate() - diffToMonday);
+    return { from: weekStart, to: now, label: "Bu hafta" };
   }
 
-  const from = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
-  return { from, to: now, label: "Bu oy" };
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
+  return { from: monthStart, to: now, label: "Bu oy" };
 }
 
 export async function GET(request: Request) {
@@ -45,13 +48,13 @@ export async function GET(request: Request) {
     let toDate: Date;
 
     if (fromParam && toParam) {
-      // Use explicit date range if provided
+      // Use explicit date range if provided - in UTC
       fromDate = new Date(fromParam);
-      fromDate.setHours(0, 0, 0, 0);
+      fromDate.setUTCHours(0, 0, 0, 0);
       toDate = new Date(toParam);
-      toDate.setHours(23, 59, 59, 999);
+      toDate.setUTCHours(23, 59, 59, 999);
     } else {
-      // Use period-based dates
+      // Use period-based dates (already UTC)
       const period: PeriodKey = periodParam === "today" || periodParam === "month" ? periodParam : "week";
       const periodDates = getPeriodDates(period);
       fromDate = periodDates.from;
@@ -59,7 +62,7 @@ export async function GET(request: Request) {
     }
 
     console.log(
-      `[OnlinePBX/Calls] Fetching calls from ${fromDate.toISOString()} to ${toDate.toISOString()}`
+      `[OnlinePBX/Calls] Fetching calls from ${fromDate.toISOString()} to ${toDate.toISOString()} (UTC)`
     );
 
     // First, try to get calls from database for historical data
