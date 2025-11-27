@@ -519,6 +519,21 @@ export default function CallsPage() {
         </section>
 
       </div>
+
+      {/* Footer Summary - Duration by Source */}
+      <div className="fixed bottom-4 right-4 rounded-lg bg-slate-800/90 border border-slate-700 p-3 text-xs text-slate-300 space-y-1">
+        <div className="font-semibold text-slate-100">Davomiyligi jami:</div>
+        <div>
+          OnlinePBX: <span className="text-blue-400 font-mono">{formatDuration(
+            onlinepbxData?.recentCalls.reduce((sum, call) => sum + call.duration, 0) || 0
+          )}</span>
+        </div>
+        <div>
+          UTel: <span className="text-green-400 font-mono">{formatDuration(
+            utelData?.data?.managerSummary.reduce((sum, mgr) => sum + mgr.totalDurationSec, 0) || 0
+          )}</span>
+        </div>
+      </div>
     </main>
   );
 }
