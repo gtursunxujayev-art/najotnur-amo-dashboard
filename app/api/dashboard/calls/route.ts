@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getAmoCalls } from "@/lib/amoCalls";
-import { getUsers } from "@/lib/amocrm";
+import { prisma } from "@/lib/prisma";
+import { getManagerNameFromExtension } from "@/lib/extensionMapping";
 
 export const dynamic = "force-dynamic";
 
@@ -43,63 +43,72 @@ export async function GET(request: Request) {
 
     console.log(`[Dashboard/Calls] Fetching calls for period: ${period} (${fromDate.toISOString()} to ${toDate.toISOString()})`);
 
-    // Set a timeout of 25 seconds for the entire request
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Calls fetch timeout - taking too long")), 25000)
-    );
-
-    // Fetch calls and users in parallel with timeout protection
-    let calls, users;
-    try {
-      [calls, users] = await Promise.race([
-        Promise.all([getAmoCalls(fromDate, toDate), getUsers()]),
-        timeoutPromise,
-      ]) as [any[], any[]];
-    } catch (timeoutErr: any) {
-      console.warn(`[Dashboard/Calls] Warning: ${timeoutErr.message}, returning partial results`);
-      // Return empty data on timeout instead of crashing
-      return NextResponse.json({
-        success: true,
-        partial: true,
-        warning: "Calls data took too long to load - showing cached/partial results",
-        data: {
-          totalCalls: 0,
-          managerCalls: [],
+    // Fetch calls from OnlinePBX and Utel databases
+    const [onlinepbxCalls, utelCalls] = await Promise.all([
+      prisma.onlinePBXCall.findMany({
+        where: {
+          date: {
+            gte: fromDate,
+            lte: toDate,
+          },
         },
-      });
-    }
+      }),
+      prisma.utelCall.findMany({
+        where: {
+          date: {
+            gte: fromDate,
+            lte: toDate,
+          },
+        },
+      }),
+    ]);
 
-    // Group calls by manager
-    const callsByManager = new Map<number, { callsAll: number; callsOutbound: number; totalDurationSec: number }>();
-    
-    for (const call of calls) {
-      const existing = callsByManager.get(call.managerId) || { callsAll: 0, callsOutbound: 0, totalDurationSec: 0 };
+    // Aggregate calls by manager name
+    const callsByManager = new Map<string, { callsAll: number; callsOutbound: number; totalDurationSec: number }>();
+
+    // Process OnlinePBX calls
+    onlinepbxCalls.forEach((call) => {
+      const managerName = call.user || "Unknown";
+      const existing = callsByManager.get(managerName) || { callsAll: 0, callsOutbound: 0, totalDurationSec: 0 };
       existing.callsAll++;
-      if (call.durationSec > 0) {
+      if (call.duration > 0) {
         existing.callsOutbound++;
       }
-      existing.totalDurationSec += call.durationSec;
-      callsByManager.set(call.managerId, existing);
-    }
+      existing.totalDurationSec += call.duration || 0;
+      callsByManager.set(managerName, existing);
+    });
 
-    // Map to manager calls with names
-    const managerCalls = Array.from(callsByManager.entries()).map(([managerId, stats]) => {
-      const user = users.find((u) => u.id === managerId);
+    // Process Utel calls
+    utelCalls.forEach((call) => {
+      const managerName = call.manager || "Unknown";
+      const existing = callsByManager.get(managerName) || { callsAll: 0, callsOutbound: 0, totalDurationSec: 0 };
+      existing.callsAll++;
+      if (call.duration > 0) {
+        existing.callsOutbound++;
+      }
+      existing.totalDurationSec += call.duration || 0;
+      callsByManager.set(managerName, existing);
+    });
+
+    // Map to manager calls
+    const managerCalls = Array.from(callsByManager.entries()).map(([managerName, stats]) => {
       return {
-        managerId,
-        managerName: user?.name || "Unknown",
+        managerId: 0, // Not used, but keeping for compatibility
+        managerName,
         callsAll: stats.callsAll,
         callsOutbound: stats.callsOutbound,
         totalDurationSec: stats.totalDurationSec,
       };
     });
 
-    console.log(`[Dashboard/Calls] Returning ${calls.length} calls for ${managerCalls.length} managers`);
+    const totalCalls = onlinepbxCalls.length + utelCalls.length;
+
+    console.log(`[Dashboard/Calls] Returning ${totalCalls} calls (${onlinepbxCalls.length} OnlinePBX + ${utelCalls.length} Utel) for ${managerCalls.length} managers`);
 
     return NextResponse.json({
       success: true,
       data: {
-        totalCalls: calls.length,
+        totalCalls,
         managerCalls,
       },
     });
