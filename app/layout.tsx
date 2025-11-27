@@ -41,6 +41,13 @@ export default function RootLayout({
               </Link>
 
               <Link
+                href="/sotuvchilar"
+                className="hover:text-white transition-colors"
+              >
+                Sotuvchilar
+              </Link>
+
+              <Link
                 href="/admin"
                 className="hover:text-white transition-colors"
               >
