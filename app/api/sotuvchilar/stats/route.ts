@@ -71,35 +71,19 @@ export async function GET(request: NextRequest) {
 
     console.log(`[Sotuvchilar/Stats] Fetching stats for period: ${periodParam} (${fromDate.toISOString()} to ${toDate.toISOString()})`);
 
-    // Build dashboard data to get manager sales stats
+    // Build dashboard data to get manager sales stats (already period-filtered)
     const dashboardData = await buildDashboardData(
       { from: fromDate, to: toDate },
       periodParam,
       { skipCalls: true }
     );
 
-    // Fetch ALL leads to calculate active leads (not closed/not won/not lost)
-    const [allLeads, users] = await Promise.all([
-      getLeadsByCreatedAt(0, Math.floor(Date.now() / 1000)).catch(() => []),
-      getUsers(),
-    ]);
-
-    const usersMap = new Map<number, string>();
-    users.forEach((u: any) => {
-      usersMap.set(u.id, u.name);
-    });
-
-    // Build active leads count by manager (all leads that are not won and not lost)
+    // Calculate active leads from dashboard data (total - won) 
+    // This avoids fetching ALL 28k+ leads and uses already-fetched period data
     const activeLeadsByManager = new Map<string, number>();
-    const isWonStatus = (lead: AmoLead) => dashboardConfig.WON_STATUS_IDS.includes(lead.status_id || 0);
-    const isLostStatus = (lead: AmoLead) => dashboardConfig.LOST_STATUS_IDS.includes(lead.status_id || 0);
-
-    allLeads.forEach((lead: AmoLead) => {
-      if (!isWonStatus(lead) && !isLostStatus(lead)) {
-        const managerId = lead.responsible_user_id || 0;
-        const managerName = usersMap.get(managerId) || `User ${managerId}`;
-        activeLeadsByManager.set(managerName, (activeLeadsByManager.get(managerName) || 0) + 1);
-      }
+    dashboardData.managerSales.forEach((ms) => {
+      const activeLeads = Math.max(0, ms.totalLeads - ms.wonDeals);
+      activeLeadsByManager.set(ms.managerName, activeLeads);
     });
 
     // Fetch call data from OnlinePBX database
