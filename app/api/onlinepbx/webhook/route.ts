@@ -89,13 +89,32 @@ export async function POST(request: Request) {
       let extensionOrManager: string;
       if (isIncoming) {
         // For incoming calls: receiver is the extension that received it
+        // Try multiple fields to find the receiving extension
         extensionOrManager =
           data.extension ||
+          data.to_extension ||
+          data.called_extension ||
           data.user ||
           data.user_name ||
           data.username ||
           data.to ||
+          data.callee ||
           "Unknown";
+          
+        // Log for debugging incoming calls
+        if (!extensionOrManager || extensionOrManager === "Unknown") {
+          console.log("[OnlinePBX/Webhook] Incoming call with unknown receiver. Available fields:", {
+            extension: data.extension,
+            to_extension: data.to_extension,
+            called_extension: data.called_extension,
+            user: data.user,
+            username: data.username,
+            to: data.to,
+            callee: data.callee,
+            caller: data.caller,
+            direction: data.direction,
+          });
+        }
       } else {
         // For outgoing calls: caller is who made the call
         extensionOrManager =

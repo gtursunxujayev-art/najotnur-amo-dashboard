@@ -438,6 +438,17 @@ export default function CallsPage() {
 
             return (
               <div className="space-y-4">
+                {/* Column Headers */}
+                <div className="grid grid-cols-7 gap-2 text-xs font-semibold text-slate-400 mb-3 px-3 py-2 bg-slate-800/50 rounded">
+                  <div>#</div>
+                  <div>Xodim</div>
+                  <div>Barcha qo'ng'iroqlar</div>
+                  <div>Kuniga o'rtacha</div>
+                  <div>Kirimchi</div>
+                  <div>Chiquvchi</div>
+                  <div>Subhbatlar umumiy vaqti</div>
+                </div>
+
                 {/* Summary Row */}
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-left text-xs text-slate-200">
