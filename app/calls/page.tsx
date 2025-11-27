@@ -344,6 +344,133 @@ export default function CallsPage() {
       </header>
 
       <div className="space-y-6">
+        {/* Combined Call Information - OnlinePBX + Utel by Manager */}
+        <section className="rounded-lg border border-slate-700 bg-slate-900 p-4">
+          <h2 className="mb-3 text-sm font-semibold text-slate-200">
+            Qo&apos;ng&apos;iroqlar ma'lumoti – Menejerlar bo&apos;yicha (OnlinePBX + UTel)
+          </h2>
+          {(onlinepbxLoading || utelLoading) ? (
+            <div className="text-xs text-slate-400 animate-pulse">
+              Qo&apos;ng&apos;iroqlar yuklanmoqda...
+            </div>
+          ) : (onlinepbxError || utelError) ? (
+            <div className="text-xs text-red-400">
+              Xato: {onlinepbxError || utelError}
+            </div>
+          ) : (() => {
+            // Merge OnlinePBX and Utel data by manager
+            const mergedManagers = new Map<string, {
+              manager: string;
+              totalCalls: number;
+              incomingCalls: number;
+              outgoingCalls: number;
+              totalDurationSec: number;
+              sources: string[];
+            }>();
+
+            // Add OnlinePBX data
+            if (onlinepbxData && onlinepbxData.recentCalls.length > 0) {
+              onlinepbxData.recentCalls.forEach((call) => {
+                const managerName = call.user || "Unknown";
+                const existing = mergedManagers.get(managerName) || {
+                  manager: managerName,
+                  totalCalls: 0,
+                  incomingCalls: 0,
+                  outgoingCalls: 0,
+                  totalDurationSec: 0,
+                  sources: [],
+                };
+                existing.totalCalls += 1;
+                if (call.type === "in") {
+                  existing.incomingCalls += 1;
+                } else if (call.type === "out") {
+                  existing.outgoingCalls += 1;
+                }
+                existing.totalDurationSec += call.duration;
+                if (!existing.sources.includes("OnlinePBX")) {
+                  existing.sources.push("OnlinePBX");
+                }
+                mergedManagers.set(managerName, existing);
+              });
+            }
+
+            // Add Utel data
+            if (utelData?.data && utelData.data.managerSummary.length > 0) {
+              utelData.data.managerSummary.forEach((utelMgr) => {
+                const existing = mergedManagers.get(utelMgr.manager) || {
+                  manager: utelMgr.manager,
+                  totalCalls: 0,
+                  incomingCalls: 0,
+                  outgoingCalls: 0,
+                  totalDurationSec: 0,
+                  sources: [],
+                };
+                existing.totalCalls += utelMgr.totalCalls;
+                existing.incomingCalls += utelMgr.incomingCount;
+                existing.outgoingCalls += utelMgr.outgoingCount;
+                existing.totalDurationSec += utelMgr.totalDurationSec;
+                if (!existing.sources.includes("UTel")) {
+                  existing.sources.push("UTel");
+                }
+                mergedManagers.set(utelMgr.manager, existing);
+              });
+            }
+
+            const mergedData = Array.from(mergedManagers.values())
+              .sort((a, b) => b.totalCalls - a.totalCalls);
+
+            if (mergedData.length === 0) {
+              return (
+                <div className="text-xs text-slate-500">
+                  Tanlangan davr uchun qo&apos;ng&apos;iroqlar topilmadi.
+                </div>
+              );
+            }
+
+            return (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-left text-xs text-slate-200">
+                  <thead>
+                    <tr className="border-b border-slate-700 bg-slate-800/60">
+                      <th className="px-3 py-2">Menejer</th>
+                      <th className="px-3 py-2">Jami qo&apos;ng&apos;iroqlar</th>
+                      <th className="px-3 py-2">Kirimchi</th>
+                      <th className="px-3 py-2">Chiquvchi</th>
+                      <th className="px-3 py-2">Umumiy davomiyligi</th>
+                      <th className="px-3 py-2">Manba</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mergedData.map((manager) => (
+                      <tr
+                        key={manager.manager}
+                        className="border-b border-slate-800 last:border-0"
+                      >
+                        <td className="px-3 py-2">{manager.manager}</td>
+                        <td className="px-3 py-2">
+                          {manager.totalCalls.toLocaleString("ru-RU")}
+                        </td>
+                        <td className="px-3 py-2">
+                          {manager.incomingCalls.toLocaleString("ru-RU")}
+                        </td>
+                        <td className="px-3 py-2">
+                          {manager.outgoingCalls.toLocaleString("ru-RU")}
+                        </td>
+                        <td className="px-3 py-2 font-semibold">
+                          {formatDuration(manager.totalDurationSec)}
+                        </td>
+                        <td className="px-3 py-2 text-xs text-slate-400">
+                          {manager.sources.join(", ")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
+        </section>
+
         {/* Manager calls (amoCRM) */}
         <section className="rounded-lg border border-slate-700 bg-slate-900 p-4">
           <h2 className="mb-3 text-sm font-semibold text-slate-200">
