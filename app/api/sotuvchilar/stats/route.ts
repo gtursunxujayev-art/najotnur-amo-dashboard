@@ -124,6 +124,9 @@ export async function GET(request: NextRequest) {
           lte: toDate,
         },
       },
+    }).catch((err) => {
+      console.error('[Sotuvchilar/Stats] Error fetching OnlinePBX calls:', err);
+      return [];
     });
 
     // Fetch call data from Utel database
@@ -134,7 +137,12 @@ export async function GET(request: NextRequest) {
           lte: toDate,
         },
       },
+    }).catch((err) => {
+      console.error('[Sotuvchilar/Stats] Error fetching Utel calls:', err);
+      return [];
     });
+
+    console.log(`[Sotuvchilar/Stats] Fetched ${onlinepbxCalls.length} OnlinePBX calls and ${utelCalls.length} Utel calls`);
 
     // Aggregate calls by manager from both sources
     const callsByManager = new Map<string, {
@@ -160,12 +168,17 @@ export async function GET(request: NextRequest) {
       callsByManager.set(manager, existing);
     });
 
+    console.log(`[Sotuvchilar/Stats] Aggregated calls for ${callsByManager.size} managers`);
+
     // Calculate number of days in period for daily averages
     const daysDiff = Math.max(1, Math.ceil((toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24)));
 
     // Build manager stats combining dashboard data with calls
     const managers: ManagerStats[] = dashboardData.managerSales.map((managerSale) => {
       const callData = callsByManager.get(managerSale.managerName) || { totalCalls: 0, totalDurationSec: 0 };
+      if (callData.totalCalls > 0) {
+        console.log(`[Sotuvchilar/Stats] ${managerSale.managerName}: ${callData.totalCalls} calls, ${callData.totalDurationSec}s`);
+      }
       
       // Calculate conversions
       const totalLeads = managerSale.totalLeads || 1;
