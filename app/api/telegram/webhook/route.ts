@@ -128,7 +128,7 @@ async function handleCourseListCommand(
     return;
   }
 
-  const buttons = courses.map((course) => [
+  const buttons = courses.map((course: string) => [
     {
       text: course,
       callback_data: `course_${course}`,
