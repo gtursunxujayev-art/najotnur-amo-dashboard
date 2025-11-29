@@ -1,9 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-
-export const dynamic = 'force-dynamic';
 
 interface CasosiyRecord {
   manager: string;
@@ -53,7 +51,7 @@ function KPICard({
   );
 }
 
-export default function OfflinePage() {
+function OfflineContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [courseTypes, setCourseTypes] = useState<string[]>([]);
@@ -272,5 +270,13 @@ export default function OfflinePage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function OfflinePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-50">Yuklanmoqda...</div>}>
+      <OfflineContent />
+    </Suspense>
   );
 }
