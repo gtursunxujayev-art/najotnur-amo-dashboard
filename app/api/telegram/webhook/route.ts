@@ -72,7 +72,7 @@ async function editTelegramMessage(
   );
 }
 
-async function getCourseTypes() {
+async function getCourseTypes(): Promise<string[]> {
   try {
     const url =
       process.env.NODE_ENV === "production"
