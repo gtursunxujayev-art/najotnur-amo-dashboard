@@ -178,8 +178,8 @@ async function handleCourseInfoCommand(
     kpi.qarzdorlik
   )}</code> so'm\n\n`;
 
-  const totalStudents = (Object.values(tarifCounts) as number[]).reduce(
-    (sum: number, count: number) => sum + count,
+  const totalStudents = Object.values(tarifCounts).reduce(
+    (sum: number, count: unknown) => sum + (typeof count === 'number' ? count : 0),
     0
   );
   text += `<b>👥 O'quvchilar:</b> <code>${totalStudents}</code>\n\n`;
