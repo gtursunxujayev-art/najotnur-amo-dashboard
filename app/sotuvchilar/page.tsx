@@ -264,7 +264,9 @@ export default function SotuvchilarPage() {
                   <div className="rounded-lg bg-slate-800/50 p-4">
                     <h3 className="mb-4 text-lg font-semibold text-white">Sotib olmaslik sabablari</h3>
                     <div className="space-y-2">
-                      {selectedManagerData.lostLeadReasons.map((item, idx) => (
+                      {selectedManagerData.lostLeadReasons
+                        .sort((a, b) => b.count - a.count)
+                        .map((item, idx) => (
                         <div key={idx} className="flex justify-between items-center border-b border-slate-700 pb-2">
                           <span className="text-slate-300">{item.reason}</span>
                           <span className="font-semibold text-white">{item.count}</span>
