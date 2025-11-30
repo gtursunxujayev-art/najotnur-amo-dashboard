@@ -16,13 +16,74 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 *   **Error Handling:** Includes graceful error handling for external API rate limiting with exponential backoff and throttling.
 *   **PDF Report Generation:** Professional-grade PDF reports are generated with branding, KPI cards, dynamic tables, Unicode support, and automatic pagination, ensuring consistent styling for both manual and automated reports.
 *   **Data Aggregation & Transformation:** Extensive logic aggregates, cleans, and transforms data from various sources (amoCRM, Google Sheets, OnlinePBX) for display and reporting.
-*   **Scheduled Reports:** An automated scheduler (node-cron) sends daily, weekly, and monthly reports via Telegram.
+*   **Scheduled Reports:** An automated scheduler (node-cron) sends daily, weekly, and monthly reports via Telegram with comprehensive execution tracking.
 *   **Dashboard UI/UX:** Features redesigned chart layouts with two-column displays, filtered pie charts, and a professional, consistent styling. The dashboard focuses on sales metrics, leads, and conversions, with call analytics moved to a dedicated page.
 *   **Dual Call Data Sources:** Dashboard displays OnlinePBX calls via webhook (real-time) and amoCRM cached calls for comprehensive tracking.
 *   **OnlinePBX Integration:** An active webhook endpoint receives real-time call events from OnlinePBX, stores data, and serves it to both webhook and dashboard endpoints. Includes mapping OnlinePBX extensions to manager names for proper call attribution.
 *   **OnlinePBX to amoCRM Sync:** A system to sync OnlinePBX call data to amoCRM, logging calls as notes to associated leads.
 *   **CSV/XLSX Import:** An admin panel supports importing historical OnlinePBX call data from CSV and XLSX files, with auto-detection of Russian/English formats.
 *   **Deployment:** Configured for autoscale deployment on Replit.
+
+## Automated Report Scheduler
+**How It Works:**
+- Reports are scheduled using node-cron with Asia/Tashkent timezone (GMT+5)
+- Daily reports: Every day at **8:00 AM GMT+5** (sends yesterday's data)
+- Weekly reports: Every Monday at **8:00 AM GMT+5** (sends last week's data)
+- Monthly reports: 1st of each month at **8:00 AM GMT+5** (sends last month's data)
+- Execution tracking: All scheduled jobs log their execution status for debugging
+
+**Subscribers:**
+- Users enable reports via Telegram bot or by contacting admin
+- Each user in the database has `dailyReport`, `weeklyReport`, and `monthlyReport` boolean flags
+
+## How to Check if Autoreports Are Working
+
+### 1. Check Scheduler Status
+Visit this endpoint to see the current scheduler state and subscribers:
+```
+GET https://your-replit-domain/api/scheduler/status
+```
+
+**Response includes:**
+- `scheduler.initialized` - Whether scheduler is running
+- `scheduler.lastExecutions` - Last execution time and success/failure status for each report type
+- `subscribers` - Count of users subscribed to daily/weekly/monthly reports
+- `subscribers_list` - List of all Telegram users with their report preferences
+
+### 2. Manually Trigger Reports (For Testing)
+Test that reports work correctly by manually triggering them:
+```
+GET https://your-replit-domain/api/scheduler/test?type=daily
+GET https://your-replit-domain/api/scheduler/test?type=weekly
+GET https://your-replit-domain/api/scheduler/test?type=monthly
+```
+
+**In development:** Replace `your-replit-domain` with `localhost:5000`
+
+### 3. Check Console Logs
+When reports execute (automatic or manual), watch the server logs for:
+- `[Scheduler] ⏰ EXECUTING DAILY REPORT` - Shows report started
+- `[Scheduler] ✅` - Report sent successfully
+- `[Scheduler] ❌` - Report failed (check the error message)
+- `[reports/daily]` - Detailed logs from the report endpoint
+
+### 4. Database Check
+View current subscribers:
+```sql
+SELECT id, "chatId", username, "dailyReport", "weeklyReport", "monthlyReport" FROM "TelegramUser";
+```
+
+### 5. Key Things to Verify
+✅ **Scheduler is initialized** on server startup (check logs for "Scheduler initialized successfully")
+✅ **At least one user has report enabled** (check database or `/api/scheduler/status`)
+✅ **Reports can be manually triggered** without errors
+✅ **Server stays running 24/7** (important for scheduled jobs to execute at 8:00 AM)
+
+**Common Issues:**
+- ❌ No subscribers enabled - Enable reports for users in database
+- ❌ Server not running 24/7 - In production, verify autoscale is configured to keep app running
+- ❌ Timezone mismatch - Schedule uses Asia/Tashkent (GMT+5), verify server time is correct
+- ❌ Dev server reload kills jobs - In development, cron jobs restart with each hot reload
 
 ## External Dependencies
 *   **amoCRM API:** Used for CRM data (leads, sales, manager statistics). Calls are cached for 1 hour. Supports syncing OnlinePBX calls.
@@ -33,6 +94,26 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 *   **PostgreSQL:** The primary database, accessed via Prisma ORM.
 
 ## Recent Changes
+
+### November 30, 2025 - Enhanced Scheduler with Execution Tracking
+- **Problem**: Automated reports weren't sending; unclear why scheduler wasn't working
+- **Solution Implemented**:
+  - ✅ Enhanced `lib/scheduler.ts` with execution history tracking
+  - ✅ Stores last execution time, success/failure status, and error messages for each report type
+  - ✅ Created `/api/scheduler/status` endpoint to check:
+    - Whether scheduler is initialized and running
+    - Execution history (time, success, message)
+    - Count of subscribers for each report type
+    - List of all users with their report preferences
+  - ✅ Created `/api/scheduler/test` endpoint to manually trigger reports for testing
+  - ✅ Added comprehensive logging with visual indicators (⏰ executing, ✅ success, ❌ error)
+  - ✅ Updated documentation with step-by-step verification instructions
+- **How to Check**: Visit `/api/scheduler/status` or manually trigger with `/api/scheduler/test?type=daily`
+- **Files Modified/Created**:
+  - `lib/scheduler.ts` - Enhanced with state tracking
+  - `app/api/scheduler/status/route.ts` - New status endpoint
+  - `app/api/scheduler/test/route.ts` - New test endpoint
+  - `replit.md` - Added debugging guide
 
 ### November 26, 2025 - Fixed Utel Call Duration Storage
 - **Problem**: Utel calls were showing 0 seconds duration on calls page
@@ -57,53 +138,19 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
   - ✅ Created `GoogleSheetCall` database model to store imported calls
   - ✅ Built `lib/googleSheetCalls.ts` to parse sheet data with flexible date/time formats
   - ✅ Created `/api/sheets/calls` endpoint to fetch and aggregate calls by caller
-  - ✅ Parser handles:
-    - Call types: Пропущенный (Missed), Входящий (Incoming), Исходящий (Outgoing)
-    - Multiple date formats: "23:58:20 2025-11-24" or "2025-10-29 12:22:09"
-    - Duration formats: "00:00:15" (HH:MM:SS) or "79" (seconds)
+  - ✅ Parser handles multiple date formats and call types
   - ✅ Added "Google Sheet Qo'ng'iroqlar bo'yicha abonentlar" section to /calls page
-- **Sheet Columns**:
-  - A: Call type (Пропущенный/Входящий/Исходящий)
-  - B: Caller (phone/extension)
-  - C: Call receiver
-  - D: Inside number (gateway)
-  - E: Date (various formats supported)
-  - F: Call length
-  - G: Successful call length
-- **Display**: Shows by-caller summary with incoming/outgoing/missed counts and total duration
-- **Spreadsheet**: https://docs.google.com/spreadsheets/d/10SpMBUxmNi4_ExGlJJwEycKDjg8VtyoH84CLcMgSbuY
+- **Sheet Columns**: Date, Caller, Call receiver, Inside number, Duration formats
 
 ### November 26, 2025 - Added UTel PBX Integration
 - **New Integration**: Added support for UTel PBX system as second call tracking source
 - **Implementation**:
-  - ✅ Created `lib/utelCalls.ts` with flexible API endpoint detection (tries /cdr, /api/cdr, /v1/cdr, /calls)
+  - ✅ Created `lib/utelCalls.ts` with flexible API endpoint detection
   - ✅ Built `/api/utel/calls` endpoint that mirrors OnlinePBX API structure
-  - ✅ Supports multiple UTel response formats (flat array, data wrapper, calls wrapper, records wrapper)
-  - ✅ Manager attribution via extension mapping (same system as OnlinePBX)
-  - ✅ Call aggregation by manager with duration formatting
+  - ✅ Supports multiple UTel response formats
+  - ✅ Manager attribution via extension mapping
   - ✅ Stored secrets: UTEL_API_TOKEN, UTEL_API_URL
-- **Features**:
-  - Automatic period filtering (today/week/month)
-  - Manager summary with incoming/outgoing/total call counts
-  - Formatted duration display (HH:MM:SS)
-  - Recent calls list (last 100)
-- **Files Created**: `lib/utelCalls.ts`, `app/api/utel/calls/route.ts`
-- **Next Steps**: Calls page frontend component can now fetch from `/api/utel/calls` to display UTel data alongside OnlinePBX
 
 ### November 25, 2025 - Fixed Incoming Call Attribution to Manager Receivers
-- **Problem**: Incoming calls were showing as "Unknown" instead of being attributed to the manager who received them
-- **Two-Part Solution**:
-  1. **Updated webhook handler** (`app/api/onlinepbx/webhook/route.ts`):
-     - ✅ For **incoming calls**: Uses `extension` field (the manager who RECEIVED the call)
-     - ✅ For **outgoing calls**: Uses `user`, `username`, `caller` fields (who made the call)
-     - ✅ All NEW incoming calls properly attribute to receiving manager via extension mapping
-  2. **Fixed existing database records** (5 calls updated):
-     - ✅ 2 incoming calls from extension 100 → Mumtoza
-     - ✅ 2 incoming calls from extension 104 → Marg'uba
-     - ✅ 1 incoming call from extension 102 → Oyshaxon
-     - ✅ 3 incoming calls from IVR (5000) remain as "Unknown" (can't determine receiver)
-- **Result**: 
-  - All incoming calls (both existing and new) now properly attribute to the receiving manager
-  - Removed ~7 "Unknown" incoming calls by mapping extensions to managers
-  - Dashboard now shows accurate incoming call attribution
-- **Files Modified**: `app/api/onlinepbx/webhook/route.ts`, database migration applied
+- **Problem**: Incoming calls were showing as "Unknown" instead of being attributed to receiving managers
+- **Solution**: Updated webhook handler to properly attribute incoming calls to receiving manager via extension mapping
