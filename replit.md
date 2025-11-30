@@ -18,7 +18,7 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 *   **Data Aggregation & Transformation:** Extensive logic aggregates, cleans, and transforms data from various sources (amoCRM, Google Sheets, OnlinePBX) for display and reporting.
 *   **Scheduled Reports:** An automated scheduler (node-cron) sends daily, weekly, and monthly reports via Telegram with comprehensive execution tracking.
 *   **Dashboard UI/UX:** Features redesigned chart layouts with two-column displays, filtered pie charts, and a professional, consistent styling. The dashboard focuses on sales metrics, leads, and conversions, with call analytics moved to a dedicated page.
-*   **Dual Call Data Sources:** Dashboard displays OnlinePBX calls via webhook (real-time) and amoCRM cached calls for comprehensive tracking.
+*   **Unified Call Data Sources:** Both the Calls page and Sotuvchilar page now use the same API endpoints (`/api/onlinepbx/calls` and `/api/utel/calls`) for consistent call tracking across the entire dashboard.
 *   **OnlinePBX Integration:** An active webhook endpoint receives real-time call events from OnlinePBX, stores data, and serves it to both webhook and dashboard endpoints. Includes mapping OnlinePBX extensions to manager names for proper call attribution.
 *   **OnlinePBX to amoCRM Sync:** A system to sync OnlinePBX call data to amoCRM, logging calls as notes to associated leads.
 *   **CSV/XLSX Import:** An admin panel supports importing historical OnlinePBX call data from CSV and XLSX files, with auto-detection of Russian/English formats.
@@ -94,6 +94,20 @@ SELECT id, "chatId", username, "dailyReport", "weeklyReport", "monthlyReport" FR
 *   **PostgreSQL:** The primary database, accessed via Prisma ORM.
 
 ## Recent Changes
+
+### November 30, 2025 - Unified Call Data Between Calls and Sotuvchilar Pages
+- **Problem**: Calls page and Sotuvchilar page showed different call counts because they used different data sources with different timezone handling
+- **Root Cause**: 
+  - Calls page fetched from `/api/onlinepbx/calls` and `/api/utel/calls` (using UTC dates)
+  - Sotuvchilar stats directly queried database tables (using local dates)
+  - This caused date range mismatches and inconsistent call counts
+- **Solution**:
+  - ✅ Removed AmoCRM and Google Sheets call data from Calls page (now only OnlinePBX + UTel)
+  - ✅ Updated `/api/sotuvchilar/stats` to fetch from same API endpoints as Calls page
+  - ✅ Both pages now show identical call data with consistent date filtering
+- **Files Modified**:
+  - `app/calls/page.tsx` - Simplified to use only OnlinePBX and UTel data sources
+  - `app/api/sotuvchilar/stats/route.ts` - Now fetches from API endpoints instead of direct database queries
 
 ### November 30, 2025 - Enhanced Scheduler with Execution Tracking
 - **Problem**: Automated reports weren't sending; unclear why scheduler wasn't working
