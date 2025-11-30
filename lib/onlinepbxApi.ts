@@ -53,9 +53,6 @@ function getOnlinePBXApiKey(): string {
   return apiKey;
 }
 
-function generateSignature(secretKey: string, data: string): string {
-  return crypto.createHmac('sha256', secretKey).update(data).digest('hex');
-}
 
 async function authenticateApi2(): Promise<{ keyId: string; key: string; domainFormat: string; apiBase: string } | null> {
   const domain = getOnlinePBXDomain();
@@ -74,7 +71,7 @@ async function authenticateApi2(): Promise<{ keyId: string; key: string; domainF
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: `api_key=${encodeURIComponent(apiKey)}`,
+        body: `auth_key=${encodeURIComponent(apiKey)}`,
       });
 
       if (!response.ok) {
@@ -137,7 +134,6 @@ async function apiRequest(
   
   const url = `${cachedAuth.apiBase}/${cachedAuth.domainFormat}/${endpoint}`;
   const body = new URLSearchParams(params).toString();
-  const signature = generateSignature(key, body);
   
   console.log(`[OnlinePBX/API] API v2 request to ${endpoint}`, { params });
   
@@ -145,7 +141,7 @@ async function apiRequest(
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'x-pbx-authentication': `${keyId}:${signature}`,
+      'x-pbx-authentication': `${keyId}:${key}`,
     },
     body,
   });
@@ -233,8 +229,14 @@ export async function syncOnlinePBXCalls(
   try {
     for (const call of calls) {
       try {
+        const callId = call.uuid || call.id || '';
+        if (!callId) {
+          result.errors.push('Call missing UUID/ID');
+          continue;
+        }
+
         const existingCall = await prisma.onlinePBXCall.findFirst({
-          where: { callId: call.uuid },
+          where: { callId },
         });
 
         if (existingCall) {
@@ -242,25 +244,37 @@ export async function syncOnlinePBXCalls(
           continue;
         }
 
-        const managerName = mapExtensionToManager(call.extension || call.user || '');
+        const rawType = call.type || call.direction || '';
+        const direction = rawType === 'incoming' || rawType === 'in' ? 'in' : 'out';
+        
+        const phone = direction === 'in' 
+          ? (call.caller || call.src || call.phone || '') 
+          : (call.called || call.dst || call.phone || '');
+        
+        const extension = call.extension || call.user || call.dst || '';
+        const managerName = mapExtensionToManager(extension) || extension || 'Unknown';
+        
+        const callDate = call.date 
+          ? new Date(call.date) 
+          : call.start_stamp 
+            ? new Date(call.start_stamp * 1000) 
+            : new Date();
         
         await prisma.onlinePBXCall.create({
           data: {
-            callId: call.uuid,
-            caller: call.caller,
-            called: call.called,
-            callType: call.type,
-            duration: call.talk_duration || call.duration || 0,
-            startTime: new Date(call.date),
-            status: call.status || 'unknown',
-            managerName,
-            extension: call.extension || call.user,
+            callId,
+            direction,
+            date: callDate,
+            duration: call.talk_duration || call.duration || call.billsec || 0,
+            phone,
+            user: managerName,
+            source: 'api',
           },
         });
         
         result.newCalls++;
       } catch (err: any) {
-        result.errors.push(`Failed to save call ${call.uuid}: ${err.message}`);
+        result.errors.push(`Failed to save call ${call.uuid || call.id}: ${err.message}`);
       }
     }
   } finally {
