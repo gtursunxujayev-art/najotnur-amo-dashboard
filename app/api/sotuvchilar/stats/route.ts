@@ -116,58 +116,88 @@ export async function GET(request: NextRequest) {
       activeLeadsByManager.set(ms.managerName, activeLeads);
     });
 
-    // Fetch call data from OnlinePBX database
-    const onlinepbxCalls = await prisma.onlinePBXCall.findMany({
-      where: {
-        date: {
-          gte: fromDate,
-          lte: toDate,
-        },
-      },
-    }).catch((err) => {
-      console.error('[Sotuvchilar/Stats] Error fetching OnlinePBX calls:', err);
-      return [];
-    });
+    // Fetch call data from the SAME API endpoints as the calls page for consistency
+    // This ensures both pages show identical call counts
+    const baseUrl = process.env.REPLIT_DOMAINS 
+      ? `https://${process.env.REPLIT_DOMAINS}` 
+      : 'http://localhost:5000';
+    
+    // Map period to the format expected by calls APIs
+    const callsPeriod = periodParam === 'today' ? 'today' : 
+                        periodParam === 'month' || periodParam === 'lastmonth' ? 'month' : 'week';
+    
+    // For custom periods or specific date ranges, pass from/to parameters
+    let onlinepbxUrl = `${baseUrl}/api/onlinepbx/calls`;
+    let utelUrl = `${baseUrl}/api/utel/calls`;
+    
+    if (periodParam === 'custom' || periodParam === 'yesterday' || periodParam === 'lastweek' || periodParam === 'lastmonth') {
+      // Pass explicit date range for non-standard periods
+      const fromStr = fromDate.toISOString().split('T')[0];
+      const toStr = toDate.toISOString().split('T')[0];
+      onlinepbxUrl += `?from=${fromStr}&to=${toStr}`;
+      utelUrl += `?from=${fromStr}&to=${toStr}`;
+    } else {
+      onlinepbxUrl += `?period=${callsPeriod}`;
+      utelUrl += `?period=${callsPeriod}`;
+    }
 
-    // Fetch call data from Utel database
-    const utelCalls = await prisma.utelCall.findMany({
-      where: {
-        date: {
-          gte: fromDate,
-          lte: toDate,
-        },
-      },
-    }).catch((err) => {
-      console.error('[Sotuvchilar/Stats] Error fetching Utel calls:', err);
-      return [];
-    });
+    console.log(`[Sotuvchilar/Stats] Fetching calls from APIs: ${onlinepbxUrl}, ${utelUrl}`);
 
-    console.log(`[Sotuvchilar/Stats] Fetched ${onlinepbxCalls.length} OnlinePBX calls and ${utelCalls.length} Utel calls`);
+    // Fetch from both call APIs in parallel
+    const [onlinepbxRes, utelRes] = await Promise.all([
+      fetch(onlinepbxUrl, { cache: 'no-store' }).catch(err => {
+        console.error('[Sotuvchilar/Stats] Error fetching OnlinePBX calls:', err);
+        return null;
+      }),
+      fetch(utelUrl, { cache: 'no-store' }).catch(err => {
+        console.error('[Sotuvchilar/Stats] Error fetching Utel calls:', err);
+        return null;
+      })
+    ]);
 
-    // Aggregate calls by manager from both sources
+    // Parse responses
+    let onlinepbxData: any = null;
+    let utelData: any = null;
+    
+    if (onlinepbxRes?.ok) {
+      const json = await onlinepbxRes.json();
+      onlinepbxData = json.data;
+    }
+    if (utelRes?.ok) {
+      utelData = await utelRes.json();
+    }
+
+    // Aggregate calls by manager from both sources (same logic as calls page)
     const callsByManager = new Map<string, {
       totalCalls: number;
       totalDurationSec: number;
     }>();
 
-    // Process OnlinePBX calls
-    onlinepbxCalls.forEach((call) => {
-      const manager = call.user || 'Unknown';
-      const existing = callsByManager.get(manager) || { totalCalls: 0, totalDurationSec: 0 };
-      existing.totalCalls += 1;
-      existing.totalDurationSec += call.duration || 0;
-      callsByManager.set(manager, existing);
-    });
+    // Process OnlinePBX calls (from recentCalls array)
+    if (onlinepbxData?.recentCalls) {
+      onlinepbxData.recentCalls.forEach((call: any) => {
+        const manager = call.user || 'Unknown';
+        const existing = callsByManager.get(manager) || { totalCalls: 0, totalDurationSec: 0 };
+        existing.totalCalls += 1;
+        existing.totalDurationSec += call.duration || 0;
+        callsByManager.set(manager, existing);
+      });
+    }
 
-    // Process Utel calls
-    utelCalls.forEach((call) => {
-      const manager = call.manager || 'Unknown';
-      const existing = callsByManager.get(manager) || { totalCalls: 0, totalDurationSec: 0 };
-      existing.totalCalls += 1;
-      existing.totalDurationSec += call.duration || 0;
-      callsByManager.set(manager, existing);
-    });
+    // Process Utel calls (from managerSummary - already aggregated)
+    if (utelData?.data?.managerSummary) {
+      utelData.data.managerSummary.forEach((mgr: any) => {
+        const manager = mgr.manager || 'Unknown';
+        const existing = callsByManager.get(manager) || { totalCalls: 0, totalDurationSec: 0 };
+        existing.totalCalls += mgr.totalCalls || 0;
+        existing.totalDurationSec += mgr.totalDurationSec || 0;
+        callsByManager.set(manager, existing);
+      });
+    }
 
+    const totalOnlinePBX = onlinepbxData?.recentCalls?.length || 0;
+    const totalUtel = utelData?.data?.totalCalls || 0;
+    console.log(`[Sotuvchilar/Stats] Fetched ${totalOnlinePBX} OnlinePBX calls and ${totalUtel} Utel calls`);
     console.log(`[Sotuvchilar/Stats] Aggregated calls for ${callsByManager.size} managers`);
 
     // Calculate number of days in period for daily averages
