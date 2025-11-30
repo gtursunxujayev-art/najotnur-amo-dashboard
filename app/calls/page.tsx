@@ -4,17 +4,6 @@ import { useEffect, useState, useRef } from "react";
 
 type PeriodKey = "today" | "week" | "month";
 
-type CallsData = {
-  totalCalls: number;
-  managerCalls: Array<{
-    managerId: number;
-    managerName: string;
-    callsAll: number;
-    callsOutbound: number;
-    totalDurationSec?: number;
-  }>;
-};
-
 // Helper function to format seconds to HH:MM:SS
 function formatDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
@@ -54,107 +43,29 @@ type UtelCallsData = {
   };
 };
 
-type SheetCallsData = {
-  success: boolean;
-  data?: {
-    source: string;
-    totalCalls: number;
-    managerSummary: Array<{
-      manager: string;
-      incomingCount: number;
-      outgoingCount: number;
-      missedCount: number;
-      totalCalls: number;
-      totalDurationSec: number;
-      formattedDuration: string;
-    }>;
-  };
-};
-
 type UiState = {
   period: PeriodKey;
-  callsLoading: boolean;
-  callsError: string | null;
-  callsData: CallsData | null;
   onlinepbxLoading: boolean;
   onlinepbxError: string | null;
   onlinepbxData: OnlinePBXCallsData | null;
   utelLoading: boolean;
   utelError: string | null;
   utelData: UtelCallsData | null;
-  sheetLoading: boolean;
-  sheetError: string | null;
-  sheetData: SheetCallsData | null;
 };
 
 export default function CallsPage() {
   const [state, setState] = useState<UiState>({
     period: "week",
-    callsLoading: false,
-    callsError: null,
-    callsData: null,
     onlinepbxLoading: false,
     onlinepbxError: null,
     onlinepbxData: null,
     utelLoading: false,
     utelError: null,
     utelData: null,
-    sheetLoading: false,
-    sheetError: null,
-    sheetData: null,
   });
 
-  const callsAbortRef = useRef<AbortController | null>(null);
   const onlinepbxAbortRef = useRef<AbortController | null>(null);
   const utelAbortRef = useRef<AbortController | null>(null);
-  const sheetAbortRef = useRef<AbortController | null>(null);
-
-  async function loadCalls(periodKey: PeriodKey) {
-    try {
-      if (callsAbortRef.current) {
-        callsAbortRef.current.abort();
-      }
-      callsAbortRef.current = new AbortController();
-
-      setState((s) => ({ ...s, callsLoading: true, callsError: null, callsData: null }));
-
-      const res = await fetch(`/api/dashboard/calls?period=${periodKey}`, {
-        cache: "no-store",
-        signal: callsAbortRef.current.signal,
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        const msg = body.error || res.statusText || "Failed to load calls";
-        throw new Error(msg);
-      }
-
-      const json = await res.json();
-      const callsData: CallsData = json.data;
-
-      setState((s) => {
-        if (s.period !== periodKey) return s;
-        return {
-          ...s,
-          callsLoading: false,
-          callsError: null,
-          callsData,
-        };
-      });
-    } catch (err: any) {
-      if (err.name === "AbortError") return;
-      console.error("Calls load error", err);
-      setState((s) => {
-        if (s.period !== periodKey) return s;
-        return {
-          ...s,
-          callsLoading: false,
-          callsError: err?.message || "Failed to load calls",
-          callsData: null,
-        };
-      });
-    }
-  }
 
   async function loadOnlinePBXCalls(periodKey: PeriodKey) {
     try {
@@ -246,59 +157,9 @@ export default function CallsPage() {
     }
   }
 
-  async function loadSheetCalls(periodKey: PeriodKey) {
-    try {
-      if (sheetAbortRef.current) {
-        sheetAbortRef.current.abort();
-      }
-      sheetAbortRef.current = new AbortController();
-
-      setState((s) => ({ ...s, sheetLoading: true, sheetError: null, sheetData: null }));
-
-      // Replace with your actual Google Sheet ID
-      const spreadsheetId = "10SpMBUxmNi4_ExGlJJwEycKDjg8VtyoH84CLcMgSbuY";
-
-      const res = await fetch(`/api/sheets/calls?spreadsheetId=${spreadsheetId}&period=${periodKey}`, {
-        cache: "no-store",
-        signal: sheetAbortRef.current.signal,
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        const msg = body.error || res.statusText || "Failed to load Google Sheet calls";
-        throw new Error(msg);
-      }
-
-      const json = await res.json();
-      const sheetData: SheetCallsData = json;
-
-      setState((s) => {
-        return {
-          ...s,
-          sheetLoading: false,
-          sheetError: null,
-          sheetData,
-        };
-      });
-    } catch (err: any) {
-      if (err.name === "AbortError") return;
-      console.error("Sheet calls load error", err);
-      setState((s) => {
-        return {
-          ...s,
-          sheetLoading: false,
-          sheetError: err?.message || "Failed to load Google Sheet calls",
-          sheetData: null,
-        };
-      });
-    }
-  }
-
   async function load(periodKey: PeriodKey) {
-    loadCalls(periodKey);
     loadOnlinePBXCalls(periodKey);
     loadUtelCalls(periodKey);
-    loadSheetCalls(periodKey);
   }
 
   useEffect(() => {
@@ -306,7 +167,7 @@ export default function CallsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { period, callsLoading, callsError, callsData, onlinepbxLoading, onlinepbxError, onlinepbxData, utelLoading, utelError, utelData, sheetLoading, sheetError, sheetData } = state;
+  const { period, onlinepbxLoading, onlinepbxError, onlinepbxData, utelLoading, utelError, utelData } = state;
 
   const handleChangePeriod = (p: PeriodKey) => {
     if (p === period) return;
@@ -320,7 +181,7 @@ export default function CallsPage() {
         <div>
           <h1 className="text-3xl font-bold">Qo&apos;ng&apos;iroqlar – Tahlil</h1>
           <p className="text-sm text-slate-400">
-            amoCRM, OnlinePBX, UTel va Google Sheet qo&apos;ng&apos;iroqlari
+            OnlinePBX va UTel qo&apos;ng&apos;iroqlari
           </p>
         </div>
 
