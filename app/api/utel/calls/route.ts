@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { fetchUtelCalls } from "@/lib/utelCalls";
 import { getManagerNameFromExtension } from "@/lib/extensionMapping";
 import { prisma } from "@/lib/prisma";
-import { getNowGMT5, getTodayStartGMT5, getTodayEndGMT5, getWeekStartGMT5, getMonthStartGMT5 } from "@/lib/timezoneGMT5";
+import { getNowGMT5, getTodayStartGMT5, getTodayEndGMT5, getWeekStartGMT5, getMonthStartGMT5, debugGMT5 } from "@/lib/timezoneGMT5";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +12,7 @@ function getPeriodDates(
   period: PeriodKey
 ): { from: Date; to: Date; label: string } {
   // Use GMT+5 (Asia/Tashkent) for all period calculations
+  // These dates are now proper UTC timestamps representing GMT+5 boundaries
   const now = getNowGMT5();
   const todayStart = getTodayStartGMT5();
   const todayEnd = getTodayEndGMT5();
@@ -21,11 +22,11 @@ function getPeriodDates(
   }
 
   if (period === "week") {
-    const weekStart = getWeekStartGMT5(todayStart);
+    const weekStart = getWeekStartGMT5();
     return { from: weekStart, to: now, label: "Bu hafta" };
   }
 
-  const monthStart = getMonthStartGMT5(todayStart);
+  const monthStart = getMonthStartGMT5();
   return { from: monthStart, to: now, label: "Bu oy" };
 }
 
@@ -63,35 +64,35 @@ export async function GET(request: Request) {
       `[UtelCalls/API] Fetching calls from ${fromDate.toISOString()} to ${toDate.toISOString()}`
     );
 
-    // Fetch from database - NO date filtering, just get all calls and filter in memory
+    // Fetch from database with proper date filtering
+    // The fromDate and toDate are now correct UTC timestamps representing GMT+5 boundaries
     let utelCalls: any[] = [];
     try {
+      console.log(`[UtelCalls/API] Debug: ${debugGMT5()}`);
+      
       const dbCalls = await prisma.utelCall.findMany({
+        where: {
+          date: {
+            gte: fromDate,
+            lte: toDate,
+          },
+        },
         orderBy: {
           date: "desc",
         },
       });
 
-      // Filter by date in memory to avoid timezone issues
-      utelCalls = dbCalls
-        .filter((call) => {
-          // Date is stored as local time (UTC+5), need to convert to UTC for comparison
-          const callDate = new Date(call.date);
-          // Subtract 5 hours to convert from local time to UTC
-          const callDateUTC = new Date(callDate.getTime() - 5 * 60 * 60 * 1000);
-          return callDateUTC >= fromDate && callDateUTC <= toDate;
-        })
-        .map((call: any) => ({
-          id: call.id,
-          direction: call.direction as "in" | "out",
-          date: call.date,
-          duration: call.duration,
-          phone: call.phone,
-          extension: call.extension,
-          name: call.manager,
-        }));
+      utelCalls = dbCalls.map((call: any) => ({
+        id: call.id,
+        direction: call.direction as "in" | "out",
+        date: call.date,
+        duration: call.duration,
+        phone: call.phone,
+        extension: call.extension,
+        name: call.manager,
+      }));
 
-      console.log(`[UtelCalls/API] Found ${utelCalls.length} calls in database (fetched ${dbCalls.length} total)`);
+      console.log(`[UtelCalls/API] Found ${utelCalls.length} calls in database (query range: ${fromDate.toISOString()} to ${toDate.toISOString()})`);
     } catch (dbErr) {
       console.error("[UtelCalls/API] Error fetching from database:", dbErr);
     }

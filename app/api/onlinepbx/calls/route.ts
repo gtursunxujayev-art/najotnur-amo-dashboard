@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { recentCalls } from "@/app/api/onlinepbx/webhook/route";
 import { PrismaClient } from "@prisma/client";
-import { getNowGMT5, getTodayStartGMT5, getTodayEndGMT5, getWeekStartGMT5, getMonthStartGMT5 } from "@/lib/timezoneGMT5";
+import { getNowGMT5, getTodayStartGMT5, getTodayEndGMT5, getWeekStartGMT5, getMonthStartGMT5, debugGMT5 } from "@/lib/timezoneGMT5";
 
 const prisma = new PrismaClient();
 
@@ -13,6 +13,7 @@ function getPeriodDates(
   period: PeriodKey
 ): { from: Date; to: Date; label: string } {
   // Use GMT+5 (Asia/Tashkent) for all period calculations
+  // These dates are now proper UTC timestamps representing GMT+5 boundaries
   const now = getNowGMT5();
   const todayStart = getTodayStartGMT5();
   const todayEnd = getTodayEndGMT5();
@@ -22,11 +23,11 @@ function getPeriodDates(
   }
 
   if (period === "week") {
-    const weekStart = getWeekStartGMT5(todayStart);
+    const weekStart = getWeekStartGMT5();
     return { from: weekStart, to: now, label: "Bu hafta" };
   }
 
-  const monthStart = getMonthStartGMT5(todayStart);
+  const monthStart = getMonthStartGMT5();
   return { from: monthStart, to: now, label: "Bu oy" };
 }
 

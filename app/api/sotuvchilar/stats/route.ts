@@ -3,7 +3,7 @@ import { buildDashboardData, Period } from '@/lib/dashboard';
 import { prisma } from '@/lib/prisma';
 import { getManagerNameFromExtension } from '@/lib/extensionMapping';
 import { dashboardConfig } from '@/config/dashboardConfig';
-import { getNowGMT5, getTodayStartGMT5, getTodayEndGMT5, getWeekStartGMT5, getMonthStartGMT5 } from '@/lib/timezoneGMT5';
+import { getNowGMT5, getTodayStartGMT5, getTodayEndGMT5, getWeekStartGMT5, getMonthStartGMT5, getYesterdayRangeGMT5, getLastWeekRangeGMT5, getLastMonthRangeGMT5 } from '@/lib/timezoneGMT5';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +26,7 @@ interface ManagerStats {
 
 function getPeriodDates(period: string): { from: Date; to: Date; label: string } {
   // Use GMT+5 (Asia/Tashkent) for all period calculations
+  // These dates are now proper UTC timestamps representing GMT+5 boundaries
   const now = getNowGMT5();
   const todayStart = getTodayStartGMT5();
   const todayEnd = getTodayEndGMT5();
@@ -35,36 +36,27 @@ function getPeriodDates(period: string): { from: Date; to: Date; label: string }
   }
 
   if (period === 'yesterday') {
-    const yesterday = new Date(todayStart);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayEnd = new Date(yesterday);
-    yesterdayEnd.setHours(23, 59, 59, 999);
-    return { from: yesterday, to: yesterdayEnd, label: 'Kecha' };
+    const { from, to } = getYesterdayRangeGMT5();
+    return { from, to, label: 'Kecha' };
   }
 
   if (period === 'week') {
-    const weekStart = getWeekStartGMT5(todayStart);
+    const weekStart = getWeekStartGMT5();
     return { from: weekStart, to: now, label: 'Bu hafta' };
   }
 
   if (period === 'lastweek') {
-    const from = getWeekStartGMT5(todayStart);
-    from.setDate(from.getDate() - 7);
-    const to = new Date(from);
-    to.setDate(to.getDate() + 6);
-    to.setHours(23, 59, 59, 999);
+    const { from, to } = getLastWeekRangeGMT5();
     return { from, to, label: "O'tgan hafta" };
   }
 
   if (period === 'month') {
-    const from = getMonthStartGMT5(todayStart);
-    return { from, to: now, label: 'Bu oy' };
+    const monthStart = getMonthStartGMT5();
+    return { from: monthStart, to: now, label: 'Bu oy' };
   }
 
   if (period === 'lastmonth') {
-    const from = new Date(todayStart.getFullYear(), todayStart.getMonth() - 1, 1);
-    const to = new Date(todayStart.getFullYear(), todayStart.getMonth(), 0);
-    to.setHours(23, 59, 59, 999);
+    const { from, to } = getLastMonthRangeGMT5();
     return { from, to, label: "O'tgan oy" };
   }
 
@@ -73,8 +65,8 @@ function getPeriodDates(period: string): { from: Date; to: Date; label: string }
     return { from: todayStart, to: todayEnd, label: 'Maxsus davr' };
   }
 
-  const from = getMonthStartGMT5(todayStart);
-  return { from, to: now, label: 'Bu oy' };
+  const monthStart = getMonthStartGMT5();
+  return { from: monthStart, to: now, label: 'Bu oy' };
 }
 
 export async function GET(request: NextRequest) {
