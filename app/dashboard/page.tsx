@@ -368,7 +368,7 @@ export default function DashboardPage() {
                   <thead>
                     <tr className="border-b border-slate-700 bg-slate-800/60">
                       <th className="px-3 py-2">Menejer</th>
-                      <th className="px-3 py-2">Lid</th>
+                      <th className="px-3 py-2">Olingan lid</th>
                       <th className="px-3 py-2">Sifatli Lid</th>
                       <th className="px-3 py-2">Sotuv</th>
                       <th className="px-3 py-2">Konversiya</th>
