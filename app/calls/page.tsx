@@ -88,7 +88,11 @@ export default function CallsPage() {
       }
 
       const json = await res.json();
-      const onlinepbxData: OnlinePBXCallsData = json.data;
+      const onlinepbxData: OnlinePBXCallsData = {
+        totalCalls: json.totalCalls || 0,
+        filteredCount: json.filteredCount || 0,
+        recentCalls: json.calls || [],
+      };
 
       setState((s) => {
         return {
@@ -133,7 +137,14 @@ export default function CallsPage() {
       }
 
       const json = await res.json();
-      const utelData: UtelCallsData = json;  // API returns full response with success and data fields
+      const utelData: UtelCallsData = {
+        success: json.success,
+        data: {
+          source: json.source || 'utel',
+          totalCalls: json.totalCalls || 0,
+          managerSummary: json.managerSummary || [],
+        }
+      };  // API returns full response with success and data fields
 
       setState((s) => {
         return {

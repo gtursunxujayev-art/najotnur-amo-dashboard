@@ -145,15 +145,16 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Parse responses
-    let onlinepbxData: any = null;
-    let utelData: any = null;
+    let onlinepbxCalls: any[] = [];
+    let utelManagerSummary: any[] = [];
     
     if (onlinepbxRes?.ok) {
       const json = await onlinepbxRes.json();
-      onlinepbxData = json.data;
+      onlinepbxCalls = json.calls || [];
     }
     if (utelRes?.ok) {
-      utelData = await utelRes.json();
+      const json = await utelRes.json();
+      utelManagerSummary = json.managerSummary || [];
     }
 
     // Aggregate calls by manager from both sources (same logic as calls page)
@@ -162,30 +163,26 @@ export async function GET(request: NextRequest) {
       totalDurationSec: number;
     }>();
 
-    // Process OnlinePBX calls (from recentCalls array)
-    if (onlinepbxData?.recentCalls) {
-      onlinepbxData.recentCalls.forEach((call: any) => {
-        const manager = call.user || 'Unknown';
-        const existing = callsByManager.get(manager) || { totalCalls: 0, totalDurationSec: 0 };
-        existing.totalCalls += 1;
-        existing.totalDurationSec += call.duration || 0;
-        callsByManager.set(manager, existing);
-      });
-    }
+    // Process OnlinePBX calls
+    onlinepbxCalls.forEach((call: any) => {
+      const manager = call.user || 'Unknown';
+      const existing = callsByManager.get(manager) || { totalCalls: 0, totalDurationSec: 0 };
+      existing.totalCalls += 1;
+      existing.totalDurationSec += call.duration || 0;
+      callsByManager.set(manager, existing);
+    });
 
-    // Process Utel calls (from managerSummary - already aggregated)
-    if (utelData?.data?.managerSummary) {
-      utelData.data.managerSummary.forEach((mgr: any) => {
-        const manager = mgr.manager || 'Unknown';
-        const existing = callsByManager.get(manager) || { totalCalls: 0, totalDurationSec: 0 };
-        existing.totalCalls += mgr.totalCalls || 0;
-        existing.totalDurationSec += mgr.totalDurationSec || 0;
-        callsByManager.set(manager, existing);
-      });
-    }
+    // Process Utel calls (already aggregated by manager)
+    utelManagerSummary.forEach((mgr: any) => {
+      const manager = mgr.manager || 'Unknown';
+      const existing = callsByManager.get(manager) || { totalCalls: 0, totalDurationSec: 0 };
+      existing.totalCalls += mgr.totalCalls || 0;
+      existing.totalDurationSec += mgr.totalDurationSec || 0;
+      callsByManager.set(manager, existing);
+    });
 
-    const totalOnlinePBX = onlinepbxData?.recentCalls?.length || 0;
-    const totalUtel = utelData?.data?.totalCalls || 0;
+    const totalOnlinePBX = onlinepbxCalls.length;
+    const totalUtel = utelManagerSummary.reduce((sum, m) => sum + (m.totalCalls || 0), 0);
     console.log(`[Sotuvchilar/Stats] Fetched ${totalOnlinePBX} OnlinePBX calls and ${totalUtel} Utel calls`);
     console.log(`[Sotuvchilar/Stats] Aggregated calls for ${callsByManager.size} managers`);
 
