@@ -22,6 +22,20 @@ type UiState = {
 
 const COLORS = ["#22c55e", "#3b82f6", "#a855f7", "#f97316", "#ef4444", "#eab308"];
 
+// Hook to detect window size
+function useWindowSize() {
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  useEffect(() => {
+    function handleResize() {
+      setSize({ width: window.innerWidth, height: window.innerHeight });
+    }
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+  return size;
+}
+
 // Safe label helpers for pie charts
 function pieLabelLossReason(props: { name?: string; percent?: number }) {
   const { name, percent } = props;
@@ -44,6 +58,7 @@ export default function DashboardPage() {
   });
 
   const dashboardAbortRef = useRef<AbortController | null>(null);
+  const windowSize = useWindowSize();
 
 
   async function load(periodKey: PeriodKey) {
@@ -199,7 +214,7 @@ export default function DashboardPage() {
           </section>
 
           {/* Charts: lost reasons + lead sources */}
-          <section className="grid gap-4 lg:grid-cols-2">
+          <section className="grid gap-4 md:grid-cols-1 lg:grid-cols-2">
             {/* Lost reasons */}
             <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
               <h2 className="mb-2 text-sm font-semibold text-slate-200">
