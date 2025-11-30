@@ -213,7 +213,7 @@ export default function SotuvchilarPage() {
                       value: selectedManagerData.qualifiedLeads,
                     },
                     {
-                      label: 'Sifatsizlid',
+                      label: 'Sifatsiz lidlar',
                       value: selectedManagerData.nonQualifiedLeads,
                     },
                     {
@@ -242,7 +242,7 @@ export default function SotuvchilarPage() {
                     </div>
                     <div>
                       <p className="text-xs text-slate-400">Kunlik o'rtacha</p>
-                      <p className="text-2xl font-bold text-white">{selectedManagerData.dailyAvgCalls.toFixed(1)}</p>
+                      <p className="text-2xl font-bold text-white">{Math.round(selectedManagerData.dailyAvgCalls)}</p>
                     </div>
                     <div>
                       <p className="text-xs text-slate-400">Qo'ng'iroqlardavomiyligi</p>
