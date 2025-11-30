@@ -185,7 +185,7 @@ async function apiRequest(
   const isDirectApi = keyId === 'direct';
   
   if (isDirectApi) {
-    const url = `${cachedAuth.apiBase}/api/v1/${endpoint}`;
+    const url = `${cachedAuth.apiBase.replace('https://', 'https://').replace('http://', 'http://')}/api/v1/${endpoint}.json`;
     console.log(`[OnlinePBX/API] Direct API request to ${url}`);
     
     const queryString = new URLSearchParams(params).toString();
@@ -204,7 +204,8 @@ async function apiRequest(
       throw new Error(`OnlinePBX API error: ${response.status} - ${text}`);
     }
 
-    return response.json();
+    const result = await response.json();
+    return result;
   } else {
     const url = `${cachedAuth.apiBase}/${cachedAuth.domainFormat}/${endpoint}`;
     const body = new URLSearchParams(params).toString();
@@ -243,9 +244,11 @@ export async function fetchOnlinePBXCallHistory(
     let result;
     
     if (isDirectApi) {
+      // Direct API endpoint format: query parameters for call history
       result = await apiRequest('call_history', {
-        date_from: dateFrom.toISOString(),
-        date_to: dateTo.toISOString(),
+        from: dateFrom.toISOString(),
+        to: dateTo.toISOString(),
+        limit: '10000',
       });
     } else {
       result = await apiRequest('mongo_history/search.json', {
