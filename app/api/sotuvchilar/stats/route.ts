@@ -97,11 +97,11 @@ export async function GET(request: NextRequest) {
       { skipCalls: true }
     );
 
-    // Calculate active leads from dashboard data (total - won) 
+    // Calculate active leads from dashboard data (total - won - lost) 
     // This avoids fetching ALL 28k+ leads and uses already-fetched period data
     const activeLeadsByManager = new Map<string, number>();
     dashboardData.managerSales.forEach((ms) => {
-      const activeLeads = Math.max(0, ms.totalLeads - ms.wonDeals);
+      const activeLeads = Math.max(0, ms.totalLeads - ms.wonDeals - ms.lostLeads);
       activeLeadsByManager.set(ms.managerName, activeLeads);
     });
 

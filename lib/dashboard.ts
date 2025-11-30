@@ -20,6 +20,7 @@ export type ManagerSalesStats = {
   managerName: string;
   totalLeads: number;
   qualifiedLeads: number;
+  lostLeads: number;
   wonDeals: number;
   wonAmount: number;
   onlineSalesCount: number;
@@ -233,6 +234,7 @@ export async function buildDashboardData(
         managerName,
         totalLeads: 0,
         qualifiedLeads: 0,
+        lostLeads: 0,
         wonDeals: 0,
         wonAmount: 0,
         onlineSalesCount: 0,
@@ -245,6 +247,8 @@ export async function buildDashboardData(
 
     // Lost reason map (for pie chart) - grouped by objection field (E'tiroz sababi) if available
     if (isLost(lead)) {
+      ms.lostLeads++;
+      
       // Try to get objection field value if it's configured
       let objectionValue: string | null = null;
       let objectionLabel: string | null = null;
