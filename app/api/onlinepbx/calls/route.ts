@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { recentCalls } from "@/app/api/onlinepbx/webhook/route";
 import { PrismaClient } from "@prisma/client";
+import { getNowGMT5, getTodayStartGMT5, getTodayEndGMT5, getWeekStartGMT5, getMonthStartGMT5 } from "@/lib/timezoneGMT5";
 
 const prisma = new PrismaClient();
 
@@ -11,26 +12,21 @@ type PeriodKey = "today" | "week" | "month";
 function getPeriodDates(
   period: PeriodKey
 ): { from: Date; to: Date; label: string } {
-  // Use UTC dates for consistent database queries
-  const now = new Date();
-  
-  // Today in UTC
-  const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
-  const todayEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
+  // Use GMT+5 (Asia/Tashkent) for all period calculations
+  const now = getNowGMT5();
+  const todayStart = getTodayStartGMT5();
+  const todayEnd = getTodayEndGMT5();
 
   if (period === "today") {
     return { from: todayStart, to: todayEnd, label: "Bugun" };
   }
 
   if (period === "week") {
-    const weekStart = new Date(todayStart);
-    const day = weekStart.getUTCDay();
-    const diffToMonday = (day + 6) % 7;
-    weekStart.setUTCDate(weekStart.getUTCDate() - diffToMonday);
+    const weekStart = getWeekStartGMT5(todayStart);
     return { from: weekStart, to: now, label: "Bu hafta" };
   }
 
-  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
+  const monthStart = getMonthStartGMT5(todayStart);
   return { from: monthStart, to: now, label: "Bu oy" };
 }
 
@@ -62,7 +58,7 @@ export async function GET(request: Request) {
     }
 
     console.log(
-      `[OnlinePBX/Calls] Fetching calls from ${fromDate.toISOString()} to ${toDate.toISOString()} (UTC)`
+      `[OnlinePBX/Calls] Fetching calls from ${fromDate.toISOString()} to ${toDate.toISOString()} (GMT+5)`
     );
 
     // First, try to get calls from database for historical data

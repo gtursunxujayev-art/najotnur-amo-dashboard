@@ -3,6 +3,7 @@ import { buildDashboardData, Period } from '@/lib/dashboard';
 import { prisma } from '@/lib/prisma';
 import { getManagerNameFromExtension } from '@/lib/extensionMapping';
 import { dashboardConfig } from '@/config/dashboardConfig';
+import { getNowGMT5, getTodayStartGMT5, getTodayEndGMT5, getWeekStartGMT5, getMonthStartGMT5 } from '@/lib/timezoneGMT5';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,12 +25,13 @@ interface ManagerStats {
 }
 
 function getPeriodDates(period: string): { from: Date; to: Date; label: string } {
-  const now = new Date();
-  const todayStart = new Date(now);
-  todayStart.setHours(0, 0, 0, 0);
+  // Use GMT+5 (Asia/Tashkent) for all period calculations
+  const now = getNowGMT5();
+  const todayStart = getTodayStartGMT5();
+  const todayEnd = getTodayEndGMT5();
 
   if (period === 'today') {
-    return { from: todayStart, to: now, label: 'Bugun' };
+    return { from: todayStart, to: todayEnd, label: 'Bugun' };
   }
 
   if (period === 'yesterday') {
@@ -41,18 +43,13 @@ function getPeriodDates(period: string): { from: Date; to: Date; label: string }
   }
 
   if (period === 'week') {
-    const from = new Date(todayStart);
-    const day = from.getDay();
-    const diffToMonday = (day + 6) % 7;
-    from.setDate(from.getDate() - diffToMonday);
-    return { from, to: now, label: 'Bu hafta' };
+    const weekStart = getWeekStartGMT5(todayStart);
+    return { from: weekStart, to: now, label: 'Bu hafta' };
   }
 
   if (period === 'lastweek') {
-    const from = new Date(todayStart);
-    const day = from.getDay();
-    const diffToMonday = (day + 6) % 7;
-    from.setDate(from.getDate() - diffToMonday - 7);
+    const from = getWeekStartGMT5(todayStart);
+    from.setDate(from.getDate() - 7);
     const to = new Date(from);
     to.setDate(to.getDate() + 6);
     to.setHours(23, 59, 59, 999);
@@ -60,7 +57,7 @@ function getPeriodDates(period: string): { from: Date; to: Date; label: string }
   }
 
   if (period === 'month') {
-    const from = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
+    const from = getMonthStartGMT5(todayStart);
     return { from, to: now, label: 'Bu oy' };
   }
 
@@ -73,10 +70,10 @@ function getPeriodDates(period: string): { from: Date; to: Date; label: string }
 
   if (period === 'custom') {
     // Will be handled by caller with start/end params
-    return { from: todayStart, to: now, label: 'Maxsus davr' };
+    return { from: todayStart, to: todayEnd, label: 'Maxsus davr' };
   }
 
-  const from = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
+  const from = getMonthStartGMT5(todayStart);
   return { from, to: now, label: 'Bu oy' };
 }
 
@@ -99,7 +96,7 @@ export async function GET(request: NextRequest) {
       toDate = dates.to;
     }
 
-    console.log(`[Sotuvchilar/Stats] Fetching stats for period: ${periodParam} (${fromDate.toISOString()} to ${toDate.toISOString()})`);
+    console.log(`[Sotuvchilar/Stats] Fetching stats for period: ${periodParam} (${fromDate.toISOString()} to ${toDate.toISOString()}) - GMT+5`);
 
     // Build dashboard data to get manager sales stats (already period-filtered)
     const dashboardData = await buildDashboardData(

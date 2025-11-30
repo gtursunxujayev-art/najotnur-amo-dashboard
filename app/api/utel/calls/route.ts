@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { fetchUtelCalls } from "@/lib/utelCalls";
 import { getManagerNameFromExtension } from "@/lib/extensionMapping";
 import { prisma } from "@/lib/prisma";
+import { getNowGMT5, getTodayStartGMT5, getTodayEndGMT5, getWeekStartGMT5, getMonthStartGMT5 } from "@/lib/timezoneGMT5";
 
 export const dynamic = "force-dynamic";
 
@@ -10,24 +11,22 @@ type PeriodKey = "today" | "week" | "month";
 function getPeriodDates(
   period: PeriodKey
 ): { from: Date; to: Date; label: string } {
-  const now = new Date();
-  const todayStart = new Date(now);
-  todayStart.setHours(0, 0, 0, 0);
+  // Use GMT+5 (Asia/Tashkent) for all period calculations
+  const now = getNowGMT5();
+  const todayStart = getTodayStartGMT5();
+  const todayEnd = getTodayEndGMT5();
 
   if (period === "today") {
-    return { from: todayStart, to: now, label: "Bugun" };
+    return { from: todayStart, to: todayEnd, label: "Bugun" };
   }
 
   if (period === "week") {
-    const from = new Date(todayStart);
-    const day = from.getDay();
-    const diffToMonday = (day + 6) % 7;
-    from.setDate(from.getDate() - diffToMonday);
-    return { from, to: now, label: "Bu hafta" };
+    const weekStart = getWeekStartGMT5(todayStart);
+    return { from: weekStart, to: now, label: "Bu hafta" };
   }
 
-  const from = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
-  return { from, to: now, label: "Bu oy" };
+  const monthStart = getMonthStartGMT5(todayStart);
+  return { from: monthStart, to: now, label: "Bu oy" };
 }
 
 function formatDuration(seconds: number): string {
