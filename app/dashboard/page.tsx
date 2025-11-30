@@ -157,7 +157,7 @@ export default function DashboardPage() {
           {/* Top metrics */}
           <section className="grid gap-4 md:grid-cols-3 lg:grid-cols-4">
             <MetricCard
-              title="Sotuv"
+              title="Sotuv shartnomasi"
               value={(data.onlineSalesCount + data.offlineSalesCount).toLocaleString("ru-RU")}
               subtitle={`${data.kelishuvSummasi.toLocaleString("ru-RU")} so'm`}
             />
