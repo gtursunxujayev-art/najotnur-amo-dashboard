@@ -35,6 +35,12 @@ export async function GET() {
       },
     });
 
+    // Convert BigInt chatId to string for JSON serialization
+    const serializedUsers = allUsers.map((u) => ({
+      ...u,
+      chatId: u.chatId.toString(),
+    }));
+
     const response = {
       status: "ok",
       timestamp: new Date().toISOString(),
@@ -47,7 +53,7 @@ export async function GET() {
         weekly: weeklySubscribers,
         monthly: monthlySubscribers,
       },
-      subscribers_list: allUsers,
+      subscribers_list: serializedUsers,
       timezone: "Asia/Tashkent (GMT+5)",
       instructions: {
         check_status: "GET /api/scheduler/status (this endpoint)",
