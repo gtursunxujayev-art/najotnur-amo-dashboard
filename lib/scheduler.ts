@@ -130,6 +130,45 @@ export function initializeScheduler() {
   );
   schedulerTasks.push(monthlyTask);
 
+  // OnlinePBX sync every hour to catch missing webhook calls
+  const onlinepbxSyncTask = cron.schedule(
+    "0 * * * *", // Every hour at :00
+    async () => {
+      const now = new Date().toISOString();
+      console.log(`[Scheduler] 📞 EXECUTING ONLINEPBX SYNC at ${now}`);
+      try {
+        const res = await fetch(`${getBaseUrl()}/api/onlinepbx/sync?period=today`, {
+          method: "GET",
+        });
+        const data = await res.json();
+        if (data.success) {
+          console.log("[Scheduler] ✅ OnlinePBX sync result:", data.result || data);
+          (executionHistory.lastExecutions as any).onlinepbxSync = {
+            time: now,
+            success: true,
+            message: data.result ? `Fetched: ${data.result.fetched}, New: ${data.result.newCalls}` : 'Sync successful',
+          };
+        } else {
+          console.log("[Scheduler] ⚠️ OnlinePBX sync skipped (API access blocked - relying on webhook):", data.hint || data.error);
+          (executionHistory.lastExecutions as any).onlinepbxSync = {
+            time: now,
+            success: false,
+            message: data.hint || data.error || 'API access blocked - webhook still active',
+          };
+        }
+      } catch (err: any) {
+        console.error("[Scheduler] ⚠️ OnlinePBX sync error (webhook still active):", err?.message);
+        (executionHistory.lastExecutions as any).onlinepbxSync = {
+          time: now,
+          success: false,
+          message: `${err?.message} - webhook still active`,
+        };
+      }
+    },
+    { timezone: "Asia/Tashkent" }
+  );
+  schedulerTasks.push(onlinepbxSyncTask);
+
   isSchedulerInitialized = true;
   executionHistory.initialized = true;
   executionHistory.isRunning = true;
@@ -139,6 +178,7 @@ export function initializeScheduler() {
   console.log("  ✓ Daily: Every day at 8:00 AM");
   console.log("  ✓ Weekly: Every Monday at 8:00 AM");
   console.log("  ✓ Monthly: 1st of each month at 8:00 AM");
+  console.log("  ✓ OnlinePBX Sync: Every hour at :00");
   console.log("[Scheduler] 🔧 Use /api/scheduler/status to check execution history");
 }
 

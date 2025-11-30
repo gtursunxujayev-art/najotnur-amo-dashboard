@@ -95,6 +95,23 @@ SELECT id, "chatId", username, "dailyReport", "weeklyReport", "monthlyReport" FR
 
 ## Recent Changes
 
+### November 30, 2025 - OnlinePBX API Polling Infrastructure
+- **Problem**: OnlinePBX webhook missing ~40 calls daily (calls from midnight to ~10 AM not delivered)
+- **Solution Implemented**:
+  - ✅ Created `lib/onlinepbxApi.ts` with multi-method authentication (API v2 + direct API)
+  - ✅ Built `/api/onlinepbx/sync` endpoint to fetch and sync missing calls
+  - ✅ Added hourly polling job to scheduler to catch missed webhook calls
+  - ⚠️ **BLOCKED**: OnlinePBX API returns 403 Forbidden from nginx - infrastructure restriction
+- **Current Status**:
+  - API polling infrastructure is ready but blocked by OnlinePBX access restrictions
+  - Webhook integration continues to work (receiving ~28 calls/day)
+  - To enable API polling, OnlinePBX admin panel may need: IP whitelist or API key refresh
+- **Workaround**: Data still captured via webhook; API polling available when access is restored
+- **Files Created/Modified**:
+  - `lib/onlinepbxApi.ts` - New API client with fallback authentication methods
+  - `app/api/onlinepbx/sync/route.ts` - New sync endpoint
+  - `lib/scheduler.ts` - Added hourly OnlinePBX sync job
+
 ### November 30, 2025 - Unified Call Data Between Calls and Sotuvchilar Pages
 - **Problem**: Calls page and Sotuvchilar page showed different call counts because they used different data sources with different timezone handling
 - **Root Cause**: 
