@@ -95,6 +95,26 @@ SELECT id, "chatId", username, "dailyReport", "weeklyReport", "monthlyReport" FR
 
 ## Recent Changes
 
+### December 1, 2025 - Full Month Excel Import & Performance Optimization
+- **Data Import**: Imported full November 2025 call history from Excel files
+  - OnlinePBX: 3,951 calls imported from Excel export
+  - UTel: 4,816 calls imported from Excel export
+  - Total: 8,767 calls in database
+- **Performance Optimization**: Added pagination to prevent freezing with large datasets
+  - `/api/onlinepbx/calls` and `/api/utel/calls` now support `page` and `limit` parameters
+  - Default limit: 500, Max limit: 2000
+  - Response includes pagination metadata: `{ page, limit, totalPages, hasMore }`
+  - Count queries use indexed date filters for fast totals
+- **Import Endpoints** (for future use):
+  - `POST /api/import/onlinepbx-excel` - Import OnlinePBX calls from Excel
+  - `POST /api/import/utel-excel` - Import UTel calls from Excel
+  - Uses batch processing (100 records/batch) with upsert for deduplication
+- **Files Created/Modified**:
+  - `app/api/import/onlinepbx-excel/route.ts` - OnlinePBX Excel import
+  - `app/api/import/utel-excel/route.ts` - UTel Excel import
+  - `app/api/onlinepbx/calls/route.ts` - Added pagination
+  - `app/api/utel/calls/route.ts` - Added pagination
+
 ### November 30, 2025 - OnlinePBX API Polling Infrastructure (FIXED!)
 - **Problem**: OnlinePBX webhook missing ~40 calls daily (calls from midnight to ~10 AM not delivered)
 - **Root Causes Fixed**:

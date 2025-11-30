@@ -39,7 +39,9 @@ export async function GET(request: Request) {
     const periodParam = searchParams.get("period") as PeriodKey | null;
     const fromParam = searchParams.get("from");
     const toParam = searchParams.get("to");
-    const limit = parseInt(searchParams.get("limit") || "1000");
+    const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "500"), 1), 2000); // Min 1, Max 2000 for performance
+    const page = Math.max(parseInt(searchParams.get("page") || "1"), 1); // Min page 1
+    const offset = (page - 1) * limit;
 
     let fromDate: Date;
     let toDate: Date;
@@ -64,7 +66,19 @@ export async function GET(request: Request) {
 
     // First, try to get calls from database for historical data
     let dbCalls: any[] = [];
+    let totalCount = 0;
     try {
+      // Get count first (fast with index on date)
+      totalCount = await prisma.onlinePBXCall.count({
+        where: {
+          date: {
+            gte: fromDate,
+            lte: toDate,
+          },
+        },
+      });
+
+      // Then fetch paginated data
       dbCalls = await prisma.onlinePBXCall.findMany({
         where: {
           date: {
@@ -74,9 +88,10 @@ export async function GET(request: Request) {
         },
         orderBy: { date: "desc" },
         take: limit,
+        skip: offset,
       });
       
-      console.log(`[OnlinePBX/Calls] Retrieved ${dbCalls.length} calls from database`);
+      console.log(`[OnlinePBX/Calls] Retrieved ${dbCalls.length} calls from database (total: ${totalCount}, page: ${page})`);
     } catch (dbError) {
       console.error("[OnlinePBX/Calls] Database query error (table may not exist yet):", dbError);
       // Fall back to in-memory storage if DB query fails
@@ -114,14 +129,20 @@ export async function GET(request: Request) {
       console.log(`[OnlinePBX/Calls] Falling back to ${calls.length} calls from in-memory storage (total: ${recentCalls.length})`);
     }
 
-    const totalCount = dbCalls.length > 0 ? dbCalls.length : recentCalls.length;
+    const finalTotalCount = totalCount > 0 ? totalCount : recentCalls.length;
 
     return NextResponse.json({
       success: true,
       calls: calls,
-      totalCalls: totalCount,
+      totalCalls: finalTotalCount,
       filteredCount: calls.length,
       source: dbCalls.length > 0 ? "database" : "memory",
+      pagination: {
+        page,
+        limit,
+        totalPages: Math.ceil(finalTotalCount / limit),
+        hasMore: page * limit < finalTotalCount,
+      },
     });
   } catch (error: any) {
     console.error("[OnlinePBX/Calls] Error:", error.message);

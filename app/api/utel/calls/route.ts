@@ -44,6 +44,9 @@ export async function GET(request: Request) {
     const periodParam = searchParams.get("period") as PeriodKey | null;
     const fromParam = searchParams.get("from");
     const toParam = searchParams.get("to");
+    const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "500"), 1), 2000); // Min 1, Max 2000 for performance
+    const page = Math.max(parseInt(searchParams.get("page") || "1"), 1); // Min page 1
+    const offset = (page - 1) * limit;
 
     let fromDate: Date;
     let toDate: Date;
@@ -67,9 +70,21 @@ export async function GET(request: Request) {
     // Fetch from database with proper date filtering
     // The fromDate and toDate are now correct UTC timestamps representing GMT+5 boundaries
     let utelCalls: any[] = [];
+    let totalCount = 0;
     try {
       console.log(`[UtelCalls/API] Debug: ${debugGMT5()}`);
       
+      // Get count first (fast with index on date)
+      totalCount = await prisma.utelCall.count({
+        where: {
+          date: {
+            gte: fromDate,
+            lte: toDate,
+          },
+        },
+      });
+
+      // Then fetch paginated data
       const dbCalls = await prisma.utelCall.findMany({
         where: {
           date: {
@@ -80,6 +95,8 @@ export async function GET(request: Request) {
         orderBy: {
           date: "desc",
         },
+        take: limit,
+        skip: offset,
       });
 
       utelCalls = dbCalls.map((call: any) => ({
@@ -92,7 +109,7 @@ export async function GET(request: Request) {
         name: call.manager,
       }));
 
-      console.log(`[UtelCalls/API] Found ${utelCalls.length} calls in database (query range: ${fromDate.toISOString()} to ${toDate.toISOString()})`);
+      console.log(`[UtelCalls/API] Found ${utelCalls.length} calls in database (total: ${totalCount}, page: ${page})`);
     } catch (dbErr) {
       console.error("[UtelCalls/API] Error fetching from database:", dbErr);
     }
@@ -153,11 +170,17 @@ export async function GET(request: Request) {
           manager: call.name || getManagerNameFromExtension(call.extension),
           formattedDuration: formatDuration(call.duration),
         })),
-      totalCalls: utelCalls.length,
+      totalCalls: totalCount || utelCalls.length,
       managerSummary: managerSummary.map((m) => ({
         ...m,
         formattedDuration: formatDuration(m.totalDurationSec),
       })),
+      pagination: {
+        page,
+        limit,
+        totalPages: Math.ceil((totalCount || utelCalls.length) / limit),
+        hasMore: page * limit < (totalCount || utelCalls.length),
+      },
     });
   } catch (error: any) {
     console.error("[UtelCalls/API] Error:", error);
