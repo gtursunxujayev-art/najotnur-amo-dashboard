@@ -103,40 +103,6 @@ async function authenticateApi2(): Promise<{ keyId: string; key: string; domainF
   return null;
 }
 
-async function testDirectApiAccess(): Promise<{ domainFormat: string; apiBase: string } | null> {
-  const domain = getOnlinePBXDomain();
-  const apiKey = getOnlinePBXApiKey();
-  
-  const endpoints = [
-    { base: `https://${domain}.onpbx.ru`, domainFormat: `${domain}.onpbx.ru` },
-    { base: `https://${domain}.onlinepbx.ru`, domainFormat: `${domain}.onlinepbx.ru` },
-  ];
-  
-  for (const endpoint of endpoints) {
-    try {
-      const testUrl = `${endpoint.base}/api/v1/users`;
-      console.log(`[OnlinePBX/API] Trying direct API access: ${testUrl}`);
-      
-      const response = await fetch(testUrl, {
-        method: 'GET',
-        headers: {
-          'x-pbx-authentication': apiKey,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        console.log(`[OnlinePBX/API] Direct API access works with: ${endpoint.domainFormat}`);
-        return { domainFormat: endpoint.domainFormat, apiBase: endpoint.base };
-      }
-      console.log(`[OnlinePBX/API] Direct API failed: ${response.status}`);
-    } catch (err) {
-      console.log(`[OnlinePBX/API] Direct API error:`, err);
-    }
-  }
-  
-  return null;
-}
 
 async function authenticate(): Promise<{ keyId: string; key: string }> {
   if (cachedAuth && cachedAuth.expires > Date.now()) {
@@ -156,20 +122,7 @@ async function authenticate(): Promise<{ keyId: string; key: string }> {
     return { keyId: api2Result.keyId, key: api2Result.key };
   }
 
-  const directResult = await testDirectApiAccess();
-  if (directResult) {
-    const apiKey = getOnlinePBXApiKey();
-    cachedAuth = {
-      keyId: 'direct',
-      key: apiKey,
-      expires: Date.now() + 2 * 24 * 60 * 60 * 1000,
-      domainFormat: directResult.domainFormat,
-      apiBase: directResult.apiBase,
-    };
-    return { keyId: 'direct', key: apiKey };
-  }
-
-  throw new Error('OnlinePBX auth failed with all API methods. Please verify ONLINEPBX_API_KEY and ONLINEPBX_DOMAIN are correct.');
+  throw new Error('OnlinePBX auth failed. Please verify ONLINEPBX_API_KEY and ONLINEPBX_DOMAIN are correct.');
 }
 
 async function apiRequest(
@@ -182,53 +135,27 @@ async function apiRequest(
     throw new Error('Authentication required but not cached');
   }
   
-  const isDirectApi = keyId === 'direct';
+  const url = `${cachedAuth.apiBase}/${cachedAuth.domainFormat}/${endpoint}`;
+  const body = new URLSearchParams(params).toString();
+  const signature = generateSignature(key, body);
   
-  if (isDirectApi) {
-    const url = `${cachedAuth.apiBase.replace('https://', 'https://').replace('http://', 'http://')}/api/v1/${endpoint}.json`;
-    console.log(`[OnlinePBX/API] Direct API request to ${url}`);
-    
-    const queryString = new URLSearchParams(params).toString();
-    const fullUrl = queryString ? `${url}?${queryString}` : url;
-    
-    const response = await fetch(fullUrl, {
-      method: 'GET',
-      headers: {
-        'x-pbx-authentication': key,
-        'Content-Type': 'application/json',
-      },
-    });
+  console.log(`[OnlinePBX/API] API v2 request to ${endpoint}`, { params });
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'x-pbx-authentication': `${keyId}:${signature}`,
+    },
+    body,
+  });
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`OnlinePBX API error: ${response.status} - ${text}`);
-    }
-
-    const result = await response.json();
-    return result;
-  } else {
-    const url = `${cachedAuth.apiBase}/${cachedAuth.domainFormat}/${endpoint}`;
-    const body = new URLSearchParams(params).toString();
-    const signature = generateSignature(key, body);
-    
-    console.log(`[OnlinePBX/API] API v2 request to ${endpoint}`, { params });
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'x-pbx-authentication': `${keyId}:${signature}`,
-      },
-      body,
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`OnlinePBX API error: ${response.status} - ${text}`);
-    }
-
-    return response.json();
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`OnlinePBX API error: ${response.status} - ${text}`);
   }
+
+  return response.json();
 }
 
 export async function fetchOnlinePBXCallHistory(
@@ -238,31 +165,23 @@ export async function fetchOnlinePBXCallHistory(
   try {
     console.log(`[OnlinePBX/API] Fetching call history from ${dateFrom.toISOString()} to ${dateTo.toISOString()}`);
 
-    const { keyId } = await authenticate();
-    const isDirectApi = keyId === 'direct';
+    await authenticate();
     
-    let result;
+    // Use mongo_history/search.json endpoint with Unix timestamps
+    const startStamp = Math.floor(dateFrom.getTime() / 1000);
+    const endStamp = Math.floor(dateTo.getTime() / 1000);
     
-    if (isDirectApi) {
-      // Direct API endpoint format: query parameters for call history
-      result = await apiRequest('call_history', {
-        from: dateFrom.toISOString(),
-        to: dateTo.toISOString(),
-        limit: '10000',
-      });
-    } else {
-      result = await apiRequest('mongo_history/search.json', {
-        date_from: dateFrom.toISOString(),
-        date_to: dateTo.toISOString(),
-      });
-    }
+    const result = await apiRequest('mongo_history/search.json', {
+      start_stamp_from: startStamp.toString(),
+      start_stamp_to: endStamp.toString(),
+    });
 
-    if (!isDirectApi && result.status !== '1') {
+    if (result.status !== '1') {
       console.error('[OnlinePBX/API] API returned error:', result);
       throw new Error(`API error: ${result.comment || result.error || 'Unknown'}`);
     }
 
-    const calls: OnlinePBXCallRecord[] = isDirectApi ? (result || []) : (result.data || []);
+    const calls: OnlinePBXCallRecord[] = result.data || [];
     console.log(`[OnlinePBX/API] Fetched ${calls.length} calls from API`);
     
     return calls;
