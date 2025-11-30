@@ -1,11 +1,12 @@
 // instrumentation.ts - Auto-starts on Next.js server initialization
-export function register() {
+export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    // Import and initialize scheduler on server startup
-    import("@/lib/scheduler").then(({ initializeScheduler }) => {
+    try {
+      // Import and initialize scheduler on server startup
+      const { initializeScheduler } = await import("@/lib/scheduler");
       initializeScheduler();
-    }).catch((err) => {
-      console.error("[instrumentation] Failed to initialize scheduler:", err);
-    });
+    } catch (err: any) {
+      console.error("[instrumentation] Failed to initialize scheduler:", err?.message);
+    }
   }
 }

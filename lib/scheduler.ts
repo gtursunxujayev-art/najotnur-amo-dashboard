@@ -24,7 +24,12 @@ let executionHistory: SchedulerStatus = {
 };
 
 export function getSchedulerStatus(): SchedulerStatus {
-  return executionHistory;
+  // Always return the current state, reflecting isSchedulerInitialized flag
+  return {
+    initialized: isSchedulerInitialized,
+    isRunning: isSchedulerInitialized,
+    lastExecutions: executionHistory.lastExecutions,
+  };
 }
 
 export function initializeScheduler() {
