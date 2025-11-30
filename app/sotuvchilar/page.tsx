@@ -253,7 +253,7 @@ export default function SotuvchilarPage() {
                     <div>
                       <p className="text-xs text-slate-400">O'rtacha Kunlik</p>
                       <p className="text-2xl font-bold text-white">
-                        {formatDuration(selectedManagerData.dailyAvgCallLength)}
+                        {formatDuration(Math.round(selectedManagerData.dailyAvgCallLength))}
                       </p>
                     </div>
                   </div>

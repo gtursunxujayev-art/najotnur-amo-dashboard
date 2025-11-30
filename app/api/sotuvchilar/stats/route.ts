@@ -97,12 +97,24 @@ export async function GET(request: NextRequest) {
       { skipCalls: true }
     );
 
-    // Calculate active leads from dashboard data (total - won - lost) 
-    // This avoids fetching ALL 28k+ leads and uses already-fetched period data
+    // Fetch CURRENT active leads (not period-dependent) - these are leads still being worked on
+    // This is separate from period stats - it shows real-time workload per manager
+    const { getCurrentActiveLeadsPerManager, getUsers } = await import('@/lib/amocrm');
+    const users = await getUsers();
+    const usersMap = new Map<number, string>();
+    users.forEach((u) => usersMap.set(u.id, u.name));
+    
+    const currentActiveLeadsByManagerId = await getCurrentActiveLeadsPerManager(
+      dashboardConfig.PIPELINE_IDS,
+      dashboardConfig.WON_STATUS_IDS,
+      dashboardConfig.LOST_STATUS_IDS
+    );
+    
+    // Convert manager IDs to names
     const activeLeadsByManager = new Map<string, number>();
-    dashboardData.managerSales.forEach((ms) => {
-      const activeLeads = Math.max(0, ms.totalLeads - ms.wonDeals - ms.lostLeads);
-      activeLeadsByManager.set(ms.managerName, activeLeads);
+    currentActiveLeadsByManagerId.forEach((count, managerId) => {
+      const name = usersMap.get(managerId) || `User ${managerId}`;
+      activeLeadsByManager.set(name, count);
     });
 
     // Fetch call data from the SAME API endpoints as the calls page for consistency

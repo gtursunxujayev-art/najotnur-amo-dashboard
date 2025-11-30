@@ -175,3 +175,73 @@ export async function getStatusMapping(): Promise<Record<number, string>> {
     return {};
   }
 }
+
+/**
+ * Get current active leads count per manager.
+ * Active leads = leads that are NOT won and NOT lost (currently being worked on).
+ * This is real-time data, not period-dependent.
+ */
+export async function getCurrentActiveLeadsPerManager(
+  pipelineIds: number[],
+  wonStatusIds: number[],
+  lostStatusIds: number[]
+): Promise<Map<number, number>> {
+  const activeLeadsByManager = new Map<number, number>();
+  
+  // Fetch leads from the last 3 years to cover all active leads
+  const now = Math.floor(Date.now() / 1000);
+  const threeYearsAgo = now - (3 * 365 * 24 * 60 * 60);
+  
+  console.log("[AmoCRM] Fetching current active leads (not won/lost)...");
+  
+  let page = 1;
+  const pageSize = 250;
+  let totalActive = 0;
+  
+  while (true) {
+    const url = `/api/v4/leads?limit=${pageSize}&page=${page}&filter[created_at][from]=${threeYearsAgo}&filter[created_at][to]=${now}`;
+    const data = await amoRequest(url);
+    const leads = data?._embedded?.leads || [];
+    
+    if (leads.length === 0) {
+      break;
+    }
+    
+    // Count active leads per manager
+    leads.forEach((lead: AmoLead) => {
+      const pipelineId = lead.pipeline_id || -1;
+      const statusId = lead.status_id || -1;
+      const managerId = lead.responsible_user_id || 0;
+      
+      // Skip leads from other pipelines
+      if (pipelineIds.length > 0 && !pipelineIds.includes(pipelineId)) {
+        return;
+      }
+      
+      // Skip won leads
+      if (wonStatusIds.includes(statusId)) {
+        return;
+      }
+      
+      // Skip lost leads
+      if (lostStatusIds.includes(statusId)) {
+        return;
+      }
+      
+      // This is an active lead
+      activeLeadsByManager.set(managerId, (activeLeadsByManager.get(managerId) || 0) + 1);
+      totalActive++;
+    });
+    
+    console.log(`[AmoCRM] Processed page ${page}: ${leads.length} leads, ${totalActive} active so far`);
+    
+    if (leads.length < pageSize) {
+      break;
+    }
+    
+    page++;
+  }
+  
+  console.log(`[AmoCRM] Total current active leads: ${totalActive}`);
+  return activeLeadsByManager;
+}
