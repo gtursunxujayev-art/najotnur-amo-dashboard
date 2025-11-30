@@ -35,10 +35,12 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     
-    // Support both period parameter and from/to date parameters
+    // Support period parameter, from/to date parameters, or exact ISO timestamps
     const periodParam = searchParams.get("period") as PeriodKey | null;
     const fromParam = searchParams.get("from");
     const toParam = searchParams.get("to");
+    const fromISOParam = searchParams.get("fromISO"); // Exact ISO timestamp
+    const toISOParam = searchParams.get("toISO"); // Exact ISO timestamp
     const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "500"), 1), 2000); // Min 1, Max 2000 for performance
     const page = Math.max(parseInt(searchParams.get("page") || "1"), 1); // Min page 1
     const offset = (page - 1) * limit;
@@ -46,7 +48,11 @@ export async function GET(request: Request) {
     let fromDate: Date;
     let toDate: Date;
 
-    if (fromParam && toParam) {
+    if (fromISOParam && toISOParam) {
+      // Use exact ISO timestamps (from Sotuvchilar API) - preserves exact time boundaries
+      fromDate = new Date(fromISOParam);
+      toDate = new Date(toISOParam);
+    } else if (fromParam && toParam) {
       // Use explicit date range if provided - in UTC
       fromDate = new Date(fromParam);
       fromDate.setUTCHours(0, 0, 0, 0);

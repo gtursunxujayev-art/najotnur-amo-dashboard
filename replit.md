@@ -30,3 +30,16 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 *   **Google Sheets API:** Integrates for call statistics and revenue data, specifically for PDF reports and historical call data import.
 *   **Telegram Bot API:** Utilized for sending automated reports and managing user subscriptions.
 *   **PostgreSQL:** The primary database, accessed via Prisma ORM.
+
+## Recent Changes (December 2025)
+
+### Full Month Data Import & Cleanup
+- Imported November 2025 call history from Excel files
+- Cleaned up 791 duplicate records (calls imported from multiple sources)
+- **Final Data**: 7,976 unique calls (OnlinePBX: 3,867 + UTel: 4,109)
+
+### Date Range Fix for Sotuvchilar API
+- **Problem**: "Yesterday" was showing 2 days of data (185 calls for Oyshaxon instead of 72)
+- **Root Cause**: Date parameters were losing timezone precision when passed between APIs
+- **Solution**: Added `fromISO` and `toISO` parameters to preserve exact UTC timestamps
+- **Result**: All period filters now use correct GMT+5 boundaries

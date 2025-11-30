@@ -119,16 +119,12 @@ export async function GET(request: NextRequest) {
     let onlinepbxUrl = `${baseUrl}/api/onlinepbx/calls`;
     let utelUrl = `${baseUrl}/api/utel/calls`;
     
-    if (periodParam === 'custom' || periodParam === 'yesterday' || periodParam === 'lastweek' || periodParam === 'lastmonth') {
-      // Pass explicit date range for non-standard periods
-      const fromStr = fromDate.toISOString().split('T')[0];
-      const toStr = toDate.toISOString().split('T')[0];
-      onlinepbxUrl += `?from=${fromStr}&to=${toStr}`;
-      utelUrl += `?from=${fromStr}&to=${toStr}`;
-    } else {
-      onlinepbxUrl += `?period=${callsPeriod}`;
-      utelUrl += `?period=${callsPeriod}`;
-    }
+    // Always pass full ISO timestamps to ensure exact date range matching
+    // This prevents timezone mismatches between APIs
+    const fromISO = fromDate.toISOString();
+    const toISO = toDate.toISOString();
+    onlinepbxUrl += `?fromISO=${encodeURIComponent(fromISO)}&toISO=${encodeURIComponent(toISO)}`;
+    utelUrl += `?fromISO=${encodeURIComponent(fromISO)}&toISO=${encodeURIComponent(toISO)}`;
 
     console.log(`[Sotuvchilar/Stats] Fetching calls from APIs: ${onlinepbxUrl}, ${utelUrl}`);
 
