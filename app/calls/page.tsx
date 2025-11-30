@@ -288,10 +288,19 @@ export default function CallsPage() {
             let mergedData = Array.from(mergedManagers.values())
               .sort((a, b) => b.totalCalls - a.totalCalls);
 
-            // Filter out IVR system calls (5000, 5001, Unknown)
-            mergedData = mergedData.filter(
-              (m) => m.manager !== "5000" && m.manager !== "5001" && m.manager !== "Unknown"
-            );
+            // Filter to only show actual manager names (text-based)
+            // Filter out: phone numbers, IVR extensions, Unknown
+            // Real manager names contain letters (Marg'uba, Mumtoza, Admin, etc.)
+            // Phone numbers and IVR extensions are purely numeric
+            const isValidManagerName = (name: string) => {
+              if (!name || name === "Unknown") return false;
+              // Normalize: remove spaces, dashes, plus signs
+              const normalized = name.replace(/[\s\-\+]/g, "");
+              // Valid manager names must contain at least one letter
+              return /[a-zA-Z]/.test(normalized);
+            };
+            
+            mergedData = mergedData.filter((m) => isValidManagerName(m.manager));
 
             if (mergedData.length === 0) {
               return (
