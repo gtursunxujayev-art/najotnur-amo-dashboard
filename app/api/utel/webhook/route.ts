@@ -68,14 +68,22 @@ export async function POST(request: Request) {
 
     if (isCallEvent && callData) {
       // Parse timestamp
+      // IMPORTANT: Utel sends date_time in GMT+5 local time (Uzbekistan)
+      // We need to convert to UTC for proper database storage
+      const GMT5_OFFSET_MS = 5 * 60 * 60 * 1000;
+      
       let callDate = new Date();
       if (callData.date_time) {
-        // Try parsing the date_time string "2025-11-26 15:50:45"
+        // Parse the date_time string "2025-11-26 15:50:45" (this is GMT+5 local time!)
         const parsed = new Date(callData.date_time);
         if (!isNaN(parsed.getTime())) {
-          callDate = parsed;
+          // CRITICAL FIX: The string is in GMT+5 local time, but JavaScript parses it as UTC
+          // We need to subtract 5 hours to get the actual UTC time
+          callDate = new Date(parsed.getTime() - GMT5_OFFSET_MS);
+          console.log(`[Utel/Webhook] Date conversion: "${callData.date_time}" (GMT+5) → ${callDate.toISOString()} (UTC)`);
         }
       } else if (callData.timestamp) {
+        // Unix timestamp is already in UTC, no conversion needed
         const timestamp = typeof callData.timestamp === "string" 
           ? parseInt(callData.timestamp) 
           : callData.timestamp;
