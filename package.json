@@ -12,6 +12,7 @@
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",
     "@prisma/client": "^5.22.0",
+    "@types/node-cron": "^3.0.11",
     "autoprefixer": "^10.4.22",
     "googleapis": "^166.0.0",
     "next": "16.0.3",

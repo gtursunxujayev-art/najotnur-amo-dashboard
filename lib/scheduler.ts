@@ -1,9 +1,10 @@
 // lib/scheduler.ts - Robust scheduler with execution tracking
-import cron from "node-cron";
+import * as cron from "node-cron";
 import { prisma } from "@/lib/prisma";
+import type { ScheduledTask } from "node-cron";
 
 let isSchedulerInitialized = false;
-let schedulerTasks: cron.ScheduledTask[] = [];
+let schedulerTasks: ScheduledTask[] = [];
 
 interface SchedulerStatus {
   initialized: boolean;
