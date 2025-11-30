@@ -3,37 +3,58 @@ import * as cron from "node-cron";
 import { prisma } from "@/lib/prisma";
 import type { ScheduledTask } from "node-cron";
 
-let isSchedulerInitialized = false;
-let schedulerTasks: ScheduledTask[] = [];
-
 interface SchedulerStatus {
   initialized: boolean;
   isRunning: boolean;
+  tasksRegistered: boolean;
   lastExecutions: {
     daily?: { time: string; success: boolean; message?: string };
     weekly?: { time: string; success: boolean; message?: string };
     monthly?: { time: string; success: boolean; message?: string };
+    onlinepbxSync?: { time: string; success: boolean; message?: string };
   };
 }
 
-// Store execution history in memory
-let executionHistory: SchedulerStatus = {
-  initialized: false,
-  isRunning: false,
-  lastExecutions: {},
-};
+// Use globalThis to persist state across module reloads in Next.js dev mode
+declare global {
+  var __schedulerState: SchedulerStatus | undefined;
+  var __schedulerTasks: ScheduledTask[] | undefined;
+}
+
+function getGlobalState(): SchedulerStatus {
+  if (!globalThis.__schedulerState) {
+    globalThis.__schedulerState = {
+      initialized: false,
+      isRunning: false,
+      tasksRegistered: false,
+      lastExecutions: {},
+    };
+  }
+  return globalThis.__schedulerState;
+}
+
+function getGlobalTasks(): ScheduledTask[] {
+  if (!globalThis.__schedulerTasks) {
+    globalThis.__schedulerTasks = [];
+  }
+  return globalThis.__schedulerTasks;
+}
 
 export function getSchedulerStatus(): SchedulerStatus {
-  // Always return the current state, reflecting isSchedulerInitialized flag
+  const state = getGlobalState();
   return {
-    initialized: isSchedulerInitialized,
-    isRunning: isSchedulerInitialized,
-    lastExecutions: executionHistory.lastExecutions,
+    initialized: state.initialized,
+    isRunning: state.isRunning,
+    tasksRegistered: state.tasksRegistered,
+    lastExecutions: state.lastExecutions,
   };
 }
 
 export function initializeScheduler() {
-  if (isSchedulerInitialized) {
+  const state = getGlobalState();
+  const tasks = getGlobalTasks();
+
+  if (state.initialized) {
     console.log("[Scheduler] Already initialized, skipping");
     return;
   }
@@ -52,14 +73,14 @@ export function initializeScheduler() {
         });
         const data = await res.json();
         console.log("[Scheduler] ✅ Daily report result:", data);
-        executionHistory.lastExecutions.daily = {
+        state.lastExecutions.daily = {
           time: now,
           success: data.ok === true,
           message: data.message || `Sent to ${data.sent} users`,
         };
       } catch (err: any) {
         console.error("[Scheduler] ❌ Daily report error:", err?.message);
-        executionHistory.lastExecutions.daily = {
+        state.lastExecutions.daily = {
           time: now,
           success: false,
           message: err?.message,
@@ -68,7 +89,7 @@ export function initializeScheduler() {
     },
     { timezone: "Asia/Tashkent" }
   );
-  schedulerTasks.push(dailyTask);
+  tasks.push(dailyTask);
 
   // Weekly reports on Monday at 8:00 AM GMT+5
   const weeklyTask = cron.schedule(
@@ -82,14 +103,14 @@ export function initializeScheduler() {
         });
         const data = await res.json();
         console.log("[Scheduler] ✅ Weekly report result:", data);
-        executionHistory.lastExecutions.weekly = {
+        state.lastExecutions.weekly = {
           time: now,
           success: data.ok === true,
           message: data.message || `Sent to ${data.sent} users`,
         };
       } catch (err: any) {
         console.error("[Scheduler] ❌ Weekly report error:", err?.message);
-        executionHistory.lastExecutions.weekly = {
+        state.lastExecutions.weekly = {
           time: now,
           success: false,
           message: err?.message,
@@ -98,7 +119,7 @@ export function initializeScheduler() {
     },
     { timezone: "Asia/Tashkent" }
   );
-  schedulerTasks.push(weeklyTask);
+  tasks.push(weeklyTask);
 
   // Monthly reports on 1st of month at 8:00 AM GMT+5
   const monthlyTask = cron.schedule(
@@ -112,14 +133,14 @@ export function initializeScheduler() {
         });
         const data = await res.json();
         console.log("[Scheduler] ✅ Monthly report result:", data);
-        executionHistory.lastExecutions.monthly = {
+        state.lastExecutions.monthly = {
           time: now,
           success: data.ok === true,
           message: data.message || `Sent to ${data.sent} users`,
         };
       } catch (err: any) {
         console.error("[Scheduler] ❌ Monthly report error:", err?.message);
-        executionHistory.lastExecutions.monthly = {
+        state.lastExecutions.monthly = {
           time: now,
           success: false,
           message: err?.message,
@@ -128,11 +149,11 @@ export function initializeScheduler() {
     },
     { timezone: "Asia/Tashkent" }
   );
-  schedulerTasks.push(monthlyTask);
+  tasks.push(monthlyTask);
 
   // OnlinePBX sync every hour to catch missing webhook calls
   const onlinepbxSyncTask = cron.schedule(
-    "0 * * * *", // Every hour at :00
+    "0 * * * *",
     async () => {
       const now = new Date().toISOString();
       console.log(`[Scheduler] 📞 EXECUTING ONLINEPBX SYNC at ${now}`);
@@ -143,14 +164,14 @@ export function initializeScheduler() {
         const data = await res.json();
         if (data.success) {
           console.log("[Scheduler] ✅ OnlinePBX sync result:", data.result || data);
-          (executionHistory.lastExecutions as any).onlinepbxSync = {
+          state.lastExecutions.onlinepbxSync = {
             time: now,
             success: true,
             message: data.result ? `Fetched: ${data.result.fetched}, New: ${data.result.newCalls}` : 'Sync successful',
           };
         } else {
           console.log("[Scheduler] ⚠️ OnlinePBX sync skipped (API access blocked - relying on webhook):", data.hint || data.error);
-          (executionHistory.lastExecutions as any).onlinepbxSync = {
+          state.lastExecutions.onlinepbxSync = {
             time: now,
             success: false,
             message: data.hint || data.error || 'API access blocked - webhook still active',
@@ -158,7 +179,7 @@ export function initializeScheduler() {
         }
       } catch (err: any) {
         console.error("[Scheduler] ⚠️ OnlinePBX sync error (webhook still active):", err?.message);
-        (executionHistory.lastExecutions as any).onlinepbxSync = {
+        state.lastExecutions.onlinepbxSync = {
           time: now,
           success: false,
           message: `${err?.message} - webhook still active`,
@@ -167,11 +188,11 @@ export function initializeScheduler() {
     },
     { timezone: "Asia/Tashkent" }
   );
-  schedulerTasks.push(onlinepbxSyncTask);
+  tasks.push(onlinepbxSyncTask);
 
-  isSchedulerInitialized = true;
-  executionHistory.initialized = true;
-  executionHistory.isRunning = true;
+  state.initialized = true;
+  state.isRunning = true;
+  state.tasksRegistered = true;
 
   console.log("[Scheduler] ✅ Scheduler initialized successfully");
   console.log("[Scheduler] 📋 Schedule (GMT+5 / Asia/Tashkent):");
