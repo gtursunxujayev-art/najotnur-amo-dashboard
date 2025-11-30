@@ -200,6 +200,7 @@ export async function syncOnlinePBXCalls(
   dateTo: Date
 ): Promise<SyncResult> {
   const { PrismaClient } = await import('@prisma/client');
+  const { getManagerNameFromExtension } = await import('./extensionMapping');
   const prisma = new PrismaClient();
   
   const result: SyncResult = {
@@ -214,6 +215,11 @@ export async function syncOnlinePBXCalls(
   try {
     calls = await fetchOnlinePBXCallHistory(dateFrom, dateTo);
     result.fetched = calls.length;
+    
+    // Debug: Log first call structure to understand API response
+    if (calls.length > 0) {
+      console.log('[OnlinePBX/Sync] Sample call structure:', JSON.stringify(calls[0], null, 2));
+    }
   } catch (fetchError: any) {
     const errorMessage = fetchError.message || 'Unknown fetch error';
     if (errorMessage.includes('403') || errorMessage.includes('auth failed')) {
@@ -229,7 +235,7 @@ export async function syncOnlinePBXCalls(
   try {
     for (const call of calls) {
       try {
-        const callId = call.uuid || call.id || '';
+        const callId = call.uuid || call._id || call.id || '';
         if (!callId) {
           result.errors.push('Call missing UUID/ID');
           continue;
@@ -244,20 +250,50 @@ export async function syncOnlinePBXCalls(
           continue;
         }
 
-        const rawType = call.type || call.direction || '';
-        const direction = rawType === 'incoming' || rawType === 'in' ? 'in' : 'out';
+        // OnlinePBX API v2 mongo_history response fields (actual structure):
+        // - uuid: unique call ID
+        // - caller_id_number: extension making the call (e.g., "102")
+        // - destination_number: external phone number (e.g., "941639999")
+        // - accountcode: "outbound" or "inbound" for direction
+        // - start_stamp: Unix timestamp
+        // - duration: total duration in seconds
+        // - user_talk_time: actual talk duration in seconds
+        // - events: array of call events with user details
         
-        const phone = direction === 'in' 
-          ? (call.caller || call.src || call.phone || '') 
-          : (call.called || call.dst || call.phone || '');
+        const accountCode = call.accountcode || '';
+        const direction = accountCode === 'inbound' ? 'in' : 'out';
         
-        const extension = call.extension || call.user || call.dst || '';
-        const managerName = mapExtensionToManager(extension) || extension || 'Unknown';
+        // Extract extension from caller_id_number (for outbound) or from events (for inbound)
+        let phone: string;
+        let userExtension: string;
         
-        const callDate = call.date 
-          ? new Date(call.date) 
-          : call.start_stamp 
-            ? new Date(call.start_stamp * 1000) 
+        if (direction === 'out') {
+          // Outbound: caller_id_number is the extension, destination_number is the phone
+          phone = call.destination_number || '';
+          userExtension = call.caller_id_number || call.caller_id_name || '';
+        } else {
+          // Inbound: destination_number may be extension, caller is the phone
+          phone = call.caller_id_number || '';
+          userExtension = call.destination_number || '';
+          
+          // Check events for user info (more reliable for inbound)
+          if (call.events && Array.isArray(call.events)) {
+            const userEvent = call.events.find((e: any) => e.type === 'user');
+            if (userEvent && userEvent.number) {
+              userExtension = userEvent.number;
+            }
+          }
+        }
+        
+        // Map extension to manager name using centralized mapping
+        const managerName = getManagerNameFromExtension(userExtension);
+        
+        console.log(`[OnlinePBX/Sync] Call ${callId}: ext=${userExtension} -> ${managerName}, dir=${direction}, phone=${phone}`);
+        
+        const callDate = call.start_stamp 
+          ? new Date(Number(call.start_stamp) * 1000) 
+          : call.date 
+            ? new Date(call.date) 
             : new Date();
         
         await prisma.onlinePBXCall.create({
@@ -265,7 +301,7 @@ export async function syncOnlinePBXCalls(
             callId,
             direction,
             date: callDate,
-            duration: call.talk_duration || call.duration || call.billsec || 0,
+            duration: call.talk_duration || call.billsec || call.duration || 0,
             phone,
             user: managerName,
             source: 'api',
@@ -274,7 +310,7 @@ export async function syncOnlinePBXCalls(
         
         result.newCalls++;
       } catch (err: any) {
-        result.errors.push(`Failed to save call ${call.uuid || call.id}: ${err.message}`);
+        result.errors.push(`Failed to save call ${call.uuid || call._id || call.id}: ${err.message}`);
       }
     }
   } finally {
