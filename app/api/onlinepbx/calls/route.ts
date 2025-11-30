@@ -118,12 +118,10 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       success: true,
-      data: {
-        totalCalls: totalCount,
-        filteredCount: calls.length,
-        recentCalls: calls,
-        source: dbCalls.length > 0 ? "database" : "memory",
-      },
+      calls: calls,
+      totalCalls: totalCount,
+      filteredCount: calls.length,
+      source: dbCalls.length > 0 ? "database" : "memory",
     });
   } catch (error: any) {
     console.error("[OnlinePBX/Calls] Error:", error.message);

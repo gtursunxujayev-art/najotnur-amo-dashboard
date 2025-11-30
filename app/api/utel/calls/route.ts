@@ -146,22 +146,18 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       success: true,
-      data: {
-        source: "utel",
-        totalCalls: utelCalls.length,
-        managerSummary: managerSummary.map((m) => ({
-          ...m,
-          formattedDuration: formatDuration(m.totalDurationSec),
+      calls: utelCalls
+        .sort((a, b) => b.date.getTime() - a.date.getTime())
+        .map((call) => ({
+          ...call,
+          manager: call.name || getManagerNameFromExtension(call.extension),
+          formattedDuration: formatDuration(call.duration),
         })),
-        recentCalls: utelCalls
-          .sort((a, b) => b.date.getTime() - a.date.getTime())
-          .slice(0, 100)
-          .map((call) => ({
-            ...call,
-            manager: call.name || getManagerNameFromExtension(call.extension),
-            formattedDuration: formatDuration(call.duration),
-          })),
-      },
+      totalCalls: utelCalls.length,
+      managerSummary: managerSummary.map((m) => ({
+        ...m,
+        formattedDuration: formatDuration(m.totalDurationSec),
+      })),
     });
   } catch (error: any) {
     console.error("[UtelCalls/API] Error:", error);
