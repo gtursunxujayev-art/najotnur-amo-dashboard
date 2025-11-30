@@ -120,10 +120,20 @@ async function handleCourseListCommand(
 
   if (courses.length === 0) {
     const text = "❌ Kurslar topilmadi";
+    const replyMarkup = {
+      inline_keyboard: [
+        [
+          {
+            text: "🔄 Qayta urinish",
+            callback_data: "refresh_courses",
+          },
+        ],
+      ],
+    };
     if (messageId) {
-      await editTelegramMessage(chatId, messageId, text);
+      await editTelegramMessage(chatId, messageId, text, replyMarkup);
     } else {
-      await sendTelegramText(chatId, text);
+      await sendTelegramText(chatId, text, replyMarkup);
     }
     return;
   }
