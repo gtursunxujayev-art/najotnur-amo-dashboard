@@ -43,3 +43,13 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 - **Root Cause**: Date parameters were losing timezone precision when passed between APIs
 - **Solution**: Added `fromISO` and `toISO` parameters to preserve exact UTC timestamps
 - **Result**: All period filters now use correct GMT+5 boundaries
+
+### Sotuvchilar Page Improvements
+- **Label Fix**: Renamed "Sifatsizlid" to "Sifatsiz lidlar"
+- **Number Formatting**: Removed decimals from O'rtacha kunlik (daily average) using Math.round()
+- **Faol lidlar Calculation**: Now correctly calculates active leads as `totalLeads - wonDeals - lostLeads` (added `lostLeads` tracking to ManagerSalesStats)
+
+### Calls Page Filter
+- **Problem**: Phone numbers and IVR extensions were appearing as "managers" in the calls table
+- **Solution**: Added filter to show only actual manager names (text-based entries with Unicode letter support)
+- **Result**: IVR extensions (5000, 5001, 5200) and phone numbers are now filtered out, keeping only 3,579 properly attributed calls

@@ -288,16 +288,30 @@ export default function CallsPage() {
             let mergedData = Array.from(mergedManagers.values())
               .sort((a, b) => b.totalCalls - a.totalCalls);
 
-            // Filter to only show actual manager names (text-based)
-            // Filter out: phone numbers, IVR extensions, Unknown
-            // Real manager names contain letters (Marg'uba, Mumtoza, Admin, etc.)
-            // Phone numbers and IVR extensions are purely numeric
+            // Filter to only show actual manager names
+            // Filter out: phone numbers (7+ digits), IVR extensions (4-digit 5xxx/6xxx), Unknown
+            // Real manager names contain Unicode letters (Latin, Cyrillic, etc.)
             const isValidManagerName = (name: string) => {
               if (!name || name === "Unknown") return false;
-              // Normalize: remove spaces, dashes, plus signs
-              const normalized = name.replace(/[\s\-\+]/g, "");
-              // Valid manager names must contain at least one letter
-              return /[a-zA-Z]/.test(normalized);
+              // Normalize: remove common phone formatting characters
+              const normalized = name.replace(/[\s\-\+\(\)]/g, "");
+              // If purely numeric, check if it's an IVR or phone number
+              if (/^\d+$/.test(normalized)) {
+                const len = normalized.length;
+                // Phone numbers are typically 7+ digits
+                if (len >= 7) return false;
+                // IVR extensions are 4-digit numbers starting with 5 or 6
+                if (len === 4 && /^[56]/.test(normalized)) return false;
+                // Other short numeric values (10, 100, etc) - likely extensions, filter for safety
+                return false;
+              }
+              // Has non-numeric characters - check for Unicode letters (Latin, Cyrillic, etc.)
+              try {
+                return /\p{L}/u.test(normalized);
+              } catch {
+                // Fallback for environments without Unicode property escapes
+                return /[a-zA-Z\u0400-\u04FF]/.test(normalized);
+              }
             };
             
             mergedData = mergedData.filter((m) => isValidManagerName(m.manager));
