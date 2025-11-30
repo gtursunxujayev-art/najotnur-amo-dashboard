@@ -121,10 +121,12 @@ export async function GET(request: NextRequest) {
     
     // Always pass full ISO timestamps to ensure exact date range matching
     // This prevents timezone mismatches between APIs
+    // Use high limit to fetch ALL calls for proper aggregation (not just first 500)
     const fromISO = fromDate.toISOString();
     const toISO = toDate.toISOString();
-    onlinepbxUrl += `?fromISO=${encodeURIComponent(fromISO)}&toISO=${encodeURIComponent(toISO)}`;
-    utelUrl += `?fromISO=${encodeURIComponent(fromISO)}&toISO=${encodeURIComponent(toISO)}`;
+    const aggregationLimit = 10000; // High limit to get all calls for monthly stats
+    onlinepbxUrl += `?fromISO=${encodeURIComponent(fromISO)}&toISO=${encodeURIComponent(toISO)}&limit=${aggregationLimit}`;
+    utelUrl += `?fromISO=${encodeURIComponent(fromISO)}&toISO=${encodeURIComponent(toISO)}&limit=${aggregationLimit}`;
 
     console.log(`[Sotuvchilar/Stats] Fetching calls from APIs: ${onlinepbxUrl}, ${utelUrl}`);
 
