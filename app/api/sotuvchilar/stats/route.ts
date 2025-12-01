@@ -239,7 +239,8 @@ export async function GET(request: NextRequest) {
       const totalLeads = managerSale.totalLeads || 1;
       const qualifiedLeads = managerSale.qualifiedLeads || 0;
       const wonDeals = managerSale.wonDeals || 0;
-      const nonQualifiedLeads = Math.max(0, totalLeads - qualifiedLeads);
+      // Use per-manager non-qualified leads (Lost leads with specific non-qualified reasons)
+      const nonQualifiedLeads = managerSale.nonQualifiedLeads || 0;
 
       const conversionToQualified = qualifiedLeads > 0 
         ? (wonDeals / qualifiedLeads) * 100 

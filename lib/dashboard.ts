@@ -22,6 +22,7 @@ export type ManagerSalesStats = {
   totalLeads: number;
   qualifiedLeads: number;
   lostLeads: number;
+  nonQualifiedLeads: number; // Lost leads with specific non-qualified reasons
   wonDeals: number;
   wonAmount: number;
   onlineSalesCount: number;
@@ -239,6 +240,7 @@ export async function buildDashboardData(
         totalLeads: 0,
         qualifiedLeads: 0,
         lostLeads: 0,
+        nonQualifiedLeads: 0,
         wonDeals: 0,
         wonAmount: 0,
         onlineSalesCount: 0,
@@ -352,6 +354,7 @@ export async function buildDashboardData(
         totalLeads: 0,
         qualifiedLeads: 0,
         lostLeads: 0,
+        nonQualifiedLeads: 0,
         wonDeals: 0,
         wonAmount: 0,
         onlineSalesCount: 0,
@@ -391,6 +394,7 @@ export async function buildDashboardData(
 
   // Non-qualified leads: Lost leads (status 143) with field 1121759 containing specific reason IDs
   // Only count if the objection field value is in NOT_QUALIFIED_REASON_IDS
+  // Track both global count and per-manager count
   if (dashboardConfig.OBJECTION_FIELD_ID != null) {
     leads.forEach((lead) => {
       if (isLost(lead)) {
@@ -400,6 +404,13 @@ export async function buildDashboardData(
           // Only count if this reason ID is in the NOT_QUALIFIED_REASON_IDS list
           if (dashboardConfig.NOT_QUALIFIED_REASON_IDS.includes(reasonId)) {
             nonQualifiedLeadsCount++;
+            
+            // Track per-manager non-qualified leads
+            const managerId = lead.responsible_user_id || 0;
+            const ms = managerSalesMap.get(managerId);
+            if (ms) {
+              ms.nonQualifiedLeads++;
+            }
           }
         }
       }
