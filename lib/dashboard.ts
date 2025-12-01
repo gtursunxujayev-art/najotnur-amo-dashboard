@@ -335,14 +335,18 @@ export async function buildDashboardData(
     }
   });
 
-  // FIX: Non-qualified count should only include lost leads that have the objection field filled in
-  // This matches the "Sifatsiz lid sabablari" chart which is grouped by objection field
+  // Non-qualified leads: Lost leads (status 143) with field 1121759 containing specific reason IDs
+  // Only count if the objection field value is in NOT_QUALIFIED_REASON_IDS
   if (dashboardConfig.OBJECTION_FIELD_ID != null) {
     leads.forEach((lead) => {
       if (isLost(lead)) {
         const objectionValue = getCustomFieldString(lead, dashboardConfig.OBJECTION_FIELD_ID || 0);
         if (objectionValue && objectionValue.trim().length > 0) {
-          nonQualifiedLeadsCount++;
+          const reasonId = Number(objectionValue);
+          // Only count if this reason ID is in the NOT_QUALIFIED_REASON_IDS list
+          if (dashboardConfig.NOT_QUALIFIED_REASON_IDS.includes(reasonId)) {
+            nonQualifiedLeadsCount++;
+          }
         }
       }
     });
