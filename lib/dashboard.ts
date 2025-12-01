@@ -27,6 +27,7 @@ export type ManagerSalesStats = {
   onlineSalesCount: number;
   offlineSalesCount: number;
   revenue: number; // from Google Sheets
+  lostReasons: Slice[]; // Per-manager lost reasons
 };
 
 export type ManagerCallsStats = {
@@ -147,6 +148,7 @@ export async function buildDashboardData(
 
   const managerSalesMap = new Map<number, ManagerSalesStats>();
   const lostReasonMap = new Map<string | number, number>(); // Can hold both number IDs and string keys like "status_143"
+  const lostReasonsByManager = new Map<number, Map<string | number, number>>(); // Per-manager lost reasons
   const leadSourcesMap = new Map<string, number>();
 
   let kelishuvSummasi = 0;
@@ -242,6 +244,7 @@ export async function buildDashboardData(
         onlineSalesCount: 0,
         offlineSalesCount: 0,
         revenue: 0,
+        lostReasons: [],
       });
     }
     const ms = managerSalesMap.get(managerId)!;
@@ -275,10 +278,24 @@ export async function buildDashboardData(
         lostReasonMap.set(objectionLabel, (lostReasonMap.get(objectionLabel) || 0) + 1);
         // Ensure it has a mapping for display
         (reasonsMap as Record<string | number, string>)[objectionLabel] = objectionLabel;
+        
+        // Track per-manager lost reasons
+        if (!lostReasonsByManager.has(managerId)) {
+          lostReasonsByManager.set(managerId, new Map());
+        }
+        const managerReasons = lostReasonsByManager.get(managerId)!;
+        managerReasons.set(objectionLabel, (managerReasons.get(objectionLabel) || 0) + 1);
       } else if (lead.loss_reason_id != null) {
         // Fall back to standard loss reason from amoCRM
         const rId = lead.loss_reason_id;
         lostReasonMap.set(rId, (lostReasonMap.get(rId) || 0) + 1);
+        
+        // Track per-manager lost reasons
+        if (!lostReasonsByManager.has(managerId)) {
+          lostReasonsByManager.set(managerId, new Map());
+        }
+        const managerReasons = lostReasonsByManager.get(managerId)!;
+        managerReasons.set(rId, (managerReasons.get(rId) || 0) + 1);
       }
     }
 
@@ -340,6 +357,7 @@ export async function buildDashboardData(
         onlineSalesCount: 0,
         offlineSalesCount: 0,
         revenue: 0,
+        lostReasons: [],
       });
     }
     const ms = managerSalesMap.get(managerId)!;
@@ -485,6 +503,17 @@ export async function buildDashboardData(
         managerStats.revenue += r.amount;
         break;
       }
+    }
+  });
+
+  // Convert per-manager lost reasons to Slice arrays
+  lostReasonsByManager.forEach((managerReasonsMap, managerId) => {
+    const stats = managerSalesMap.get(managerId);
+    if (stats) {
+      stats.lostReasons = Array.from(managerReasonsMap.entries()).map(([reasonId, count]) => ({
+        label: (reasonsMap as Record<string | number, string>)[reasonId] || `Reason ${reasonId}`,
+        value: count,
+      })).sort((a, b) => b.value - a.value); // Sort by count descending
     }
   });
 
