@@ -115,28 +115,42 @@ export async function GET(request: NextRequest) {
         { skipCalls: true }
       ),
       
-      // Get current active leads from amoCRM (cached, ~1-90s depending on cache)
+      // Get current active leads from amoCRM with timeout to prevent blocking
       (async () => {
         try {
           const { getCurrentActiveLeadsPerManager, getUsers } = await import('@/lib/amocrm');
-          const users = await getUsers();
-          const usersMap = new Map<number, string>();
-          users.forEach((u) => usersMap.set(u.id, u.name));
           
-          const currentActiveLeadsByManagerId = await getCurrentActiveLeadsPerManager(
-            dashboardConfig.ACTIVE_LEADS_PIPELINE_IDS || dashboardConfig.PIPELINE_IDS,
-            dashboardConfig.WON_STATUS_IDS,
-            dashboardConfig.LOST_STATUS_IDS
-          );
-          
-          // Convert manager IDs to names
-          const activeLeadsByManager = new Map<string, number>();
-          currentActiveLeadsByManagerId.forEach((count, managerId) => {
-            const name = usersMap.get(managerId) || `User ${managerId}`;
-            activeLeadsByManager.set(name, count);
+          // Add timeout of 30 seconds to prevent blocking the entire request
+          const timeoutPromise = new Promise<Map<string, number>>((resolve) => {
+            setTimeout(() => {
+              console.warn('[Sotuvchilar/Stats] Active leads fetch timed out, using empty map');
+              resolve(new Map<string, number>());
+            }, 30000); // 30 second timeout
           });
           
-          return activeLeadsByManager;
+          const fetchPromise = (async () => {
+            const users = await getUsers();
+            const usersMap = new Map<number, string>();
+            users.forEach((u) => usersMap.set(u.id, u.name));
+            
+            const currentActiveLeadsByManagerId = await getCurrentActiveLeadsPerManager(
+              dashboardConfig.ACTIVE_LEADS_PIPELINE_IDS || dashboardConfig.PIPELINE_IDS,
+              dashboardConfig.WON_STATUS_IDS,
+              dashboardConfig.LOST_STATUS_IDS
+            );
+            
+            // Convert manager IDs to names
+            const activeLeadsByManager = new Map<string, number>();
+            currentActiveLeadsByManagerId.forEach((count, managerId) => {
+              const name = usersMap.get(managerId) || `User ${managerId}`;
+              activeLeadsByManager.set(name, count);
+            });
+            
+            return activeLeadsByManager;
+          })();
+          
+          // Return whichever completes first
+          return Promise.race([fetchPromise, timeoutPromise]);
         } catch (err) {
           console.error('[Sotuvchilar/Stats] Error fetching active leads:', err);
           return new Map<string, number>();
