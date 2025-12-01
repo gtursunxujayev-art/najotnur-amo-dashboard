@@ -21,6 +21,7 @@ interface ManagerStats {
   dailyAvgCalls: number;
   dailyAvgCallLength: number;
   revenue: number;
+  averageReachTime: number; // minutes from lead creation to first call
   lostLeadReasons: { reason: string; count: number }[];
 }
 
@@ -167,25 +168,48 @@ export async function GET(request: NextRequest) {
       utelManagerSummary = json.managerSummary || [];
     }
 
-    // Aggregate calls by manager from both sources (same logic as calls page)
+    // Aggregate calls by manager and store all call details for reach time calculation
     const callsByManager = new Map<string, {
       totalCalls: number;
       totalDurationSec: number;
+      calls: any[];
     }>();
 
     // Process OnlinePBX calls
     onlinepbxCalls.forEach((call: any) => {
       const manager = call.user || 'Unknown';
-      const existing = callsByManager.get(manager) || { totalCalls: 0, totalDurationSec: 0 };
+      const existing = callsByManager.get(manager) || { totalCalls: 0, totalDurationSec: 0, calls: [] };
       existing.totalCalls += 1;
       existing.totalDurationSec += call.duration || 0;
+      existing.calls.push({ timestamp: call.timestamp, duration: call.duration });
       callsByManager.set(manager, existing);
     });
+
+    // Process OnlinePBX calls array for reach time (with timestamps)
+    const callsForReachTime = new Map<string, any[]>();
+    onlinepbxCalls.forEach((call: any) => {
+      const manager = call.user || 'Unknown';
+      if (!callsForReachTime.has(manager)) {
+        callsForReachTime.set(manager, []);
+      }
+      callsForReachTime.get(manager)!.push({ timestamp: call.timestamp, dateTime: call.timestamp });
+    });
+
+    // Process Utel calls for reach time
+    if (Array.isArray(onlinepbxCalls)) {
+      onlinepbxCalls.forEach((call: any) => {
+        const manager = call.user || 'Unknown';
+        if (!callsForReachTime.has(manager)) {
+          callsForReachTime.set(manager, []);
+        }
+        callsForReachTime.get(manager)!.push({ timestamp: call.timestamp, dateTime: call.timestamp });
+      });
+    }
 
     // Process Utel calls (already aggregated by manager)
     utelManagerSummary.forEach((mgr: any) => {
       const manager = mgr.manager || 'Unknown';
-      const existing = callsByManager.get(manager) || { totalCalls: 0, totalDurationSec: 0 };
+      const existing = callsByManager.get(manager) || { totalCalls: 0, totalDurationSec: 0, calls: [] };
       existing.totalCalls += mgr.totalCalls || 0;
       existing.totalDurationSec += mgr.totalDurationSec || 0;
       callsByManager.set(manager, existing);
@@ -195,6 +219,26 @@ export async function GET(request: NextRequest) {
     const totalUtel = utelManagerSummary.reduce((sum, m) => sum + (m.totalCalls || 0), 0);
     console.log(`[Sotuvchilar/Stats] Fetched ${totalOnlinePBX} OnlinePBX calls and ${totalUtel} Utel calls`);
     console.log(`[Sotuvchilar/Stats] Aggregated calls for ${callsByManager.size} managers`);
+
+    // Fetch new leads and calculate reach times
+    const fromUnix = Math.floor(fromDate.getTime() / 1000);
+    const toUnix = Math.floor(toDate.getTime() / 1000);
+    const { getLeadsByCreatedAt, getAverageReachTimePerManager, getUsers } = await import('@/lib/amocrm');
+    
+    let newLeads: any[] = [];
+    let reachTimeByManager = new Map<string, number>();
+    
+    try {
+      newLeads = await getLeadsByCreatedAt(fromUnix, toUnix);
+      const users = await getUsers();
+      const usersMap = new Map<number, string>();
+      users.forEach((u) => usersMap.set(u.id, u.name));
+      
+      reachTimeByManager = await getAverageReachTimePerManager(newLeads, callsForReachTime, usersMap);
+      console.log(`[Sotuvchilar/Stats] Calculated reach times for ${reachTimeByManager.size} managers`);
+    } catch (err) {
+      console.error('[Sotuvchilar/Stats] Error calculating reach times:', err);
+    }
 
     // Calculate number of days in period for daily averages
     const daysDiff = Math.max(1, Math.ceil((toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24)));
