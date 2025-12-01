@@ -79,8 +79,22 @@ async function getCourseTypes(): Promise<string[]> {
         ? `https://${DOMAIN}/api/casosiy?types=true`
         : `http://localhost:5000/api/casosiy?types=true`;
 
+    console.log("[telegram] Fetching course types from:", url);
     const response = await fetch(url, { cache: "no-store" });
+    
+    if (!response.ok) {
+      console.error("[telegram] API returned non-200 status:", response.status, response.statusText);
+      return [];
+    }
+    
     const data = await response.json();
+    console.log("[telegram] Course types response:", JSON.stringify(data));
+    
+    if (!data.success) {
+      console.error("[telegram] API returned success=false:", data.error);
+      return [];
+    }
+    
     return data.data?.courseTypes || [];
   } catch (error) {
     console.error("[telegram] Error fetching course types:", error);
@@ -99,8 +113,22 @@ async function getCourseData(courseType: string) {
             courseType
           )}`;
 
+    console.log("[telegram] Fetching course data from:", url);
     const response = await fetch(url, { cache: "no-store" });
+    
+    if (!response.ok) {
+      console.error("[telegram] API returned non-200 status:", response.status, response.statusText);
+      return null;
+    }
+    
     const data = await response.json();
+    console.log("[telegram] Course data response:", JSON.stringify(data));
+    
+    if (!data.success) {
+      console.error("[telegram] API returned success=false:", data.error);
+      return null;
+    }
+    
     return data.data || null;
   } catch (error) {
     console.error("[telegram] Error fetching course data:", error);
