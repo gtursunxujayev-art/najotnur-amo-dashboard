@@ -212,9 +212,13 @@ export async function getCurrentActiveLeadsPerManager(
   let totalLeads = 0;
   
   while (true) {
-    // Build URL with pipeline filter for faster queries
-    const pipelineFilters = pipelineIds.map((id, idx) => `filter[pipeline_id][${idx}]=${id}`).join('&');
-    const url = `/api/v4/leads?limit=${pageSize}&page=${page}&${pipelineFilters}`;
+    // Query all leads without pipeline filter (filter in code instead for reliability)
+    const url = `/api/v4/leads?limit=${pageSize}&page=${page}`;
+    
+    if (page === 1) {
+      console.log(`[AmoCRM] Query URL: ${url}`);
+      console.log(`[AmoCRM] Will filter in code for pipelines: ${pipelineIds.join(',')}`);
+    }
     
     const data = await amoRequest(url);
     const leads = data?._embedded?.leads || [];
@@ -225,27 +229,33 @@ export async function getCurrentActiveLeadsPerManager(
     
     totalLeads += leads.length;
     
-    // Count active leads per manager
+    // Count active leads per manager (filter pipeline + status in code)
     leads.forEach((lead: AmoLead) => {
       const statusId = lead.status_id || -1;
       const managerId = lead.responsible_user_id || 0;
+      const pipelineId = lead.pipeline_id || -1;
       
-      // Skip won leads (status 142)
+      // Filter by pipeline
+      if (!pipelineIds.includes(pipelineId)) {
+        return;
+      }
+      
+      // Skip won leads
       if (wonStatusIds.includes(statusId)) {
         return;
       }
       
-      // Skip lost leads (status 143)
+      // Skip lost leads
       if (lostStatusIds.includes(statusId)) {
         return;
       }
       
-      // This is an active lead
+      // This is an active lead in one of the target pipelines
       activeLeadsByManager.set(managerId, (activeLeadsByManager.get(managerId) || 0) + 1);
       totalActive++;
     });
     
-    console.log(`[AmoCRM] Processed page ${page}: ${leads.length} leads, ${totalActive} active so far`);
+    console.log(`[AmoCRM] Page ${page}: ${leads.length} leads, ${totalActive} active so far`);
     
     if (leads.length < pageSize) {
       break;
