@@ -236,7 +236,7 @@ export async function getAverageReachTimePerManager(
   
   // For each new lead, find the first call made by its manager after creation
   newLeads.forEach((lead) => {
-    const managerId = lead.responsible_user_id;
+    const managerId = lead.responsible_user_id || 0;
     const managerName = usersMap.get(managerId) || `User ${managerId}`;
     const leadCreatedUnix = lead.created_at || 0;
     const leadCreatedMs = leadCreatedUnix * 1000;
