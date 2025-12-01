@@ -380,3 +380,62 @@ export async function getCurrentActiveLeadsPerManager(
   
   return activeLeadsFetchPromise;
 }
+
+/**
+ * Get completed tasks (follow-ups) for managers within a date range.
+ * Returns count of completed tasks per manager.
+ * A task is considered "completed" when its task_result is not null/empty.
+ */
+export async function getCompletedFollowUpsByManager(
+  fromUnix: number,
+  toUnix: number
+): Promise<Map<number, number>> {
+  const completedByManager = new Map<number, number>();
+  
+  try {
+    console.log(`[AmoCRM] Fetching completed tasks from ${fromUnix} to ${toUnix}...`);
+    
+    let page = 1;
+    const pageSize = 250;
+    let totalTasks = 0;
+    let totalCompleted = 0;
+    
+    while (true) {
+      const url = `/api/v4/tasks?limit=${pageSize}&page=${page}&filter[updated_at][from]=${fromUnix}&filter[updated_at][to]=${toUnix}`;
+      
+      const data = await amoRequest(url);
+      const tasks = data?._embedded?.tasks || [];
+      
+      if (tasks.length === 0) {
+        break;
+      }
+      
+      totalTasks += tasks.length;
+      
+      // Count completed tasks per manager
+      tasks.forEach((task: any) => {
+        // A task is completed if task_result is set (has value, not null/empty)
+        const taskResult = task.task_result?.result;
+        if (taskResult) {
+          const managerId = task.responsible_user_id || task.created_by || 0;
+          completedByManager.set(managerId, (completedByManager.get(managerId) || 0) + 1);
+          totalCompleted++;
+        }
+      });
+      
+      console.log(`[AmoCRM] Page ${page}: ${tasks.length} tasks, ${totalCompleted} completed so far`);
+      
+      if (tasks.length < pageSize) {
+        break;
+      }
+      
+      page++;
+    }
+    
+    console.log(`[AmoCRM] Completed follow-ups fetch: ${totalTasks} total tasks, ${totalCompleted} completed`);
+    return completedByManager;
+  } catch (error) {
+    console.error("[AmoCRM] Error fetching completed follow-ups:", error);
+    return new Map<number, number>();
+  }
+}
