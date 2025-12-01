@@ -212,12 +212,13 @@ export async function getCurrentActiveLeadsPerManager(
   let totalLeads = 0;
   
   while (true) {
-    // Query all leads without pipeline filter (filter in code instead for reliability)
-    const url = `/api/v4/leads?limit=${pageSize}&page=${page}`;
+    // Query only leads from target pipelines using API filter (much faster than fetching all leads)
+    const pipelineFilter = pipelineIds.map(id => `filter[pipeline_id][]=${id}`).join('&');
+    const url = `/api/v4/leads?${pipelineFilter}&limit=${pageSize}&page=${page}`;
     
     if (page === 1) {
       console.log(`[AmoCRM] Query URL: ${url}`);
-      console.log(`[AmoCRM] Will filter in code for pipelines: ${pipelineIds.join(',')}`);
+      console.log(`[AmoCRM] Using API filter for pipelines (fast mode)`);
     }
     
     const data = await amoRequest(url);
@@ -229,16 +230,10 @@ export async function getCurrentActiveLeadsPerManager(
     
     totalLeads += leads.length;
     
-    // Count active leads per manager (filter pipeline + status in code)
+    // Count active leads per manager (filter status only, pipeline already filtered by API)
     leads.forEach((lead: AmoLead) => {
       const statusId = lead.status_id || -1;
       const managerId = lead.responsible_user_id || 0;
-      const pipelineId = lead.pipeline_id || -1;
-      
-      // Filter by pipeline
-      if (!pipelineIds.includes(pipelineId)) {
-        return;
-      }
       
       // Skip won leads
       if (wonStatusIds.includes(statusId)) {
