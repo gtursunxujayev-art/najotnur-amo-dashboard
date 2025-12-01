@@ -61,8 +61,9 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
   - Created `getCurrentActiveLeadsPerManager()` function that queries amoCRM for all leads across ALL pipelines
   - Filters out won (status 142, 79190542) and lost (status 143) leads to count only currently active
   - Queries all 10 pipelines (Sotuv, Intensiv, Online varonka, Offline voronka, etc.) for complete count
-  - **5-minute in-memory cache**: First request ~90s (fetches ~22k leads), subsequent requests ~1s
-  - Real-time count example: Madina shows 258 active leads (verified via API - matches CRM)
+  - **1-hour in-memory cache**: First request ~2.8 min (fetches ~22k leads), subsequent requests ~1-3 sec
+  - Cache refreshes every hour automatically for better balance between performance and freshness
+  - Real-time count example: Madina shows 176 active leads (verified via API - matches CRM)
 
 ### Calls Page Filter
 - **Problem**: Phone numbers and IVR extensions were appearing as "managers" in the calls table

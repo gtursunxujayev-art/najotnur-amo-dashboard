@@ -176,18 +176,18 @@ export async function getStatusMapping(): Promise<Record<number, string>> {
   }
 }
 
-// Cache for active leads data (TTL: 5 minutes)
+// Cache for active leads data (TTL: 1 hour)
 let activeLeadsCache: {
   data: Map<number, number>;
   timestamp: number;
 } | null = null;
-const ACTIVE_LEADS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const ACTIVE_LEADS_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
 /**
  * Get current active leads count per manager.
  * Active leads = leads that are NOT won (142) and NOT lost (143) from specific pipelines.
  * This is real-time data, not period-dependent.
- * Results are cached for 5 minutes to improve performance.
+ * Results are cached for 1 hour to improve performance.
  */
 export async function getCurrentActiveLeadsPerManager(
   pipelineIds: number[], // Query only these pipelines for faster performance
