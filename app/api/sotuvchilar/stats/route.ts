@@ -249,9 +249,9 @@ export async function GET(request: NextRequest) {
         ? (wonDeals / totalLeads) * 100
         : 0;
 
-      // Lost reasons - use dashboard's pre-calculated reasons (aggregate for all)
+      // Lost reasons - use manager's own lost reasons (per-manager breakdown)
       const lostReasons: { reason: string; count: number }[] = [];
-      dashboardData.nonQualifiedReasons.forEach((reason) => {
+      managerSale.lostReasons.forEach((reason) => {
         lostReasons.push({
           reason: reason.label,
           count: reason.value,
