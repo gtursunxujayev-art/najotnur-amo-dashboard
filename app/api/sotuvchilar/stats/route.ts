@@ -220,24 +220,47 @@ export async function GET(request: NextRequest) {
     console.log(`[Sotuvchilar/Stats] Fetched ${totalOnlinePBX} OnlinePBX calls and ${totalUtel} Utel calls`);
     console.log(`[Sotuvchilar/Stats] Aggregated calls for ${callsByManager.size} managers`);
 
-    // Fetch new leads and calculate reach times
+    // Fetch new leads and calculate reach times + per-manager lost reasons
     const fromUnix = Math.floor(fromDate.getTime() / 1000);
     const toUnix = Math.floor(toDate.getTime() / 1000);
-    const { getLeadsByCreatedAt, getAverageReachTimePerManager, getUsers } = await import('@/lib/amocrm');
+    const { getLeadsByCreatedAt, getAverageReachTimePerManager, getUsers, getLossReasons } = await import('@/lib/amocrm');
     
     let newLeads: any[] = [];
     let reachTimeByManager = new Map<string, number>();
+    let lostReasonsByManager = new Map<string, Map<string, number>>();
     
     try {
       newLeads = await getLeadsByCreatedAt(fromUnix, toUnix);
       const users = await getUsers();
+      const reasonsMap = await getLossReasons();
       const usersMap = new Map<number, string>();
       users.forEach((u) => usersMap.set(u.id, u.name));
       
       reachTimeByManager = await getAverageReachTimePerManager(newLeads, callsForReachTime, usersMap);
       console.log(`[Sotuvchilar/Stats] Calculated reach times for ${reachTimeByManager.size} managers`);
+      
+      // Calculate per-manager lost reasons from the period's leads
+      const allLeadsInPeriod = await getLeadsByCreatedAt(fromUnix, toUnix);
+      allLeadsInPeriod.forEach((lead: any) => {
+        const managerId = lead.responsible_user_id || 0;
+        const managerName = usersMap.get(managerId) || `User ${managerId}`;
+        
+        // Check if lead is lost (status 143) and has a loss reason
+        if (lead.status_id === 143 && lead.loss_reason_id != null) {
+          const reasonId = lead.loss_reason_id;
+          const reasonLabel = reasonsMap[reasonId] || `Sabab ${reasonId}`;
+          
+          if (!lostReasonsByManager.has(managerName)) {
+            lostReasonsByManager.set(managerName, new Map<string, number>());
+          }
+          const reasonsMap_ = lostReasonsByManager.get(managerName)!;
+          reasonsMap_.set(reasonLabel, (reasonsMap_.get(reasonLabel) || 0) + 1);
+        }
+      });
+      
+      console.log(`[Sotuvchilar/Stats] Calculated lost reasons for ${lostReasonsByManager.size} managers`);
     } catch (err) {
-      console.error('[Sotuvchilar/Stats] Error calculating reach times:', err);
+      console.error('[Sotuvchilar/Stats] Error calculating reach times and lost reasons:', err);
     }
 
     // Calculate number of days in period for daily averages
@@ -264,14 +287,17 @@ export async function GET(request: NextRequest) {
         ? (wonDeals / totalLeads) * 100
         : 0;
 
-      // Lost reasons from dashboard (aggregated for all leads in period)
+      // Lost reasons for this SPECIFIC manager only (not all managers)
       const lostReasons: { reason: string; count: number }[] = [];
-      dashboardData.nonQualifiedReasons.forEach((reason) => {
-        lostReasons.push({
-          reason: reason.label,
-          count: reason.value,
-        });
-      });
+      const managerLostReasons = lostReasonsByManager.get(managerSale.managerName);
+      if (managerLostReasons && managerLostReasons.size > 0) {
+        // Sort by count descending and convert to array
+        Array.from(managerLostReasons.entries())
+          .sort((a, b) => b[1] - a[1])
+          .forEach(([reason, count]) => {
+            lostReasons.push({ reason, count });
+          });
+      }
 
       return {
         name: managerSale.managerName,
