@@ -185,12 +185,15 @@ const ACTIVE_LEADS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 /**
  * Get current active leads count per manager.
- * Active leads = leads that are NOT won and NOT lost (currently being worked on).
+ * Active leads = leads that are NOT won (142) and NOT lost (143) across ALL pipelines.
  * This is real-time data, not period-dependent.
  * Results are cached for 5 minutes to improve performance.
+ * 
+ * NOTE: We query ALL pipelines because managers may have active leads spread across
+ * multiple pipelines (Sotuv, Intensiv, Online, etc.), not just the main sales pipeline.
  */
 export async function getCurrentActiveLeadsPerManager(
-  pipelineIds: number[],
+  _pipelineIds: number[], // Ignored - we query all pipelines
   wonStatusIds: number[],
   lostStatusIds: number[]
 ): Promise<Map<number, number>> {
@@ -202,30 +205,17 @@ export async function getCurrentActiveLeadsPerManager(
   
   const activeLeadsByManager = new Map<number, number>();
   
-  // Fetch leads from the last 3 years to cover all active leads
-  const now = Math.floor(Date.now() / 1000);
-  const threeYearsAgo = now - (3 * 365 * 24 * 60 * 60);
-  
-  console.log("[AmoCRM] Fetching current active leads (not won/lost)...");
-  console.log(`[AmoCRM] Pipeline filter: ${pipelineIds.join(',')}, Won statuses: ${wonStatusIds.join(',')}, Lost statuses: ${lostStatusIds.join(',')}`);
+  console.log("[AmoCRM] Fetching current active leads from ALL pipelines (not won/lost)...");
+  console.log(`[AmoCRM] Won statuses: ${wonStatusIds.join(',')}, Lost statuses: ${lostStatusIds.join(',')}`);
   
   let page = 1;
   const pageSize = 250;
   let totalActive = 0;
+  let totalLeads = 0;
   
   while (true) {
-    // Build URL with pipeline filter to reduce data fetched
-    let url = `/api/v4/leads?limit=${pageSize}&page=${page}&filter[created_at][from]=${threeYearsAgo}&filter[created_at][to]=${now}`;
-    
-    // Add pipeline filter to the API query if configured
-    if (pipelineIds.length > 0) {
-      url += `&filter[pipeline_id][0]=${pipelineIds[0]}`;
-      if (pipelineIds.length > 1) {
-        pipelineIds.slice(1).forEach((id, idx) => {
-          url += `&filter[pipeline_id][${idx + 1}]=${id}`;
-        });
-      }
-    }
+    // Query ALL leads without pipeline filter - active leads can be in any pipeline
+    const url = `/api/v4/leads?limit=${pageSize}&page=${page}`;
     
     const data = await amoRequest(url);
     const leads = data?._embedded?.leads || [];
@@ -234,17 +224,19 @@ export async function getCurrentActiveLeadsPerManager(
       break;
     }
     
-    // Count active leads per manager (pipeline already filtered in API query)
+    totalLeads += leads.length;
+    
+    // Count active leads per manager
     leads.forEach((lead: AmoLead) => {
       const statusId = lead.status_id || -1;
       const managerId = lead.responsible_user_id || 0;
       
-      // Skip won leads
+      // Skip won leads (status 142)
       if (wonStatusIds.includes(statusId)) {
         return;
       }
       
-      // Skip lost leads
+      // Skip lost leads (status 143)
       if (lostStatusIds.includes(statusId)) {
         return;
       }
@@ -263,7 +255,7 @@ export async function getCurrentActiveLeadsPerManager(
     page++;
   }
   
-  console.log(`[AmoCRM] Total current active leads: ${totalActive}`);
+  console.log(`[AmoCRM] Total leads processed: ${totalLeads}, Active leads: ${totalActive}`);
   
   // Update cache
   activeLeadsCache = {

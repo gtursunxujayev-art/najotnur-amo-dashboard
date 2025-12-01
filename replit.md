@@ -48,11 +48,11 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 - **Label Fix**: Renamed "Sifatsizlid" to "Sifatsiz lidlar"
 - **Number Formatting**: Removed decimals from O'rtacha kunlik (daily average) using Math.round()
 - **Faol lidlar - Real-Time Active Leads**: Completely reimplemented to show CURRENT active leads from amoCRM (not period-dependent)
-  - Created `getCurrentActiveLeadsPerManager()` function that queries amoCRM for all leads in pipeline 9975586
+  - Created `getCurrentActiveLeadsPerManager()` function that queries amoCRM for all leads across ALL pipelines
   - Filters out won (status 142, 79190542) and lost (status 143) leads to count only currently active
-  - Added pipeline filter to API query for efficiency (reduced from 28k+ to ~4k leads)
-  - **5-minute in-memory cache**: First request ~15-25s, subsequent requests ~1.2s
-  - Real-time count example: Madina shows 103 active leads (verified via API)
+  - Queries all 10 pipelines (Sotuv, Intensiv, Online varonka, Offline voronka, etc.) for complete count
+  - **5-minute in-memory cache**: First request ~90s (fetches ~22k leads), subsequent requests ~1s
+  - Real-time count example: Madina shows 258 active leads (verified via API - matches CRM)
 
 ### Calls Page Filter
 - **Problem**: Phone numbers and IVR extensions were appearing as "managers" in the calls table
