@@ -2,9 +2,9 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCasosiyData, CasosiyRow } from "@/lib/casosiySheets";
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const DOMAIN = process.env.REPLIT_DOMAIN || "localhost:5000";
 
 async function sendTelegramText(
   chatId: number | bigint | string,
@@ -74,28 +74,19 @@ async function editTelegramMessage(
 
 async function getCourseTypes(): Promise<string[]> {
   try {
-    const url =
-      process.env.NODE_ENV === "production"
-        ? `https://${DOMAIN}/api/casosiy?types=true`
-        : `http://localhost:5000/api/casosiy?types=true`;
-
-    console.log("[telegram] Fetching course types from:", url);
-    const response = await fetch(url, { cache: "no-store" });
+    console.log("[telegram] Fetching course types directly from Google Sheets...");
     
-    if (!response.ok) {
-      console.error("[telegram] API returned non-200 status:", response.status, response.statusText);
-      return [];
-    }
+    // Fetch all data without date filtering
+    const fromDate = new Date("2025-01-01");
+    const toDate = new Date("2099-12-31");
     
-    const data = await response.json();
-    console.log("[telegram] Course types response:", JSON.stringify(data));
+    const allData = await getCasosiyData(fromDate, toDate);
     
-    if (!data.success) {
-      console.error("[telegram] API returned success=false:", data.error);
-      return [];
-    }
+    // Get unique course types
+    const courseTypes = Array.from(new Set(allData.map(r => r.courseType))).sort();
     
-    return data.data?.courseTypes || [];
+    console.log(`[telegram] Found ${courseTypes.length} course types:`, courseTypes);
+    return courseTypes;
   } catch (error) {
     console.error("[telegram] Error fetching course types:", error);
     return [];
@@ -104,32 +95,41 @@ async function getCourseTypes(): Promise<string[]> {
 
 async function getCourseData(courseType: string) {
   try {
-    const url =
-      process.env.NODE_ENV === "production"
-        ? `https://${DOMAIN}/api/casosiy?courseType=${encodeURIComponent(
-            courseType
-          )}`
-        : `http://localhost:5000/api/casosiy?courseType=${encodeURIComponent(
-            courseType
-          )}`;
+    console.log(`[telegram] Fetching course data for "${courseType}" directly from Google Sheets...`);
+    
+    // Fetch all data without date filtering
+    const fromDate = new Date("2025-01-01");
+    const toDate = new Date("2099-12-31");
+    
+    const allData = await getCasosiyData(fromDate, toDate);
+    
+    // Filter by course type
+    const data = allData.filter(r => r.courseType === courseType);
+    
+    // Calculate KPIs for selected course type
+    let tushum = 0, qarzdorlik = 0, kelishuv = 0;
+    const tarifCounts = new Map<string, number>();
 
-    console.log("[telegram] Fetching course data from:", url);
-    const response = await fetch(url, { cache: "no-store" });
-    
-    if (!response.ok) {
-      console.error("[telegram] API returned non-200 status:", response.status, response.statusText);
-      return null;
+    for (const row of data) {
+      tushum += row.paymentSum;
+      qarzdorlik += row.debtSum;
+      kelishuv += row.kelishuv;
+      
+      const tarif = row.paymentType || "Unknown";
+      tarifCounts.set(tarif, (tarifCounts.get(tarif) || 0) + 1);
     }
-    
-    const data = await response.json();
-    console.log("[telegram] Course data response:", JSON.stringify(data));
-    
-    if (!data.success) {
-      console.error("[telegram] API returned success=false:", data.error);
-      return null;
-    }
-    
-    return data.data || null;
+
+    console.log(`[telegram] Found ${data.length} records for course type: ${courseType}`);
+
+    return {
+      totalRecords: data.length,
+      kpi: {
+        tushum,
+        qarzdorlik,
+        kelishuv,
+      },
+      tarifCounts: Object.fromEntries(tarifCounts),
+    };
   } catch (error) {
     console.error("[telegram] Error fetching course data:", error);
     return null;
