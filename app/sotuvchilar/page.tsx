@@ -19,6 +19,7 @@ interface ManagerStats {
   dailyAvgCallLength: number;
   revenue: number;
   averageReachTime: number;
+  completedFollowUps: number;
   lostLeadReasons: { reason: string; count: number }[];
 }
 
@@ -151,6 +152,7 @@ export default function SotuvchilarPage() {
                     <th className="px-3 py-2 text-center">Konversiya umumiy</th>
                     <th className="px-3 py-2 text-center">Qo'ng'iroqlar</th>
                     <th className="px-3 py-2 text-center">Davomiylifi</th>
+                    <th className="px-3 py-2 text-center">Qayta aloqa</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -172,6 +174,7 @@ export default function SotuvchilarPage() {
                       <td className="px-3 py-2 text-center">{manager.conversionToAllLeads.toFixed(1)}%</td>
                       <td className="px-3 py-2 text-center">{manager.totalCalls}</td>
                       <td className="px-3 py-2 text-center">{formatDuration(manager.totalCallLength)}</td>
+                      <td className="px-3 py-2 text-center">{manager.completedFollowUps}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -228,6 +231,10 @@ export default function SotuvchilarPage() {
                     {
                       label: "O'rtacha erishish vaqti",
                       value: selectedManagerData.averageReachTime > 0 ? `${selectedManagerData.averageReachTime} min` : 'N/A',
+                    },
+                    {
+                      label: 'Bajarilgan qayta aloqa',
+                      value: selectedManagerData.completedFollowUps,
                     },
                   ].map((item, idx) => (
                     <div key={idx} className="rounded-lg bg-slate-800/50 p-4">
