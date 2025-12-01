@@ -22,6 +22,7 @@ interface ManagerStats {
   dailyAvgCallLength: number;
   revenue: number;
   averageReachTime: number; // minutes from lead creation to first call
+  completedFollowUps: number; // follow-ups/tasks completed in the period
   lostLeadReasons: { reason: string; count: number }[];
 }
 
@@ -104,9 +105,9 @@ export async function GET(request: NextRequest) {
 
     console.log(`[Sotuvchilar/Stats] Fetching calls and active leads (in parallel)...`);
 
-    // PARALLELIZE all data fetching: dashboard + active leads + calls APIs
+    // PARALLELIZE all data fetching: dashboard + active leads + calls APIs + follow-ups
     // This is much faster than sequential fetching
-    const [dashboardData, activeLeadsData, onlinepbxRes, utelRes] = await Promise.all([
+    const [dashboardData, activeLeadsData, onlinepbxRes, utelRes, followUpsData] = await Promise.all([
       // Get dashboard data for period-based stats
       buildDashboardData(
         { from: fromDate, to: toDate },
@@ -150,10 +151,39 @@ export async function GET(request: NextRequest) {
       fetch(utelUrl, { cache: 'no-store' }).catch(err => {
         console.error('[Sotuvchilar/Stats] Error fetching Utel calls:', err);
         return null;
-      })
+      }),
+      
+      // Fetch completed follow-ups per manager
+      (async () => {
+        try {
+          const { getCompletedFollowUpsByManager, getUsers } = await import('@/lib/amocrm');
+          const fromUnix = Math.floor(fromDate.getTime() / 1000);
+          const toUnix = Math.floor(toDate.getTime() / 1000);
+          
+          const completedByManagerId = await getCompletedFollowUpsByManager(fromUnix, toUnix);
+          
+          // Get users map for ID to name conversion
+          const users = await getUsers();
+          const usersMap = new Map<number, string>();
+          users.forEach((u) => usersMap.set(u.id, u.name));
+          
+          // Convert manager IDs to names
+          const completedByManager = new Map<string, number>();
+          completedByManagerId.forEach((count, managerId) => {
+            const name = usersMap.get(managerId) || `User ${managerId}`;
+            completedByManager.set(name, count);
+          });
+          
+          return completedByManager;
+        } catch (err) {
+          console.error('[Sotuvchilar/Stats] Error fetching follow-ups:', err);
+          return new Map<string, number>();
+        }
+      })()
     ]);
 
     const activeLeadsByManager = activeLeadsData;
+    const completedFollowUpsByManager = followUpsData;
 
     // Parse responses
     let onlinepbxCalls: any[] = [];
@@ -274,6 +304,7 @@ export async function GET(request: NextRequest) {
         dailyAvgCallLength: callData.totalDurationSec / daysDiff,
         revenue: managerSale.revenue || 0,
         averageReachTime: reachTimeByManager.get(managerSale.managerName) || 0,
+        completedFollowUps: completedFollowUpsByManager.get(managerSale.managerName) || 0,
         lostLeadReasons: lostReasons,
       };
     });
