@@ -1,6 +1,7 @@
 // lib/dashboard.ts
 import {
   getLeadsByCreatedAt,
+  getLeadsByClosedAt,
   getUsers,
   getLossReasons,
   getFieldEnumMapping,
@@ -113,11 +114,12 @@ export async function buildDashboardData(
   
   const skipCalls = options?.skipCalls ?? false;
 
-  const [users, reasonsMap, leads, revenueRows, leadSourceEnums, statusMap, objectionEnums] =
+  const [users, reasonsMap, leads, wonLeads, revenueRows, leadSourceEnums, statusMap, objectionEnums] =
     await Promise.all([
       getUsers(),
       getLossReasons(),
       getLeadsByCreatedAt(toUnixSeconds(period.from), toUnixSeconds(period.to)),
+      getLeadsByClosedAt(toUnixSeconds(period.from), toUnixSeconds(period.to)),
       getSheetRevenue(period.from, period.to).catch(err => {
         console.error("[Dashboard] Error fetching revenue data:", err);
         return [];
@@ -245,6 +247,9 @@ export async function buildDashboardData(
     const ms = managerSalesMap.get(managerId)!;
     ms.totalLeads++;
 
+    // NOTE: Won deals are now counted separately from wonLeads (by closed_at, not created_at)
+    // So we skip the isWon check here for counting
+
     // Lost reason map (for pie chart) - grouped by objection field (E'tiroz sababi) if available
     if (isLost(lead)) {
       ms.lostLeads++;
@@ -284,35 +289,7 @@ export async function buildDashboardData(
     }
     
     // Don't count nonQualifiedLeadsCount here - will compute after loop
-
-    // Won / deals
-    if (isWon(lead)) {
-      // For "Qisman to'lov qildi" status, use custom field 1416675 for kelishuvSummasi
-      let dealAmount = price;
-      if (lead.status_id === dashboardConfig.PARTIAL_PAYMENT_STATUS_ID && 
-          dashboardConfig.PARTIAL_PAYMENT_FIELD_ID != null) {
-        dealAmount = getCustomFieldNumber(lead, dashboardConfig.PARTIAL_PAYMENT_FIELD_ID);
-      }
-      
-      kelishuvSummasi += dealAmount;
-      ms.wonDeals++;
-      ms.wonAmount += dealAmount;
-
-      if (isQualified(lead)) {
-        wonFromQualifiedCount++;
-      }
-
-      if (isOnlineDeal(lead)) {
-        onlineSummasi += dealAmount;
-        onlineSalesCount++;
-        ms.onlineSalesCount++;
-      }
-      if (isOfflineDeal(lead)) {
-        offlineSummasi += dealAmount;
-        offlineSalesCount++;
-        ms.offlineSalesCount++;
-      }
-    }
+    // Don't count wonDeals here - will process wonLeads separately by closed_at date
 
     // Lead sources ("Qayerdan")
     if (dashboardConfig.LEAD_SOURCE_FIELD_ID != null) {
@@ -332,6 +309,65 @@ export async function buildDashboardData(
       } else {
         leadSourcesMap.set("Unknown source", (leadSourcesMap.get("Unknown source") || 0) + 1);
       }
+    }
+  });
+
+  // Process won deals from wonLeads (filtered by closed_at date, not created_at)
+  wonLeads.forEach((lead) => {
+    if (!isWon(lead)) {
+      return; // Skip leads that aren't won
+    }
+
+    const pipelineId = lead.pipeline_id || -1;
+    if (hasPipelineFilter && !dashboardConfig.PIPELINE_IDS.includes(pipelineId)) {
+      return; // Skip leads from other pipelines
+    }
+
+    const managerId = lead.responsible_user_id || 0;
+    const managerName = usersMap.get(managerId) || `User ${managerId}`;
+    const price = lead.price || 0;
+
+    // Ensure manager exists in map
+    if (!managerSalesMap.has(managerId)) {
+      managerSalesMap.set(managerId, {
+        managerId,
+        managerName,
+        totalLeads: 0,
+        qualifiedLeads: 0,
+        lostLeads: 0,
+        wonDeals: 0,
+        wonAmount: 0,
+        onlineSalesCount: 0,
+        offlineSalesCount: 0,
+        revenue: 0,
+      });
+    }
+    const ms = managerSalesMap.get(managerId)!;
+
+    // For "Qisman to'lov qildi" status, use custom field 1416675 for kelishuvSummasi
+    let dealAmount = price;
+    if (lead.status_id === dashboardConfig.PARTIAL_PAYMENT_STATUS_ID && 
+        dashboardConfig.PARTIAL_PAYMENT_FIELD_ID != null) {
+      dealAmount = getCustomFieldNumber(lead, dashboardConfig.PARTIAL_PAYMENT_FIELD_ID);
+    }
+    
+    kelishuvSummasi += dealAmount;
+    ms.wonDeals++;
+    ms.wonAmount += dealAmount;
+
+    if (isQualified(lead)) {
+      wonFromQualifiedCount++;
+    }
+
+    if (isOnlineDeal(lead)) {
+      onlineSummasi += dealAmount;
+      onlineSalesCount++;
+      ms.onlineSalesCount++;
+    }
+    if (isOfflineDeal(lead)) {
+      offlineSummasi += dealAmount;
+      offlineSalesCount++;
+      ms.offlineSalesCount++;
     }
   });
 

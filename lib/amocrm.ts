@@ -107,6 +107,43 @@ export async function getLeadsByCreatedAt(
 }
 
 /**
+ * Get leads closed (won) within [from, to] in unix seconds.
+ * Used to count sales by close date instead of creation date.
+ * Paginates through all results (amoCRM API returns max 250 per page).
+ */
+export async function getLeadsByClosedAt(
+  fromUnix: number,
+  toUnix: number
+): Promise<AmoLead[]> {
+  // amoCRM supports filters: filter[closed_at][from], [to]
+  const allLeads: AmoLead[] = [];
+  let page = 1;
+  const pageSize = 250;
+  
+  while (true) {
+    const url = `/api/v4/leads?limit=${pageSize}&page=${page}&filter[closed_at][from]=${fromUnix}&filter[closed_at][to]=${toUnix}`;
+    const data = await amoRequest(url);
+    const leads = data?._embedded?.leads || [];
+    
+    if (leads.length === 0) {
+      break; // No more pages
+    }
+    
+    allLeads.push(...leads);
+    console.log(`[AmoCRM] Fetched page ${page} (closed_at): ${leads.length} leads (total: ${allLeads.length})`);
+    
+    // Check if there are more pages
+    if (leads.length < pageSize) {
+      break; // Last page (fewer results than requested)
+    }
+    
+    page++;
+  }
+  
+  return allLeads;
+}
+
+/**
  * Get users (managers) for name mapping.
  */
 export async function getUsers(): Promise<{ id: number; name: string }[]> {
