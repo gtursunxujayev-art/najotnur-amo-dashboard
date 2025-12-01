@@ -220,6 +220,9 @@ let activeLeadsCache: {
 } | null = null;
 const ACTIVE_LEADS_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
+// Pending promise to prevent concurrent fetches
+let activeLeadsFetchPromise: Promise<Map<number, number>> | null = null;
+
 /**
  * Calculate average reach time (minutes from lead creation to first call).
  * Returns map of manager name -> average reach time in minutes
@@ -292,72 +295,88 @@ export async function getCurrentActiveLeadsPerManager(
     return activeLeadsCache.data;
   }
   
-  const activeLeadsByManager = new Map<number, number>();
-  
-  console.log(`[AmoCRM] Fetching current active leads from ${pipelineIds.length} pipelines (not won/lost)...`);
-  console.log(`[AmoCRM] Pipeline IDs: ${pipelineIds.join(',')}`);
-  console.log(`[AmoCRM] Won statuses: ${wonStatusIds.join(',')}, Lost statuses: ${lostStatusIds.join(',')}`);
-  
-  let page = 1;
-  const pageSize = 250;
-  let totalActive = 0;
-  let totalLeads = 0;
-  
-  while (true) {
-    // Query only leads from target pipelines using API filter (much faster than fetching all leads)
-    const pipelineFilter = pipelineIds.map(id => `filter[pipeline_id][]=${id}`).join('&');
-    const url = `/api/v4/leads?${pipelineFilter}&limit=${pageSize}&page=${page}`;
-    
-    if (page === 1) {
-      console.log(`[AmoCRM] Query URL: ${url}`);
-      console.log(`[AmoCRM] Using API filter for pipelines (fast mode)`);
-    }
-    
-    const data = await amoRequest(url);
-    const leads = data?._embedded?.leads || [];
-    
-    if (leads.length === 0) {
-      break;
-    }
-    
-    totalLeads += leads.length;
-    
-    // Count active leads per manager (filter status only, pipeline already filtered by API)
-    leads.forEach((lead: AmoLead) => {
-      const statusId = lead.status_id || -1;
-      const managerId = lead.responsible_user_id || 0;
-      
-      // Skip won leads
-      if (wonStatusIds.includes(statusId)) {
-        return;
-      }
-      
-      // Skip lost leads
-      if (lostStatusIds.includes(statusId)) {
-        return;
-      }
-      
-      // This is an active lead in one of the target pipelines
-      activeLeadsByManager.set(managerId, (activeLeadsByManager.get(managerId) || 0) + 1);
-      totalActive++;
-    });
-    
-    console.log(`[AmoCRM] Page ${page}: ${leads.length} leads, ${totalActive} active so far`);
-    
-    if (leads.length < pageSize) {
-      break;
-    }
-    
-    page++;
+  // If a fetch is already in progress, wait for it instead of starting a new one
+  if (activeLeadsFetchPromise) {
+    console.log("[AmoCRM] Another active leads fetch in progress, waiting...");
+    return activeLeadsFetchPromise;
   }
   
-  console.log(`[AmoCRM] Total leads processed: ${totalLeads}, Active leads: ${totalActive}`);
+  // Start fetch and store promise to prevent concurrent fetches
+  activeLeadsFetchPromise = (async () => {
+    const activeLeadsByManager = new Map<number, number>();
+    
+    console.log(`[AmoCRM] Fetching current active leads from ${pipelineIds.length} pipelines (not won/lost)...`);
+    console.log(`[AmoCRM] Pipeline IDs: ${pipelineIds.join(',')}`);
+    console.log(`[AmoCRM] Won statuses: ${wonStatusIds.join(',')}, Lost statuses: ${lostStatusIds.join(',')}`);
+    
+    let page = 1;
+    const pageSize = 250;
+    let totalActive = 0;
+    let totalLeads = 0;
+    
+    try {
+      while (true) {
+        // Query only leads from target pipelines using API filter (much faster than fetching all leads)
+        const pipelineFilter = pipelineIds.map(id => `filter[pipeline_id][]=${id}`).join('&');
+        const url = `/api/v4/leads?${pipelineFilter}&limit=${pageSize}&page=${page}`;
+        
+        if (page === 1) {
+          console.log(`[AmoCRM] Query URL: ${url}`);
+          console.log(`[AmoCRM] Using API filter for pipelines (fast mode)`);
+        }
+        
+        const data = await amoRequest(url);
+        const leads = data?._embedded?.leads || [];
+        
+        if (leads.length === 0) {
+          break;
+        }
+        
+        totalLeads += leads.length;
+        
+        // Count active leads per manager (filter status only, pipeline already filtered by API)
+        leads.forEach((lead: AmoLead) => {
+          const statusId = lead.status_id || -1;
+          const managerId = lead.responsible_user_id || 0;
+          
+          // Skip won leads
+          if (wonStatusIds.includes(statusId)) {
+            return;
+          }
+          
+          // Skip lost leads
+          if (lostStatusIds.includes(statusId)) {
+            return;
+          }
+          
+          // This is an active lead in one of the target pipelines
+          activeLeadsByManager.set(managerId, (activeLeadsByManager.get(managerId) || 0) + 1);
+          totalActive++;
+        });
+        
+        console.log(`[AmoCRM] Page ${page}: ${leads.length} leads, ${totalActive} active so far`);
+        
+        if (leads.length < pageSize) {
+          break;
+        }
+        
+        page++;
+      }
+      
+      console.log(`[AmoCRM] Total leads processed: ${totalLeads}, Active leads: ${totalActive}`);
+      
+      // Update cache
+      activeLeadsCache = {
+        data: activeLeadsByManager,
+        timestamp: Date.now()
+      };
+      
+      return activeLeadsByManager;
+    } finally {
+      // Clear the pending promise when done
+      activeLeadsFetchPromise = null;
+    }
+  })();
   
-  // Update cache
-  activeLeadsCache = {
-    data: activeLeadsByManager,
-    timestamp: Date.now()
-  };
-  
-  return activeLeadsByManager;
+  return activeLeadsFetchPromise;
 }
