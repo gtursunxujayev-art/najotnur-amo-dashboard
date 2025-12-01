@@ -184,6 +184,61 @@ let activeLeadsCache: {
 const ACTIVE_LEADS_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
 /**
+ * Calculate average reach time (minutes from lead creation to first call).
+ * Returns map of manager name -> average reach time in minutes
+ */
+export async function getAverageReachTimePerManager(
+  newLeads: AmoLead[],
+  callsByManager: Map<string, any[]>,
+  usersMap: Map<number, string>
+): Promise<Map<string, number>> {
+  const reachTimes = new Map<string, number[]>();
+  
+  // For each new lead, find the first call made by its manager after creation
+  newLeads.forEach((lead) => {
+    const managerId = lead.responsible_user_id;
+    const managerName = usersMap.get(managerId) || `User ${managerId}`;
+    const leadCreatedUnix = lead.created_at || 0;
+    const leadCreatedMs = leadCreatedUnix * 1000;
+    
+    // Get all calls for this manager
+    const managerCalls = callsByManager.get(managerName) || [];
+    
+    // Find first call after lead was created
+    const callsAfterLead = managerCalls.filter((call: any) => {
+      const callTimeMs = new Date(call.timestamp || call.dateTime).getTime();
+      return callTimeMs >= leadCreatedMs;
+    });
+    
+    if (callsAfterLead.length > 0) {
+      // Sort by time and get first call
+      const firstCall = callsAfterLead.sort((a: any, b: any) => {
+        const timeA = new Date(a.timestamp || a.dateTime).getTime();
+        const timeB = new Date(b.timestamp || b.dateTime).getTime();
+        return timeA - timeB;
+      })[0];
+      
+      const firstCallMs = new Date(firstCall.timestamp || firstCall.dateTime).getTime();
+      const reachTimeMinutes = (firstCallMs - leadCreatedMs) / (1000 * 60);
+      
+      if (!reachTimes.has(managerName)) {
+        reachTimes.set(managerName, []);
+      }
+      reachTimes.get(managerName)!.push(reachTimeMinutes);
+    }
+  });
+  
+  // Calculate average for each manager
+  const averages = new Map<string, number>();
+  reachTimes.forEach((times, managerName) => {
+    const avg = times.reduce((a, b) => a + b, 0) / times.length;
+    averages.set(managerName, Math.round(avg));
+  });
+  
+  return averages;
+}
+
+/**
  * Get current active leads count per manager.
  * Active leads = leads that are NOT won (142) and NOT lost (143) from specific pipelines.
  * This is real-time data, not period-dependent.
