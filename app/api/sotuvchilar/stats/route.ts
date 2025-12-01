@@ -90,60 +90,58 @@ export async function GET(request: NextRequest) {
 
     console.log(`[Sotuvchilar/Stats] Fetching stats for period: ${periodParam} (${fromDate.toISOString()} to ${toDate.toISOString()}) - GMT+5`);
 
-    // Build dashboard data to get manager sales stats (already period-filtered)
-    const dashboardData = await buildDashboardData(
-      { from: fromDate, to: toDate },
-      periodParam,
-      { skipCalls: true }
-    );
-
-    // Fetch CURRENT active leads (not period-dependent) - these are leads still being worked on
-    // This is separate from period stats - it shows real-time workload per manager
-    const { getCurrentActiveLeadsPerManager, getUsers } = await import('@/lib/amocrm');
-    const users = await getUsers();
-    const usersMap = new Map<number, string>();
-    users.forEach((u) => usersMap.set(u.id, u.name));
-    
-    const currentActiveLeadsByManagerId = await getCurrentActiveLeadsPerManager(
-      dashboardConfig.PIPELINE_IDS,
-      dashboardConfig.WON_STATUS_IDS,
-      dashboardConfig.LOST_STATUS_IDS
-    );
-    
-    // Convert manager IDs to names
-    const activeLeadsByManager = new Map<string, number>();
-    currentActiveLeadsByManagerId.forEach((count, managerId) => {
-      const name = usersMap.get(managerId) || `User ${managerId}`;
-      activeLeadsByManager.set(name, count);
-    });
-
-    // Fetch call data from the SAME API endpoints as the calls page for consistency
-    // This ensures both pages show identical call counts
     const baseUrl = process.env.REPLIT_DOMAINS 
       ? `https://${process.env.REPLIT_DOMAINS}` 
       : 'http://localhost:5000';
     
-    // Map period to the format expected by calls APIs
-    const callsPeriod = periodParam === 'today' ? 'today' : 
-                        periodParam === 'month' || periodParam === 'lastmonth' ? 'month' : 'week';
-    
-    // For custom periods or specific date ranges, pass from/to parameters
-    let onlinepbxUrl = `${baseUrl}/api/onlinepbx/calls`;
-    let utelUrl = `${baseUrl}/api/utel/calls`;
-    
-    // Always pass full ISO timestamps to ensure exact date range matching
-    // This prevents timezone mismatches between APIs
-    // Use high limit to fetch ALL calls for proper aggregation (not just first 500)
     const fromISO = fromDate.toISOString();
     const toISO = toDate.toISOString();
-    const aggregationLimit = 10000; // High limit to get all calls for monthly stats
-    onlinepbxUrl += `?fromISO=${encodeURIComponent(fromISO)}&toISO=${encodeURIComponent(toISO)}&limit=${aggregationLimit}`;
-    utelUrl += `?fromISO=${encodeURIComponent(fromISO)}&toISO=${encodeURIComponent(toISO)}&limit=${aggregationLimit}`;
+    const aggregationLimit = 10000;
+    
+    const onlinepbxUrl = `${baseUrl}/api/onlinepbx/calls?fromISO=${encodeURIComponent(fromISO)}&toISO=${encodeURIComponent(toISO)}&limit=${aggregationLimit}`;
+    const utelUrl = `${baseUrl}/api/utel/calls?fromISO=${encodeURIComponent(fromISO)}&toISO=${encodeURIComponent(toISO)}&limit=${aggregationLimit}`;
 
-    console.log(`[Sotuvchilar/Stats] Fetching calls from APIs: ${onlinepbxUrl}, ${utelUrl}`);
+    console.log(`[Sotuvchilar/Stats] Fetching calls and active leads (in parallel)...`);
 
-    // Fetch from both call APIs in parallel
-    const [onlinepbxRes, utelRes] = await Promise.all([
+    // PARALLELIZE all data fetching: dashboard + active leads + calls APIs
+    // This is much faster than sequential fetching
+    const [dashboardData, activeLeadsData, onlinepbxRes, utelRes] = await Promise.all([
+      // Get dashboard data for period-based stats
+      buildDashboardData(
+        { from: fromDate, to: toDate },
+        periodParam,
+        { skipCalls: true }
+      ),
+      
+      // Get current active leads from amoCRM (cached, ~1-90s depending on cache)
+      (async () => {
+        try {
+          const { getCurrentActiveLeadsPerManager, getUsers } = await import('@/lib/amocrm');
+          const users = await getUsers();
+          const usersMap = new Map<number, string>();
+          users.forEach((u) => usersMap.set(u.id, u.name));
+          
+          const currentActiveLeadsByManagerId = await getCurrentActiveLeadsPerManager(
+            dashboardConfig.PIPELINE_IDS,
+            dashboardConfig.WON_STATUS_IDS,
+            dashboardConfig.LOST_STATUS_IDS
+          );
+          
+          // Convert manager IDs to names
+          const activeLeadsByManager = new Map<string, number>();
+          currentActiveLeadsByManagerId.forEach((count, managerId) => {
+            const name = usersMap.get(managerId) || `User ${managerId}`;
+            activeLeadsByManager.set(name, count);
+          });
+          
+          return activeLeadsByManager;
+        } catch (err) {
+          console.error('[Sotuvchilar/Stats] Error fetching active leads:', err);
+          return new Map<string, number>();
+        }
+      })(),
+      
+      // Fetch from both call APIs
       fetch(onlinepbxUrl, { cache: 'no-store' }).catch(err => {
         console.error('[Sotuvchilar/Stats] Error fetching OnlinePBX calls:', err);
         return null;
@@ -153,6 +151,8 @@ export async function GET(request: NextRequest) {
         return null;
       })
     ]);
+
+    const activeLeadsByManager = activeLeadsData;
 
     // Parse responses
     let onlinepbxCalls: any[] = [];
