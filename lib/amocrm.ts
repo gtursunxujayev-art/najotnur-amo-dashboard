@@ -381,61 +381,99 @@ export async function getCurrentActiveLeadsPerManager(
   return activeLeadsFetchPromise;
 }
 
+// Cache for completed follow-ups
+let completedFollowUpsCache: {
+  data: Map<number, number>;
+  timestamp: number;
+} | null = null;
+let followUpsFetchPromise: Promise<Map<number, number>> | null = null;
+const FOLLOW_UPS_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
 /**
  * Get completed tasks (follow-ups) for managers within a date range.
  * Returns count of completed tasks per manager.
  * A task is considered "completed" when its task_result is not null/empty.
+ * Results are cached for 30 minutes to reduce API load.
  */
 export async function getCompletedFollowUpsByManager(
   fromUnix: number,
   toUnix: number
 ): Promise<Map<number, number>> {
-  const completedByManager = new Map<number, number>();
-  
-  try {
-    console.log(`[AmoCRM] Fetching completed tasks from ${fromUnix} to ${toUnix}...`);
-    
-    let page = 1;
-    const pageSize = 250;
-    let totalTasks = 0;
-    let totalCompleted = 0;
-    
-    while (true) {
-      const url = `/api/v4/tasks?limit=${pageSize}&page=${page}&filter[updated_at][from]=${fromUnix}&filter[updated_at][to]=${toUnix}`;
-      
-      const data = await amoRequest(url);
-      const tasks = data?._embedded?.tasks || [];
-      
-      if (tasks.length === 0) {
-        break;
-      }
-      
-      totalTasks += tasks.length;
-      
-      // Count completed tasks per manager
-      tasks.forEach((task: any) => {
-        // A task is completed if task_result is set (has value, not null/empty)
-        const taskResult = task.task_result?.result;
-        if (taskResult) {
-          const managerId = task.responsible_user_id || task.created_by || 0;
-          completedByManager.set(managerId, (completedByManager.get(managerId) || 0) + 1);
-          totalCompleted++;
-        }
-      });
-      
-      console.log(`[AmoCRM] Page ${page}: ${tasks.length} tasks, ${totalCompleted} completed so far`);
-      
-      if (tasks.length < pageSize) {
-        break;
-      }
-      
-      page++;
-    }
-    
-    console.log(`[AmoCRM] Completed follow-ups fetch: ${totalTasks} total tasks, ${totalCompleted} completed`);
-    return completedByManager;
-  } catch (error) {
-    console.error("[AmoCRM] Error fetching completed follow-ups:", error);
-    return new Map<number, number>();
+  // Check cache first
+  if (completedFollowUpsCache && Date.now() - completedFollowUpsCache.timestamp < FOLLOW_UPS_CACHE_TTL) {
+    console.log("[AmoCRM] Using cached follow-ups data");
+    return completedFollowUpsCache.data;
   }
+  
+  // If a fetch is already in progress, wait for it instead of starting a new one
+  if (followUpsFetchPromise) {
+    console.log("[AmoCRM] Another follow-ups fetch in progress, waiting...");
+    return followUpsFetchPromise;
+  }
+  
+  // Start fetch and store promise to prevent concurrent fetches
+  followUpsFetchPromise = (async () => {
+    const completedByManager = new Map<number, number>();
+    
+    try {
+      console.log(`[AmoCRM] Fetching completed tasks from ${fromUnix} to ${toUnix}...`);
+      
+      let page = 1;
+      const pageSize = 250;
+      let totalTasks = 0;
+      let totalCompleted = 0;
+      
+      while (true) {
+        const url = `/api/v4/tasks?limit=${pageSize}&page=${page}&filter[updated_at][from]=${fromUnix}&filter[updated_at][to]=${toUnix}`;
+        
+        const data = await amoRequest(url);
+        const tasks = data?._embedded?.tasks || [];
+        
+        if (tasks.length === 0) {
+          break;
+        }
+        
+        totalTasks += tasks.length;
+        
+        // Count completed tasks per manager
+        tasks.forEach((task: any) => {
+          // A task is completed if task_result is set (has value, not null/empty)
+          const taskResult = task.task_result?.result;
+          if (taskResult) {
+            const managerId = task.responsible_user_id || task.created_by || 0;
+            completedByManager.set(managerId, (completedByManager.get(managerId) || 0) + 1);
+            totalCompleted++;
+          }
+        });
+        
+        if (page === 1 || page % 5 === 0) {
+          console.log(`[AmoCRM] Follow-ups page ${page}: ${tasks.length} tasks, ${totalCompleted} completed so far`);
+        }
+        
+        if (tasks.length < pageSize) {
+          break;
+        }
+        
+        page++;
+      }
+      
+      console.log(`[AmoCRM] Completed follow-ups fetch: ${totalTasks} total tasks, ${totalCompleted} completed`);
+      
+      // Update cache
+      completedFollowUpsCache = {
+        data: completedByManager,
+        timestamp: Date.now()
+      };
+      
+      return completedByManager;
+    } catch (error) {
+      console.error("[AmoCRM] Error fetching completed follow-ups:", error);
+      return new Map<number, number>();
+    } finally {
+      // Clear the pending promise when done
+      followUpsFetchPromise = null;
+    }
+  })();
+  
+  return followUpsFetchPromise;
 }
