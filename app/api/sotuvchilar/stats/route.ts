@@ -287,6 +287,7 @@ export async function GET(request: NextRequest) {
         dailyAvgCalls: callData.totalCalls / daysDiff,
         dailyAvgCallLength: callData.totalDurationSec / daysDiff,
         revenue: managerSale.revenue || 0,
+        averageReachTime: reachTimeByManager.get(managerSale.managerName) || 0,
         lostLeadReasons: lostReasons,
       };
     });

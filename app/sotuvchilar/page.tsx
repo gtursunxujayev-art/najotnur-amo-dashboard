@@ -18,6 +18,7 @@ interface ManagerStats {
   dailyAvgCalls: number;
   dailyAvgCallLength: number;
   revenue: number;
+  averageReachTime: number;
   lostLeadReasons: { reason: string; count: number }[];
 }
 
@@ -223,6 +224,10 @@ export default function SotuvchilarPage() {
                     {
                       label: 'Konversiya umumiy',
                       value: `${selectedManagerData.conversionToAllLeads.toFixed(1)}%`,
+                    },
+                    {
+                      label: "O'rtacha erishish vaqti",
+                      value: selectedManagerData.averageReachTime > 0 ? `${selectedManagerData.averageReachTime} min` : 'N/A',
                     },
                   ].map((item, idx) => (
                     <div key={idx} className="rounded-lg bg-slate-800/50 p-4">
