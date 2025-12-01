@@ -185,15 +185,12 @@ const ACTIVE_LEADS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 /**
  * Get current active leads count per manager.
- * Active leads = leads that are NOT won (142) and NOT lost (143) across ALL pipelines.
+ * Active leads = leads that are NOT won (142) and NOT lost (143) from specific pipelines.
  * This is real-time data, not period-dependent.
  * Results are cached for 5 minutes to improve performance.
- * 
- * NOTE: We query ALL pipelines because managers may have active leads spread across
- * multiple pipelines (Sotuv, Intensiv, Online, etc.), not just the main sales pipeline.
  */
 export async function getCurrentActiveLeadsPerManager(
-  _pipelineIds: number[], // Ignored - we query all pipelines
+  pipelineIds: number[], // Query only these pipelines for faster performance
   wonStatusIds: number[],
   lostStatusIds: number[]
 ): Promise<Map<number, number>> {
@@ -205,7 +202,8 @@ export async function getCurrentActiveLeadsPerManager(
   
   const activeLeadsByManager = new Map<number, number>();
   
-  console.log("[AmoCRM] Fetching current active leads from ALL pipelines (not won/lost)...");
+  console.log(`[AmoCRM] Fetching current active leads from ${pipelineIds.length} pipelines (not won/lost)...`);
+  console.log(`[AmoCRM] Pipeline IDs: ${pipelineIds.join(',')}`);
   console.log(`[AmoCRM] Won statuses: ${wonStatusIds.join(',')}, Lost statuses: ${lostStatusIds.join(',')}`);
   
   let page = 1;
@@ -214,8 +212,9 @@ export async function getCurrentActiveLeadsPerManager(
   let totalLeads = 0;
   
   while (true) {
-    // Query ALL leads without pipeline filter - active leads can be in any pipeline
-    const url = `/api/v4/leads?limit=${pageSize}&page=${page}`;
+    // Build URL with pipeline filter for faster queries
+    const pipelineFilters = pipelineIds.map((id, idx) => `filter[pipeline_id][${idx}]=${id}`).join('&');
+    const url = `/api/v4/leads?limit=${pageSize}&page=${page}&${pipelineFilters}`;
     
     const data = await amoRequest(url);
     const leads = data?._embedded?.leads || [];

@@ -13,6 +13,7 @@ export type RevenueSheetsConfig = {
 export type DashboardConfig = {
   // --- amoCRM constructor ---
   PIPELINE_IDS: number[];
+  ACTIVE_LEADS_PIPELINE_IDS?: number[];
   QUALIFIED_STATUS_IDS: number[];
   WON_STATUS_IDS: number[];
   LOST_STATUS_IDS: number[];
@@ -63,7 +64,14 @@ function applyRevenueAliases(c: DashboardConfig) {
 
 const cfg: DashboardConfig = {
   "PIPELINE_IDS": [
-    9975586
+    9975586  // Sotuv
+  ],
+  // Active leads pipelines: Only count leads from these 4 pipelines for faster queries
+  "ACTIVE_LEADS_PIPELINE_IDS": [
+    9975586,    // Sotuv
+    9975588,    // Intensiv
+    10105524,   // Online Voronka
+    10105526    // Offline Voronka
   ],
   "QUALIFIED_STATUS_IDS": [
     79198062,

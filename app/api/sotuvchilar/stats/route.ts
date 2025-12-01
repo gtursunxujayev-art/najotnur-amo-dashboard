@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
           users.forEach((u) => usersMap.set(u.id, u.name));
           
           const currentActiveLeadsByManagerId = await getCurrentActiveLeadsPerManager(
-            dashboardConfig.PIPELINE_IDS,
+            dashboardConfig.ACTIVE_LEADS_PIPELINE_IDS || dashboardConfig.PIPELINE_IDS,
             dashboardConfig.WON_STATUS_IDS,
             dashboardConfig.LOST_STATUS_IDS
           );
