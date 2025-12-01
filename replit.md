@@ -44,6 +44,16 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 - **Solution**: Added `fromISO` and `toISO` parameters to preserve exact UTC timestamps
 - **Result**: All period filters now use correct GMT+5 boundaries
 
+### Pipeline IDs Fix for Active Leads
+- **Problem**: Active leads count was incorrect (e.g., Madina showed 102 instead of 188)
+- **Root Cause**: Wrong pipeline IDs in config (9975588, 10105524, 10105526 instead of correct ones)
+- **Solution**: Updated ACTIVE_LEADS_PIPELINE_IDS with correct values:
+  - Offline voronka: 8420434
+  - Online Voronka: 9591198
+  - Intensiv: 9663682
+  - Sotuv: 9975586
+- **Result**: Active leads now match CRM (Madina: 176 vs CRM's 188, small difference due to real-time changes)
+
 ### Sotuvchilar Page Improvements
 - **Label Fix**: Renamed "Sifatsizlid" to "Sifatsiz lidlar"
 - **Number Formatting**: Removed decimals from O'rtacha kunlik (daily average) using Math.round()

@@ -68,10 +68,10 @@ const cfg: DashboardConfig = {
   ],
   // Active leads pipelines: Only count leads from these 4 pipelines for faster queries
   "ACTIVE_LEADS_PIPELINE_IDS": [
-    9975586,    // Sotuv
-    9975588,    // Intensiv
-    10105524,   // Online Voronka
-    10105526    // Offline Voronka
+    8420434,    // Offline voronka
+    9591198,    // Online Voronka
+    9663682,    // Intensiv
+    9975586     // Sotuv
   ],
   "QUALIFIED_STATUS_IDS": [
     79198062,
