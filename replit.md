@@ -14,7 +14,7 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 *   **Error Handling:** Includes graceful error handling for external API rate limiting with exponential backoff and throttling.
 *   **PDF Report Generation:** Professional-grade PDF reports are generated with branding, KPI cards, dynamic tables, Unicode support, and automatic pagination.
 *   **Data Aggregation & Transformation:** Extensive logic aggregates, cleans, and transforms data from various sources (amoCRM, Google Sheets, OnlinePBX, UTel) for display and reporting.
-*   **Automated Scheduled Reports:** A `node-cron` scheduler sends daily, weekly, and monthly reports via Telegram with comprehensive execution tracking and timezone support (Asia/Tashkent).
+*   **Automated Scheduled Reports:** CLI scripts (`scripts/send-report.ts`) send daily, weekly, and monthly reports via Telegram. These are designed for Replit Scheduled Deployments (not node-cron, as autoscale deployments scale to zero when idle).
 *   **Dashboard UI/UX:** Features redesigned chart layouts, filtered pie charts, and consistent professional styling. Focuses on sales metrics, leads, and conversions, with call analytics on a dedicated page.
 *   **Unified Call Data Sources:** The Calls and Sotuvchilar pages use the same API endpoints (`/api/onlinepbx/calls` and `/api/utel/calls`) for consistent call tracking and accurate manager attribution via extension mapping.
 *   **OnlinePBX Integration:** An active webhook receives real-time call events, stores data, and serves it to various endpoints. Includes syncing OnlinePBX call data to amoCRM as notes.
@@ -69,3 +69,19 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 - **Problem**: Phone numbers and IVR extensions were appearing as "managers" in the calls table
 - **Solution**: Added filter to show only actual manager names (text-based entries with Unicode letter support)
 - **Result**: IVR extensions (5000, 5001, 5200) and phone numbers are now filtered out, keeping only 3,579 properly attributed calls
+
+### Scheduled Reports via Replit Scheduled Deployments
+- **Problem**: Autoscale deployments scale to zero when idle, so node-cron scheduled tasks never run
+- **Solution**: Created CLI scripts for Replit Scheduled Deployments feature
+- **Scripts Available**:
+  - `npm run report:daily` - sends daily report to Telegram subscribers
+  - `npm run report:weekly` - sends weekly report to Telegram subscribers  
+  - `npm run report:monthly` - sends monthly report to Telegram subscribers
+- **Setup Instructions**:
+  1. Go to "Publish" in Replit
+  2. Click "Schedule" tab
+  3. Add 3 scheduled jobs with these settings:
+     - **Daily**: Command = `npm run report:daily`, Schedule = `0 3 * * *` (8:00 AM GMT+5 = 3:00 UTC)
+     - **Weekly**: Command = `npm run report:weekly`, Schedule = `0 3 * * 1` (Monday at 8:00 AM GMT+5)
+     - **Monthly**: Command = `npm run report:monthly`, Schedule = `0 3 1 * *` (1st of month at 8:00 AM GMT+5)
+  4. Set timeout to 300 seconds (5 minutes) for each job
