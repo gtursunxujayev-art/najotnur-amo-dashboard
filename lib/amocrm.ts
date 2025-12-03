@@ -381,6 +381,37 @@ export async function getCurrentActiveLeadsPerManager(
   return activeLeadsFetchPromise;
 }
 
+/**
+ * Pre-warm the active leads cache by fetching data in the background.
+ * This should be called on server initialization to ensure cache is ready
+ * before user requests come in.
+ * Uses default config values for pipeline and status IDs.
+ */
+export async function warmActiveLeadsCache(): Promise<void> {
+  const { dashboardConfig } = await import('@/config/dashboardConfig');
+  
+  const pipelineIds = dashboardConfig.ACTIVE_LEADS_PIPELINE_IDS || dashboardConfig.PIPELINE_IDS;
+  const wonStatusIds = dashboardConfig.WON_STATUS_IDS;
+  const lostStatusIds = dashboardConfig.LOST_STATUS_IDS;
+  
+  console.log('[AmoCRM] Pre-warming active leads cache...');
+  console.log(`[AmoCRM] Using pipeline IDs: ${pipelineIds.join(',')}`);
+  
+  try {
+    const result = await getCurrentActiveLeadsPerManager(pipelineIds, wonStatusIds, lostStatusIds);
+    console.log(`[AmoCRM] Cache warmed successfully with ${result.size} managers`);
+  } catch (err: any) {
+    console.error('[AmoCRM] Cache warming failed:', err?.message);
+  }
+}
+
+/**
+ * Check if active leads cache is populated and valid.
+ */
+export function isActiveLeadsCacheReady(): boolean {
+  return activeLeadsCache !== null && (Date.now() - activeLeadsCache.timestamp < ACTIVE_LEADS_CACHE_TTL);
+}
+
 // Cache for completed follow-ups
 let completedFollowUpsCache: {
   data: Map<number, number>;

@@ -118,14 +118,20 @@ export async function GET(request: NextRequest) {
       // Get current active leads from amoCRM with timeout to prevent blocking
       (async () => {
         try {
-          const { getCurrentActiveLeadsPerManager, getUsers } = await import('@/lib/amocrm');
+          const { getCurrentActiveLeadsPerManager, getUsers, isActiveLeadsCacheReady } = await import('@/lib/amocrm');
           
-          // Add timeout of 30 seconds to prevent blocking the entire request
+          // If cache is ready, we can use a shorter timeout
+          // If not, allow longer timeout for initial fetch (90 seconds)
+          const cacheReady = isActiveLeadsCacheReady();
+          const timeoutMs = cacheReady ? 10000 : 90000; // 10s if cached, 90s if fetching
+          
+          console.log(`[Sotuvchilar/Stats] Active leads cache status: ${cacheReady ? 'ready' : 'not ready'}, timeout: ${timeoutMs}ms`);
+          
           const timeoutPromise = new Promise<Map<string, number>>((resolve) => {
             setTimeout(() => {
-              console.warn('[Sotuvchilar/Stats] Active leads fetch timed out, using empty map');
+              console.warn(`[Sotuvchilar/Stats] Active leads fetch timed out after ${timeoutMs}ms, using empty map`);
               resolve(new Map<string, number>());
-            }, 30000); // 30 second timeout
+            }, timeoutMs);
           });
           
           const fetchPromise = (async () => {
