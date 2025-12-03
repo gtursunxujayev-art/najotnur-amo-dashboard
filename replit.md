@@ -70,6 +70,22 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 - **Solution**: Added filter to show only actual manager names (text-based entries with Unicode letter support)
 - **Result**: IVR extensions (5000, 5001, 5200) and phone numbers are now filtered out, keeping only 3,579 properly attributed calls
 
+### Active Leads Cache Warming (December 3, 2025)
+- **Problem**: Sotuvchilar page was timing out (30+ seconds) because fetching 9,400+ leads from amoCRM takes ~60 seconds
+- **Solution**: Implemented cache warming on server start
+  - `warmActiveLeadsCache()` function pre-fetches active leads when server starts
+  - `isActiveLeadsCacheReady()` helper checks if cache is available
+  - Cache warming triggered via `/api/admin/init-scheduler` on app initialization
+  - Adaptive timeout: 10s when cache ready, 90s when cache is cold
+- **Performance**:
+  - Cache warming: ~60 seconds (processes 9,447 leads across 38 pages)
+  - Cached requests: **1-2 seconds** (down from 30+ second timeout)
+  - 2,582 active leads cached for 11 managers
+- **Cache Details**:
+  - 1-hour TTL (refreshes automatically)
+  - Concurrent fetch guard prevents duplicate API calls
+  - Proper timeout cleanup to avoid misleading log messages
+
 ### Scheduled Reports via Replit Scheduled Deployments
 - **Problem**: Autoscale deployments scale to zero when idle, so node-cron scheduled tasks never run
 - **Solution**: Created CLI scripts for Replit Scheduled Deployments feature

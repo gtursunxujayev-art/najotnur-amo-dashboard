@@ -127,8 +127,12 @@ export async function GET(request: NextRequest) {
           
           console.log(`[Sotuvchilar/Stats] Active leads cache status: ${cacheReady ? 'ready' : 'not ready'}, timeout: ${timeoutMs}ms`);
           
+          let timeoutId: NodeJS.Timeout | null = null;
+          let didTimeout = false;
+          
           const timeoutPromise = new Promise<Map<string, number>>((resolve) => {
-            setTimeout(() => {
+            timeoutId = setTimeout(() => {
+              didTimeout = true;
               console.warn(`[Sotuvchilar/Stats] Active leads fetch timed out after ${timeoutMs}ms, using empty map`);
               resolve(new Map<string, number>());
             }, timeoutMs);
@@ -151,6 +155,13 @@ export async function GET(request: NextRequest) {
               const name = usersMap.get(managerId) || `User ${managerId}`;
               activeLeadsByManager.set(name, count);
             });
+            
+            // Clear timeout since we got data
+            if (timeoutId) clearTimeout(timeoutId);
+            
+            if (!didTimeout) {
+              console.log(`[Sotuvchilar/Stats] Active leads fetch completed with ${activeLeadsByManager.size} managers`);
+            }
             
             return activeLeadsByManager;
           })();
