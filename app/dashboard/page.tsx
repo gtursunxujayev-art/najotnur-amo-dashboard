@@ -36,17 +36,42 @@ function useWindowSize() {
   return size;
 }
 
-// Safe label helpers for pie charts
-function pieLabelLossReason(props: { name?: string; percent?: number }) {
-  const { name, percent } = props;
-  const p = typeof percent === "number" ? percent : 0;
-  return `${name ?? ""} ${(p * 100).toFixed(0)}%`;
-}
-
-function pieLabelSource(props: { name?: string; percent?: number }) {
-  const { name, percent } = props;
-  const p = typeof percent === "number" ? percent : 0;
-  return `${name ?? ""} ${(p * 100).toFixed(0)}%`;
+// Responsive pie chart label renderer
+function createResponsiveLabel(isMobile: boolean) {
+  return function renderLabel(props: { 
+    name?: string; 
+    percent?: number;
+    cx?: number;
+    cy?: number;
+    midAngle?: number;
+    innerRadius?: number;
+    outerRadius?: number;
+    x?: number;
+    y?: number;
+  }) {
+    if (isMobile) return null;
+    
+    const { name, percent, cx = 0, x = 0, y = 0 } = props;
+    const p = typeof percent === "number" ? percent : 0;
+    const displayName = name ?? "";
+    
+    const truncatedName = displayName.length > 12 
+      ? displayName.substring(0, 10) + "..." 
+      : displayName;
+    
+    return (
+      <text 
+        x={x} 
+        y={y} 
+        fill="#e2e8f0" 
+        textAnchor={x > (cx || 0) ? "start" : "end"}
+        dominantBaseline="central"
+        fontSize="11"
+      >
+        {`${truncatedName} ${(p * 100).toFixed(0)}%`}
+      </text>
+    );
+  };
 }
 
 export default function DashboardPage() {
@@ -111,7 +136,6 @@ export default function DashboardPage() {
   useEffect(() => {
     load(state.period);
     
-    // Initialize scheduler on app startup
     fetch("/api/admin/init-scheduler", { method: "GET" })
       .then(r => r.json())
       .then(d => console.log("[Dashboard] Scheduler initialized:", d))
@@ -125,6 +149,10 @@ export default function DashboardPage() {
     if (p === period) return;
     load(p);
   };
+
+  const isMobile = windowSize.width > 0 && windowSize.width < 640;
+  const isTablet = windowSize.width >= 640 && windowSize.width < 1024;
+  const outerRadius = isMobile ? 70 : isTablet ? 65 : 80;
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-slate-50">
@@ -157,7 +185,7 @@ export default function DashboardPage() {
 
       {loading && (
         <div className="rounded-lg border border-slate-700 bg-slate-900 p-4 text-sm text-slate-300">
-          Loading dashboard data…
+          Loading dashboard data...
         </div>
       )}
 
@@ -202,7 +230,7 @@ export default function DashboardPage() {
               subtitle="NOT qualified reasons"
             />
             <MetricCard
-              title="Konversiya (sifatli → sotuv)"
+              title="Konversiya (sifatli - sotuv)"
               value={`${(data.conversionFromQualified * 100).toFixed(1)}%`}
               subtitle="Won from qualified"
             />
@@ -221,52 +249,48 @@ export default function DashboardPage() {
                 Sifatsiz lid sabablari (Muvaffaqiyatsiz E&apos;tiroz sababi)
               </h2>
               <p className="mb-2 text-xs text-slate-400">
-                Barcha yo&apos;qotilgan lidlar “E&apos;tiroz sababi” bo&apos;yicha.
+                Barcha yo&apos;qotilgan lidlar &quot;E&apos;tiroz sababi&quot; bo&apos;yicha.
               </p>
-              <div className="flex h-64 gap-4">
-                {/* Left side: List - sorted by value descending */}
-                <div className="w-2/5 flex flex-col justify-start overflow-y-auto pr-2">
-                  {data.nonQualifiedReasons.length === 0 ? (
-                    <div className="text-xs text-slate-500">
-                      Hali yo&apos;qotilgan lidlar yo&apos;q.
-                    </div>
-                  ) : (
-                    <div className="space-y-1">
-                      {[...data.nonQualifiedReasons]
-                        .sort((a, b) => b.value - a.value)
-                        .map((reason, index) => (
-                          <div key={index} className="flex justify-between text-xs text-slate-300 whitespace-nowrap">
-                            <span className="flex-shrink-0">{reason.label}</span>
-                            <span className="ml-2 text-slate-400 font-semibold flex-shrink-0">{reason.value}</span>
+              {data.nonQualifiedReasons.length === 0 ? (
+                <div className="text-xs text-slate-500 py-8 text-center">
+                  Hali yo&apos;qotilgan lidlar yo&apos;q.
+                </div>
+              ) : (() => {
+                const total = data.nonQualifiedReasons.reduce((sum, item) => sum + item.value, 0);
+                const sortedData = [...data.nonQualifiedReasons].sort((a, b) => b.value - a.value);
+                const filtered = sortedData.filter(item => (item.value / total) * 100 >= 5);
+                
+                return (
+                  <div className={`${isMobile ? 'flex flex-col' : 'flex'} gap-4`}>
+                    {/* Legend with color squares */}
+                    <div className={`${isMobile ? 'order-2 w-full' : 'w-2/5'} flex flex-col justify-start overflow-y-auto ${isMobile ? 'max-h-40' : ''}`}>
+                      <div className={`${isMobile ? 'grid grid-cols-2 gap-x-4 gap-y-1' : 'space-y-1'}`}>
+                        {sortedData.map((reason, index) => (
+                          <div key={index} className="flex items-center gap-2 text-xs text-slate-300">
+                            <div 
+                              className="w-3 h-3 rounded-sm flex-shrink-0" 
+                              style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                            />
+                            <span className={`${isMobile ? 'truncate' : ''} flex-1`}>{reason.label}</span>
+                            <span className="text-slate-400 font-semibold flex-shrink-0">{reason.value}</span>
                           </div>
                         ))}
+                      </div>
                     </div>
-                  )}
-                </div>
-                
-                {/* Right side: Pie chart with labels */}
-                <div className="w-3/5">
-                  {data.nonQualifiedReasons.length === 0 ? (
-                    <div className="h-full flex items-center justify-center text-xs text-slate-500">
-                      Hali yo&apos;qotilgan lidlar yo&apos;q.
-                    </div>
-                  ) : (() => {
-                    const total = data.nonQualifiedReasons.reduce((sum, item) => sum + item.value, 0);
-                    const filtered = [...data.nonQualifiedReasons]
-                      .sort((a, b) => b.value - a.value)
-                      .filter(item => (item.value / total) * 100 >= 5);
-                    return (
+                    
+                    {/* Pie chart */}
+                    <div className={`${isMobile ? 'order-1 w-full h-56' : 'w-3/5 h-64'}`}>
                       <ResponsiveContainer width="100%" height="100%">
-                        <PieChart margin={{ top: 0, right: 20, bottom: 0, left: 20 }}>
+                        <PieChart margin={isMobile ? { top: 5, right: 5, bottom: 5, left: 5 } : { top: 10, right: 30, bottom: 10, left: 30 }}>
                           <Pie
                             data={filtered}
                             dataKey="value"
                             nameKey="label"
                             cx="50%"
                             cy="50%"
-                            outerRadius={55}
-                            labelLine={true}
-                            label={pieLabelLossReason}
+                            outerRadius={outerRadius}
+                            labelLine={!isMobile}
+                            label={createResponsiveLabel(isMobile)}
                           >
                             {filtered.map((_, index) => (
                               <Cell
@@ -282,13 +306,14 @@ export default function DashboardPage() {
                               borderRadius: 8,
                               fontSize: 12,
                             }}
+                            formatter={(value: number, name: string) => [`${value} (${((value / total) * 100).toFixed(0)}%)`, name]}
                           />
                         </PieChart>
                       </ResponsiveContainer>
-                    );
-                  })()}
-                </div>
-              </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Lead sources */}
@@ -297,52 +322,48 @@ export default function DashboardPage() {
                 Lid manbalari (Qayerdan)
               </h2>
               <p className="mb-2 text-xs text-slate-400">
-                Lidlar soni {`"Qayerdan"`} maydoni bo&apos;yicha taqsimoti.
+                Lidlar soni &quot;Qayerdan&quot; maydoni bo&apos;yicha taqsimoti.
               </p>
-              <div className="flex h-64 gap-4">
-                {/* Left side: List - sorted by value descending */}
-                <div className="w-2/5 flex flex-col justify-start overflow-y-auto pr-2">
-                  {data.leadSources.length === 0 ? (
-                    <div className="text-xs text-slate-500">
-                      Lead manbalari topilmadi.
-                    </div>
-                  ) : (
-                    <div className="space-y-1">
-                      {[...data.leadSources]
-                        .sort((a, b) => b.value - a.value)
-                        .map((source, index) => (
-                          <div key={index} className="flex justify-between text-xs text-slate-300 whitespace-nowrap">
-                            <span className="flex-shrink-0">{source.label}</span>
-                            <span className="ml-2 text-slate-400 font-semibold flex-shrink-0">{source.value}</span>
+              {data.leadSources.length === 0 ? (
+                <div className="text-xs text-slate-500 py-8 text-center">
+                  Lead manbalari topilmadi.
+                </div>
+              ) : (() => {
+                const total = data.leadSources.reduce((sum, item) => sum + item.value, 0);
+                const sortedData = [...data.leadSources].sort((a, b) => b.value - a.value);
+                const filtered = sortedData.filter(item => (item.value / total) * 100 >= 5);
+                
+                return (
+                  <div className={`${isMobile ? 'flex flex-col' : 'flex'} gap-4`}>
+                    {/* Legend with color squares */}
+                    <div className={`${isMobile ? 'order-2 w-full' : 'w-2/5'} flex flex-col justify-start overflow-y-auto ${isMobile ? 'max-h-40' : ''}`}>
+                      <div className={`${isMobile ? 'grid grid-cols-2 gap-x-4 gap-y-1' : 'space-y-1'}`}>
+                        {sortedData.map((source, index) => (
+                          <div key={index} className="flex items-center gap-2 text-xs text-slate-300">
+                            <div 
+                              className="w-3 h-3 rounded-sm flex-shrink-0" 
+                              style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                            />
+                            <span className={`${isMobile ? 'truncate' : ''} flex-1`}>{source.label}</span>
+                            <span className="text-slate-400 font-semibold flex-shrink-0">{source.value}</span>
                           </div>
                         ))}
+                      </div>
                     </div>
-                  )}
-                </div>
-                
-                {/* Right side: Pie chart with labels */}
-                <div className="w-3/5">
-                  {data.leadSources.length === 0 ? (
-                    <div className="h-full flex items-center justify-center text-xs text-slate-500">
-                      Lead manbalari topilmadi.
-                    </div>
-                  ) : (() => {
-                    const total = data.leadSources.reduce((sum, item) => sum + item.value, 0);
-                    const filtered = [...data.leadSources]
-                      .sort((a, b) => b.value - a.value)
-                      .filter(item => (item.value / total) * 100 >= 5);
-                    return (
+                    
+                    {/* Pie chart */}
+                    <div className={`${isMobile ? 'order-1 w-full h-56' : 'w-3/5 h-64'}`}>
                       <ResponsiveContainer width="100%" height="100%">
-                        <PieChart margin={{ top: 0, right: 20, bottom: 0, left: 20 }}>
+                        <PieChart margin={isMobile ? { top: 5, right: 5, bottom: 5, left: 5 } : { top: 10, right: 30, bottom: 10, left: 30 }}>
                           <Pie
                             data={filtered}
                             dataKey="value"
                             nameKey="label"
                             cx="50%"
                             cy="50%"
-                            outerRadius={55}
-                            labelLine={true}
-                            label={pieLabelSource}
+                            outerRadius={outerRadius}
+                            labelLine={!isMobile}
+                            label={createResponsiveLabel(isMobile)}
                           >
                             {filtered.map((_, index) => (
                               <Cell
@@ -358,13 +379,14 @@ export default function DashboardPage() {
                               borderRadius: 8,
                               fontSize: 12,
                             }}
+                            formatter={(value: number, name: string) => [`${value} (${((value / total) * 100).toFixed(0)}%)`, name]}
                           />
                         </PieChart>
                       </ResponsiveContainer>
-                    );
-                  })()}
-                </div>
-              </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </section>
 
