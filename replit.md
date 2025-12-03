@@ -101,3 +101,17 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
      - **Weekly**: Command = `npm run report:weekly`, Schedule = `0 3 * * 1` (Monday at 8:00 AM GMT+5)
      - **Monthly**: Command = `npm run report:monthly`, Schedule = `0 3 1 * *` (1st of month at 8:00 AM GMT+5)
   4. Set timeout to 300 seconds (5 minutes) for each job
+
+### Responsive UI Improvements (December 3, 2025)
+- **Hamburger Menu Navigation**:
+  - Replaced horizontal nav bar with hamburger menu (☰) for all layouts
+  - Left-side sliding panel with icons for each menu item
+  - Click outside to close functionality
+  - Component: `app/components/SideMenu.tsx`
+  
+- **Dashboard Pie Charts Redesign**:
+  - Labels now show ONLY percentage (e.g., "45%")
+  - Full legend below each chart with colored squares, full names, and values
+  - All data slices render in chart (no filtering) - labels hidden for slices <5%
+  - Consistent colors between pie slices and legend entries
+  - Responsive layout: works on mobile, tablet, and desktop
