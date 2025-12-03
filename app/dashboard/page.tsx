@@ -12,7 +12,6 @@ import {
 
 type PeriodKey = "today" | "week" | "month";
 
-
 type UiState = {
   loading: boolean;
   error: string | null;
@@ -20,55 +19,36 @@ type UiState = {
   period: PeriodKey;
 };
 
-const COLORS = ["#22c55e", "#3b82f6", "#a855f7", "#f97316", "#ef4444", "#eab308"];
+const COLORS = ["#22c55e", "#3b82f6", "#a855f7", "#f97316", "#ef4444", "#eab308", "#14b8a6", "#ec4899", "#6366f1", "#84cc16"];
 
-// Hook to detect window size
-function useWindowSize() {
-  const [size, setSize] = useState({ width: 0, height: 0 });
-  useEffect(() => {
-    function handleResize() {
-      setSize({ width: window.innerWidth, height: window.innerHeight });
-    }
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-  return size;
-}
-
-// Responsive pie chart label renderer
-function createResponsiveLabel(isMobile: boolean) {
-  return function renderLabel(props: { 
-    name?: string; 
+function renderPercentageLabel(total: number) {
+  return function(props: { 
     percent?: number;
     cx?: number;
     cy?: number;
     midAngle?: number;
     innerRadius?: number;
     outerRadius?: number;
-    x?: number;
-    y?: number;
   }) {
-    if (isMobile) return null;
+    const { percent = 0, cx = 0, cy = 0, midAngle = 0, outerRadius = 0 } = props;
+    const RADIAN = Math.PI / 180;
+    const radius = outerRadius * 1.35;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
     
-    const { name, percent, cx = 0, x = 0, y = 0 } = props;
-    const p = typeof percent === "number" ? percent : 0;
-    const displayName = name ?? "";
-    
-    const truncatedName = displayName.length > 12 
-      ? displayName.substring(0, 10) + "..." 
-      : displayName;
+    if (percent < 0.05) return null;
     
     return (
       <text 
         x={x} 
         y={y} 
         fill="#e2e8f0" 
-        textAnchor={x > (cx || 0) ? "start" : "end"}
+        textAnchor={x > cx ? "start" : "end"}
         dominantBaseline="central"
-        fontSize="11"
+        fontSize="12"
+        fontWeight="600"
       >
-        {`${truncatedName} ${(p * 100).toFixed(0)}%`}
+        {`${(percent * 100).toFixed(0)}%`}
       </text>
     );
   };
@@ -83,8 +63,6 @@ export default function DashboardPage() {
   });
 
   const dashboardAbortRef = useRef<AbortController | null>(null);
-  const windowSize = useWindowSize();
-
 
   async function load(periodKey: PeriodKey) {
     try {
@@ -150,15 +128,11 @@ export default function DashboardPage() {
     load(p);
   };
 
-  const isMobile = windowSize.width > 0 && windowSize.width < 640;
-  const isTablet = windowSize.width >= 640 && windowSize.width < 1024;
-  const outerRadius = isMobile ? 70 : isTablet ? 65 : 80;
-
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-slate-50">
       <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Najot Nur – Dashboard</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">Najot Nur – Dashboard</h1>
           <p className="text-sm text-slate-400">
             amoCRM + optional Google Sheets statistikasi
           </p>
@@ -198,7 +172,7 @@ export default function DashboardPage() {
       {!loading && !error && data && (
         <div className="space-y-6">
           {/* Top metrics */}
-          <section className="grid gap-4 md:grid-cols-3 lg:grid-cols-4">
+          <section className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             <MetricCard
               title="Sotuv shartnomasi"
               value={(data.onlineSalesCount + data.offlineSalesCount).toLocaleString("ru-RU")}
@@ -242,7 +216,7 @@ export default function DashboardPage() {
           </section>
 
           {/* Charts: lost reasons + lead sources */}
-          <section className="grid gap-4 md:grid-cols-1 lg:grid-cols-2">
+          <section className="grid gap-4 grid-cols-1 lg:grid-cols-2">
             {/* Lost reasons */}
             <div className="rounded-lg border border-slate-700 bg-slate-900 p-4">
               <h2 className="mb-2 text-sm font-semibold text-slate-200">
@@ -258,41 +232,24 @@ export default function DashboardPage() {
               ) : (() => {
                 const total = data.nonQualifiedReasons.reduce((sum, item) => sum + item.value, 0);
                 const sortedData = [...data.nonQualifiedReasons].sort((a, b) => b.value - a.value);
-                const filtered = sortedData.filter(item => (item.value / total) * 100 >= 5);
                 
                 return (
-                  <div className={`${isMobile ? 'flex flex-col' : 'flex'} gap-4`}>
-                    {/* Legend with color squares */}
-                    <div className={`${isMobile ? 'order-2 w-full' : 'w-2/5'} flex flex-col justify-start overflow-y-auto ${isMobile ? 'max-h-40' : ''}`}>
-                      <div className={`${isMobile ? 'grid grid-cols-2 gap-x-4 gap-y-1' : 'space-y-1'}`}>
-                        {sortedData.map((reason, index) => (
-                          <div key={index} className="flex items-center gap-2 text-xs text-slate-300">
-                            <div 
-                              className="w-3 h-3 rounded-sm flex-shrink-0" 
-                              style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                            />
-                            <span className={`${isMobile ? 'truncate' : ''} flex-1`}>{reason.label}</span>
-                            <span className="text-slate-400 font-semibold flex-shrink-0">{reason.value}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    
+                  <div className="flex flex-col">
                     {/* Pie chart */}
-                    <div className={`${isMobile ? 'order-1 w-full h-56' : 'w-3/5 h-64'}`}>
+                    <div className="w-full h-56 sm:h-64">
                       <ResponsiveContainer width="100%" height="100%">
-                        <PieChart margin={isMobile ? { top: 5, right: 5, bottom: 5, left: 5 } : { top: 10, right: 30, bottom: 10, left: 30 }}>
+                        <PieChart margin={{ top: 20, right: 40, bottom: 20, left: 40 }}>
                           <Pie
-                            data={filtered}
+                            data={sortedData}
                             dataKey="value"
                             nameKey="label"
                             cx="50%"
                             cy="50%"
-                            outerRadius={outerRadius}
-                            labelLine={!isMobile}
-                            label={createResponsiveLabel(isMobile)}
+                            outerRadius={65}
+                            labelLine={true}
+                            label={renderPercentageLabel(total)}
                           >
-                            {filtered.map((_, index) => (
+                            {sortedData.map((_, index) => (
                               <Cell
                                 key={index}
                                 fill={COLORS[index % COLORS.length]}
@@ -310,6 +267,22 @@ export default function DashboardPage() {
                           />
                         </PieChart>
                       </ResponsiveContainer>
+                    </div>
+                    
+                    {/* Legend below chart */}
+                    <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2">
+                      {sortedData.map((reason, index) => (
+                        <div key={index} className="flex items-start gap-2 text-xs text-slate-300">
+                          <div 
+                            className="w-3 h-3 rounded-sm flex-shrink-0 mt-0.5" 
+                            style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <span className="block leading-tight">{reason.label}</span>
+                            <span className="text-slate-400 font-semibold">{reason.value}</span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 );
@@ -331,41 +304,24 @@ export default function DashboardPage() {
               ) : (() => {
                 const total = data.leadSources.reduce((sum, item) => sum + item.value, 0);
                 const sortedData = [...data.leadSources].sort((a, b) => b.value - a.value);
-                const filtered = sortedData.filter(item => (item.value / total) * 100 >= 5);
                 
                 return (
-                  <div className={`${isMobile ? 'flex flex-col' : 'flex'} gap-4`}>
-                    {/* Legend with color squares */}
-                    <div className={`${isMobile ? 'order-2 w-full' : 'w-2/5'} flex flex-col justify-start overflow-y-auto ${isMobile ? 'max-h-40' : ''}`}>
-                      <div className={`${isMobile ? 'grid grid-cols-2 gap-x-4 gap-y-1' : 'space-y-1'}`}>
-                        {sortedData.map((source, index) => (
-                          <div key={index} className="flex items-center gap-2 text-xs text-slate-300">
-                            <div 
-                              className="w-3 h-3 rounded-sm flex-shrink-0" 
-                              style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                            />
-                            <span className={`${isMobile ? 'truncate' : ''} flex-1`}>{source.label}</span>
-                            <span className="text-slate-400 font-semibold flex-shrink-0">{source.value}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    
+                  <div className="flex flex-col">
                     {/* Pie chart */}
-                    <div className={`${isMobile ? 'order-1 w-full h-56' : 'w-3/5 h-64'}`}>
+                    <div className="w-full h-56 sm:h-64">
                       <ResponsiveContainer width="100%" height="100%">
-                        <PieChart margin={isMobile ? { top: 5, right: 5, bottom: 5, left: 5 } : { top: 10, right: 30, bottom: 10, left: 30 }}>
+                        <PieChart margin={{ top: 20, right: 40, bottom: 20, left: 40 }}>
                           <Pie
-                            data={filtered}
+                            data={sortedData}
                             dataKey="value"
                             nameKey="label"
                             cx="50%"
                             cy="50%"
-                            outerRadius={outerRadius}
-                            labelLine={!isMobile}
-                            label={createResponsiveLabel(isMobile)}
+                            outerRadius={65}
+                            labelLine={true}
+                            label={renderPercentageLabel(total)}
                           >
-                            {filtered.map((_, index) => (
+                            {sortedData.map((_, index) => (
                               <Cell
                                 key={index}
                                 fill={COLORS[index % COLORS.length]}
@@ -383,6 +339,22 @@ export default function DashboardPage() {
                           />
                         </PieChart>
                       </ResponsiveContainer>
+                    </div>
+                    
+                    {/* Legend below chart */}
+                    <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2">
+                      {sortedData.map((source, index) => (
+                        <div key={index} className="flex items-start gap-2 text-xs text-slate-300">
+                          <div 
+                            className="w-3 h-3 rounded-sm flex-shrink-0 mt-0.5" 
+                            style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <span className="block leading-tight">{source.label}</span>
+                            <span className="text-slate-400 font-semibold">{source.value}</span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 );

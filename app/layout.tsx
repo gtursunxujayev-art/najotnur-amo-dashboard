@@ -1,7 +1,5 @@
-// app/layout.tsx
-
 import "./globals.css";
-import Link from "next/link";
+import SideMenu from "./components/SideMenu";
 
 export const metadata = {
   title: "Najot Nur Dashboard",
@@ -17,62 +15,20 @@ export default function RootLayout({
     <html lang="uz">
       <body className="bg-[#020817] text-white min-h-screen">
         {/* TOP NAVBAR */}
-        <header className="w-full bg-[#111827] border-b border-gray-800">
-          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <header className="w-full bg-[#111827] border-b border-gray-800 sticky top-0 z-30">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-4">
+            {/* HAMBURGER MENU */}
+            <SideMenu />
+            
             {/* BRAND */}
-            <div className="text-xl font-bold text-white">
+            <div className="text-lg sm:text-xl font-bold text-white">
               Najot Nur Dashboard
             </div>
-
-            {/* NAV BUTTONS */}
-            <nav className="flex items-center space-x-6 text-gray-300">
-              <Link
-                href="/dashboard"
-                className="hover:text-white transition-colors"
-              >
-                Dashboard
-              </Link>
-
-              <Link
-                href="/calls"
-                className="hover:text-white transition-colors"
-              >
-                Calls
-              </Link>
-
-              <Link
-                href="/sotuvchilar"
-                className="hover:text-white transition-colors"
-              >
-                Sotuvchilar
-              </Link>
-
-              <Link
-                href="/admin"
-                className="hover:text-white transition-colors"
-              >
-                Admin
-              </Link>
-
-              <Link
-                href="/offline"
-                className="hover:text-white transition-colors"
-              >
-                O'quv Kurslar
-              </Link>
-
-              <Link
-                href="/users"
-                className="hover:text-white transition-colors"
-              >
-                Users
-              </Link>
-            </nav>
           </div>
         </header>
 
         {/* PAGE CONTENT */}
-        <main className="max-w-7xl mx-auto px-6 py-8">{children}</main>
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">{children}</main>
       </body>
     </html>
   );
