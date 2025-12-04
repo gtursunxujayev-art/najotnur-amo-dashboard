@@ -55,7 +55,25 @@ export async function amoRequest(
     throw new Error(`amoCRM error ${res.status}: ${txt}`);
   }
 
-  return res.json();
+  // Handle empty responses (status 204 or empty body)
+  const contentLength = res.headers.get("content-length");
+  if (res.status === 204 || contentLength === "0") {
+    return null;
+  }
+
+  // Try to parse JSON, handle empty body gracefully
+  const text = await res.text();
+  if (!text || text.trim() === "") {
+    console.warn("[amoRequest] Empty response body, returning null");
+    return null;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    console.error("[amoRequest] Failed to parse JSON:", text.substring(0, 200));
+    throw new Error(`Failed to parse amoCRM response as JSON: ${text.substring(0, 100)}`);
+  }
 }
 
 export type AmoLead = {
