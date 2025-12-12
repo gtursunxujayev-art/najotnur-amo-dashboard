@@ -115,3 +115,16 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
   - All data slices render in chart (no filtering) - labels hidden for slices <5%
   - Consistent colors between pie slices and legend entries
   - Responsive layout: works on mobile, tablet, and desktop
+
+### Manager Call History in PDF Reports (December 12, 2025)
+- **Feature**: Added manager call statistics to automated PDF reports (daily, weekly, monthly)
+- **Implementation**:
+  - New `fetchManagerCallStats()` function queries call data directly from database using Prisma
+  - Fetches from both OnlinePBX and UTel call tables
+  - Aggregates calls per manager with call count and total duration
+  - Filters out non-manager entries (phone numbers, IVR extensions)
+- **PDF Section**: "Menejerlar qo'ng'iroqlari" table with columns:
+  - Menejer (Manager name)
+  - Qo'ng'iroqlar (Call count)
+  - Umumiy vaqt (Total duration formatted as Xh Xm Xs)
+- **Production Ready**: Uses direct Prisma queries instead of HTTP self-calls for reliability in serverless environments

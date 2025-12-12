@@ -4,6 +4,119 @@ import { buildDashboardData, Period } from "@/lib/dashboard";
 import fs from "fs";
 import path from "path";
 import fontkit from "@pdf-lib/fontkit";
+import { prisma } from "@/lib/prisma";
+
+type ManagerCallStats = {
+  managerName: string;
+  callCount: number;
+  totalDuration: number; // in seconds
+};
+
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  if (mins < 60) return `${mins}m ${secs}s`;
+  const hours = Math.floor(mins / 60);
+  const remainingMins = mins % 60;
+  return `${hours}h ${remainingMins}m`;
+}
+
+async function fetchManagerCallStats(period: Period): Promise<ManagerCallStats[]> {
+  const tag = "[reportPdf-calls]";
+  try {
+    const fromDate = period.from;
+    const toDate = period.to;
+    
+    // Query calls directly from database using Prisma
+    const [onlinePbxCalls, utelCalls] = await Promise.all([
+      prisma.onlinePBXCall.findMany({
+        where: {
+          date: {
+            gte: fromDate,
+            lte: toDate,
+          },
+        },
+        select: {
+          user: true,
+          duration: true,
+        },
+      }).catch(() => []),
+      prisma.utelCall.findMany({
+        where: {
+          date: {
+            gte: fromDate,
+            lte: toDate,
+          },
+        },
+        select: {
+          manager: true,
+          duration: true,
+        },
+      }).catch(() => []),
+    ]);
+    
+    console.log(`${tag} Fetched ${onlinePbxCalls.length + utelCalls.length} total calls (OnlinePBX: ${onlinePbxCalls.length}, UTel: ${utelCalls.length})`);
+    
+    // Aggregate by manager
+    const managerMap = new Map<string, { callCount: number; totalDuration: number }>();
+    
+    // Process OnlinePBX calls (manager is in 'user' field)
+    for (const call of onlinePbxCalls) {
+      const managerName = call.user || 'Unknown';
+      
+      // Filter out non-manager entries (phone numbers, IVR extensions)
+      if (!managerName || /^\d+$/.test(managerName) || /^[+\d\s()-]+$/.test(managerName)) {
+        continue;
+      }
+      
+      const duration = call.duration || 0;
+      
+      if (!managerMap.has(managerName)) {
+        managerMap.set(managerName, { callCount: 0, totalDuration: 0 });
+      }
+      
+      const stats = managerMap.get(managerName)!;
+      stats.callCount++;
+      stats.totalDuration += duration;
+    }
+    
+    // Process UTel calls (manager is in 'manager' field)
+    for (const call of utelCalls) {
+      const managerName = call.manager || 'Unknown';
+      
+      // Filter out non-manager entries (phone numbers, IVR extensions)
+      if (!managerName || /^\d+$/.test(managerName) || /^[+\d\s()-]+$/.test(managerName)) {
+        continue;
+      }
+      
+      const duration = call.duration || 0;
+      
+      if (!managerMap.has(managerName)) {
+        managerMap.set(managerName, { callCount: 0, totalDuration: 0 });
+      }
+      
+      const stats = managerMap.get(managerName)!;
+      stats.callCount++;
+      stats.totalDuration += duration;
+    }
+    
+    // Convert to array and sort by call count
+    const result: ManagerCallStats[] = Array.from(managerMap.entries())
+      .map(([managerName, stats]) => ({
+        managerName,
+        callCount: stats.callCount,
+        totalDuration: stats.totalDuration,
+      }))
+      .sort((a, b) => b.callCount - a.callCount);
+    
+    console.log(`${tag} Aggregated calls for ${result.length} managers`);
+    return result;
+  } catch (err: any) {
+    console.error(`${tag} Error fetching call stats:`, err?.message || err);
+    return [];
+  }
+}
 
 function formatMoney(num: number): string {
   return new Intl.NumberFormat("uz-UZ", {
@@ -50,10 +163,16 @@ export async function generateDashboardPdf(
   try {
     console.log(`${tag} Starting PDF generation for period: ${periodLabel}`);
     let data;
+    let managerCallStats: ManagerCallStats[] = [];
+    
     try {
       // Skip calls to avoid timeout issues with amoCRM API
       data = await buildDashboardData(period, periodLabel, { skipCalls: true });
       console.log(`${tag} Dashboard data built successfully - ${Object.keys(data).length} fields`);
+      
+      // Fetch call stats in parallel (don't block on errors)
+      managerCallStats = await fetchManagerCallStats(period);
+      console.log(`${tag} Call stats fetched for ${managerCallStats.length} managers`);
       
       // Validate data structure
       if (!data || typeof data !== "object") {
@@ -436,6 +555,123 @@ export async function generateDashboardPdf(
         vals.forEach((v, j) => {
           page.drawText(sanitizeText(v), {
             x: colXs[j] + 5,
+            y: y - 11,
+            size: 7,
+            font,
+            color: textColor,
+          });
+        });
+
+        y -= 14;
+      }
+    }
+
+    // Section: Manager Calls History
+    if (managerCallStats.length > 0) {
+      if (y < 150) {
+        // Add new page if not enough space
+        page = pdfDoc.addPage();
+        y = height - 30;
+      }
+
+      // Section title with background
+      page.drawRectangle({
+        x: 40,
+        y: y - 18,
+        width: width - 80,
+        height: 18,
+        color: secondaryColor,
+      });
+
+      page.drawText("Menejerlar qo'ng'iroqlari", {
+        x: 50,
+        y: y - 13,
+        size: 10,
+        font: boldFont,
+        color: rgb(1, 1, 1),
+      });
+      y -= 28;
+
+      const callHeaders = ["Menejer", "Qo'ng'iroqlar", "Umumiy vaqt"];
+      const callColXs = [40, 200, 350];
+
+      // Header row
+      page.drawRectangle({
+        x: 40,
+        y: y - 16,
+        width: width - 80,
+        height: 16,
+        color: lightGray,
+        borderColor: borderColor,
+        borderWidth: 1,
+      });
+
+      callHeaders.forEach((h, i) => {
+        page.drawText(sanitizeText(h), {
+          x: callColXs[i] + 5,
+          y: y - 12,
+          size: 8,
+          font: boldFont,
+          color: textColor,
+        });
+      });
+
+      y -= 18;
+
+      // Data rows
+      for (let i = 0; i < managerCallStats.length; i++) {
+        const mc = managerCallStats[i];
+
+        if (y < 40) {
+          // Add new page
+          page = pdfDoc.addPage();
+          y = height - 30;
+
+          // Draw header row on new page
+          page.drawRectangle({
+            x: 40,
+            y: y - 16,
+            width: width - 80,
+            height: 16,
+            color: lightGray,
+            borderColor: borderColor,
+            borderWidth: 1,
+          });
+
+          callHeaders.forEach((h, j) => {
+            page.drawText(sanitizeText(h), {
+              x: callColXs[j] + 5,
+              y: y - 12,
+              size: 8,
+              font: boldFont,
+              color: textColor,
+            });
+          });
+
+          y -= 18;
+        }
+
+        // Alternate row colors
+        const rowColor = i % 2 === 0 ? rgb(1, 1, 1) : lightGray;
+        page.drawRectangle({
+          x: 40,
+          y: y - 14,
+          width: width - 80,
+          height: 14,
+          color: rowColor,
+          borderColor: borderColor,
+          borderWidth: 1,
+        });
+
+        const callVals = [
+          mc.managerName,
+          String(mc.callCount),
+          formatDuration(mc.totalDuration),
+        ];
+
+        callVals.forEach((v, j) => {
+          page.drawText(sanitizeText(v), {
+            x: callColXs[j] + 5,
             y: y - 11,
             size: 7,
             font,
