@@ -27,6 +27,30 @@ export const EXTENSION_MAP: Record<string, string> = {
   "111": "Orzugul",
 };
 
+// OnlinePBX-specific extension redirects
+// Redirects calls from one extension to another BEFORE name lookup
+// Example: Calls to 100 (Admin) should be counted as 108 (Mohinur)
+export const ONLINEPBX_EXTENSION_REDIRECT: Record<string, string> = {
+  "100": "108", // Admin calls → Mohinur
+};
+
+/**
+ * Apply OnlinePBX-specific extension redirect
+ * Redirects calls from one extension to another (e.g., 100 → 108)
+ * Only applies to OnlinePBX calls
+ */
+export function applyOnlinePbxExtensionRedirect(extension: string): string {
+  if (!extension) return extension;
+  
+  const redirectTo = ONLINEPBX_EXTENSION_REDIRECT[extension];
+  if (redirectTo) {
+    console.log(`[ExtensionMapping] Redirecting OnlinePBX extension ${extension} → ${redirectTo}`);
+    return redirectTo;
+  }
+  
+  return extension;
+}
+
 /**
  * Get manager name from extension number
  * Returns manager name if found, otherwise returns extension number
@@ -41,6 +65,15 @@ export function getManagerNameFromExtension(extension: string): string {
   
   // If not found, return extension as-is
   return extension;
+}
+
+/**
+ * Get manager name from OnlinePBX extension with redirect applied
+ * First applies any redirects, then looks up the manager name
+ */
+export function getManagerNameFromOnlinePbxExtension(extension: string): string {
+  const redirectedExtension = applyOnlinePbxExtensionRedirect(extension);
+  return getManagerNameFromExtension(redirectedExtension);
 }
 
 /**

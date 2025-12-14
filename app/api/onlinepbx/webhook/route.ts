@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
-import { getManagerNameFromExtension } from "@/lib/extensionMapping";
+import { getManagerNameFromOnlinePbxExtension } from "@/lib/extensionMapping";
 
 const prisma = new PrismaClient();
 
@@ -138,8 +138,8 @@ export async function POST(request: Request) {
         duration: parseInt(data.call_duration || data.duration || 0),
         // OnlinePBX sends 'callee' for phone number
         phone: data.callee || data.from || data.phone || data.to || "Unknown",
-        // Map extension number to manager name
-        user: getManagerNameFromExtension(extensionOrManager),
+        // Map extension number to manager name (with OnlinePBX-specific redirects)
+        user: getManagerNameFromOnlinePbxExtension(extensionOrManager),
         source: "webhook",
         timestamp: Date.now(),
       };
