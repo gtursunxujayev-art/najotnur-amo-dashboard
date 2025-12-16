@@ -11,6 +11,7 @@ interface LeadData {
   manager: string;
   pipeline: string;
   pipelineId: number;
+  createdAt?: number;
 }
 
 function getCurrentTimeInGMT5(): Date {
@@ -72,6 +73,20 @@ export async function sendTelegramNotification(
 
   const leadUrl = `https://najotnur01.amocrm.ru/leads/detail/${lead.leadId}`;
 
+  let createdTimeStr = "";
+  if (lead.createdAt) {
+    const createdDate = new Date(lead.createdAt * 1000);
+    const gmt5Date = new Date(createdDate.getTime() + TIMEZONE_OFFSET * 3600000);
+    createdTimeStr = gmt5Date.toLocaleString("uz-UZ", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+  }
+
   let message = `🆕 <b>Yangi lid!</b>\n\n`;
   message += `👤 <b>Ismi:</b> ${lead.leadName}\n`;
   if (lead.phone) {
@@ -81,15 +96,23 @@ export async function sendTelegramNotification(
     message += `📍 <b>Qayerdan:</b> ${lead.source}\n`;
   }
   message += `👨‍💼 <b>Menejer:</b> ${lead.manager}\n`;
-  message += `📊 <b>Voronka:</b> ${lead.pipeline}\n\n`;
-  message += `🔗 <a href="${leadUrl}">CRM da ochish</a>`;
+  message += `📊 <b>Voronka:</b> ${lead.pipeline}\n`;
+  if (createdTimeStr) {
+    message += `🕐 <b>Yaratilgan:</b> ${createdTimeStr}\n`;
+  }
 
   const replyMarkup = {
     inline_keyboard: [
       [
         {
+          text: "📋 CRM da ochish",
+          url: leadUrl,
+        },
+      ],
+      [
+        {
           text: "✅ Ko'rdim",
-          callback_data: `lead_open_${notificationId}`,
+          callback_data: `lead_resp_${notificationId}`,
         },
       ],
     ],

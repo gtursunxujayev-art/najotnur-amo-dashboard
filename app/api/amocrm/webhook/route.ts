@@ -19,6 +19,9 @@ const MANAGERS: Record<number, string> = {
   10148106: "sabina",
   10403170: "Gulchehra",
   11136174: "Orzugul",
+  12681170: "Asal",
+  12681150: "Shaxnoza",
+  10363642: "Nodira",
 };
 
 function getPipelineName(pipelineId: number): string {
@@ -216,6 +219,8 @@ export async function POST(request: Request) {
         continue;
       }
 
+      const createdAt = parseInt(lead.date_create || lead.created_at || "0");
+      
       const leadData = {
         leadId,
         leadName,
@@ -224,6 +229,7 @@ export async function POST(request: Request) {
         manager: getManagerName(responsibleUserId),
         pipeline: getPipelineName(pipelineId),
         pipelineId,
+        createdAt: createdAt || undefined,
       };
 
       console.log("[amoCRM/Webhook] Processing lead:", leadData);

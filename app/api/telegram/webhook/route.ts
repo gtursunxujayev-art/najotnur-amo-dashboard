@@ -530,8 +530,9 @@ export async function POST(req: Request) {
       } else if (callbackData.startsWith("course_")) {
         const courseType = callbackData.substring(7);
         await handleCourseInfoCommand(chatId, courseType, messageId);
-      } else if (callbackData.startsWith("lead_open_")) {
-        const notificationId = callbackData.substring(10);
+      } else if (callbackData.startsWith("lead_open_") || callbackData.startsWith("lead_resp_")) {
+        const prefix = callbackData.startsWith("lead_open_") ? "lead_open_" : "lead_resp_";
+        const notificationId = callbackData.substring(prefix.length);
         const chatIdBigInt = BigInt(String(chatId));
         const user = await prisma.telegramUser.findUnique({
           where: { chatId: chatIdBigInt },
