@@ -247,20 +247,21 @@ export async function generateDashboardPdf(
     });
     y -= 20;
 
-    // KPI Cards Section
+    // KPI Cards Section - 3 columns for better fit
     const cardHeight = 45;
-    const cardWidth = (width - 120) / 2;
-    const cardGap = 20;
+    const cardsPerRow = 3;
+    const cardGap = 15;
+    const cardWidth = (width - 80 - (cardGap * (cardsPerRow - 1))) / cardsPerRow;
 
     const kpiData = [
-      { label: "Tushum", value: formatMoney(data.oylikTushum) },
+      { label: "Umumiy tushum", value: formatMoney(data.oylikTushum) },
+      { label: "Kelishuv summasi", value: formatMoney(data.kelishuvSummasi) },
       { label: "Online tushum", value: formatMoney(data.onlineRevenue) },
       { label: "Offline tushum", value: formatMoney(data.offlineRevenue) },
       { label: "Intensiv tushum", value: formatMoney(data.intensivRevenue || 0) },
-      { label: "Kelishuv summasi", value: formatMoney(data.kelishuvSummasi) },
     ];
 
-    // Draw KPI cards in 2x2 grid
+    // Draw KPI cards in 3-column grid
     let cardX = 40;
     let cardY = y;
     let cardCount = 0;
@@ -279,18 +280,18 @@ export async function generateDashboardPdf(
 
       // Label
       page.drawText(sanitizeText(kpi.label), {
-        x: cardX + 10,
+        x: cardX + 8,
         y: cardY - 15,
-        size: 8,
+        size: 7,
         font,
         color: rgb(100 / 255, 116 / 255, 139 / 255),
       });
 
       // Value
       page.drawText(sanitizeText(kpi.value), {
-        x: cardX + 10,
+        x: cardX + 8,
         y: cardY - 30,
-        size: 12,
+        size: 11,
         font: boldFont,
         color: accentColor,
       });
@@ -298,14 +299,19 @@ export async function generateDashboardPdf(
       cardX += cardWidth + cardGap;
       cardCount++;
 
-      if (cardCount === 2) {
+      if (cardCount === cardsPerRow) {
         cardX = 40;
-        cardY -= cardHeight + 15;
+        cardY -= cardHeight + 12;
         cardCount = 0;
       }
     }
 
-    y = cardY - 20;
+    // Handle last incomplete row
+    if (cardCount > 0) {
+      cardY -= cardHeight + 12;
+    }
+
+    y = cardY;
 
     // All metrics (leads and sales)
     const totalSalesCount = (data.onlineSalesCount || 0) + (data.offlineSalesCount || 0) + (data.intensivSalesCount || 0);
