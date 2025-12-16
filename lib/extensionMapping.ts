@@ -34,6 +34,12 @@ export const ONLINEPBX_EXTENSION_REDIRECT: Record<string, string> = {
   "100": "108", // Admin calls → Mohinur
 };
 
+// Manager name redirects (when OnlinePBX sends name instead of extension)
+// Maps manager names to their redirected names
+export const ONLINEPBX_NAME_REDIRECT: Record<string, string> = {
+  "Admin": "Mohinur", // Admin calls → Mohinur
+};
+
 /**
  * Apply OnlinePBX-specific extension redirect
  * Redirects calls from one extension to another (e.g., 100 → 108)
@@ -69,10 +75,20 @@ export function getManagerNameFromExtension(extension: string): string {
 
 /**
  * Get manager name from OnlinePBX extension with redirect applied
- * First applies any redirects, then looks up the manager name
+ * First applies any redirects (extension or name), then looks up the manager name
  */
-export function getManagerNameFromOnlinePbxExtension(extension: string): string {
-  const redirectedExtension = applyOnlinePbxExtensionRedirect(extension);
+export function getManagerNameFromOnlinePbxExtension(extensionOrName: string): string {
+  if (!extensionOrName) return "Unknown";
+  
+  // First check if this is a name that should be redirected (e.g., "Admin" → "Mohinur")
+  if (ONLINEPBX_NAME_REDIRECT[extensionOrName]) {
+    const redirectedName = ONLINEPBX_NAME_REDIRECT[extensionOrName];
+    console.log(`[ExtensionMapping] Redirecting OnlinePBX name "${extensionOrName}" → "${redirectedName}"`);
+    return redirectedName;
+  }
+  
+  // Apply extension-based redirect (e.g., "100" → "108")
+  const redirectedExtension = applyOnlinePbxExtensionRedirect(extensionOrName);
   return getManagerNameFromExtension(redirectedExtension);
 }
 
