@@ -174,6 +174,7 @@ export async function notifyUsersAboutLead(lead: LeadData): Promise<void> {
   // NOTE: We check by eventType="new" so reassigned notifications don't block new lead notifications
   const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
   
+  const txStart = Date.now();
   let notification;
   try {
     notification = await prisma.$transaction(async (tx) => {
@@ -216,8 +217,9 @@ export async function notifyUsersAboutLead(lead: LeadData): Promise<void> {
       console.log(`[LeadNotifications] Created notification record ${newNotification.id} for new lead ${lead.leadId}`);
       return newNotification;
     }, {
-      isolationLevel: 'Serializable', // Prevent race conditions
+      isolationLevel: 'Serializable', // Serializable prevents race conditions; short transaction so minimal performance impact
     });
+    console.log(`[LeadNotifications] Transaction completed in ${Date.now() - txStart}ms`);
   } catch (error: any) {
     // Handle serialization failure (concurrent transaction conflict)
     if (error.code === 'P2034' || error.message?.includes('serialization')) {
@@ -231,6 +233,7 @@ export async function notifyUsersAboutLead(lead: LeadData): Promise<void> {
     return; // Already notified, skip sending
   }
 
+  const usersStart = Date.now();
   const users = await prisma.telegramUser.findMany({
     where: {
       leadNotifications: true,
@@ -238,11 +241,16 @@ export async function notifyUsersAboutLead(lead: LeadData): Promise<void> {
   });
 
   console.log(
-    `[LeadNotifications] Found ${users.length} users with lead notifications enabled`
+    `[LeadNotifications] Found ${users.length} users with lead notifications enabled (query: ${Date.now() - usersStart}ms)`
   );
 
+  const managerLower = lead.manager.toLowerCase();
+  const sendStart = Date.now();
+  
+  // Process users in parallel for faster notifications (using Promise.allSettled for fault tolerance)
+  const sendPromises: Promise<{ userId: number; type: 'send' | 'queue'; success: boolean }>[] = [];
+  
   for (const user of users) {
-    const managerLower = lead.manager.toLowerCase();
     const userManagersLower = (user.notifyManagers || []).map(m => m.toLowerCase());
     
     if (
@@ -264,27 +272,51 @@ export async function notifyUsersAboutLead(lead: LeadData): Promise<void> {
       console.log(
         `[LeadNotifications] Queueing for user ${user.id} - outside working hours`
       );
-      await prisma.notificationQueue.create({
-        data: {
-          userId: user.id,
-          notificationId: notification.id, // Link to existing notification for dedupe
-          leadId: lead.leadId,
-          leadName: lead.leadName,
-          phone: lead.phone,
-          source: lead.source,
-          manager: lead.manager,
-          pipeline: lead.pipeline,
-          pipelineId: lead.pipelineId,
-          eventType: 'new',
-          scheduledFor: getNextMorningAt905(),
-          sent: false,
-        },
-      });
+      sendPromises.push(
+        prisma.notificationQueue.create({
+          data: {
+            userId: user.id,
+            notificationId: notification.id,
+            leadId: lead.leadId,
+            leadName: lead.leadName,
+            phone: lead.phone,
+            source: lead.source,
+            manager: lead.manager,
+            pipeline: lead.pipeline,
+            pipelineId: lead.pipelineId,
+            eventType: 'new',
+            scheduledFor: getNextMorningAt905(),
+            sent: false,
+          },
+        })
+        .then(() => ({ userId: user.id, type: 'queue' as const, success: true }))
+        .catch((err) => {
+          console.error(`[LeadNotifications] Failed to queue for user ${user.id}:`, err);
+          return { userId: user.id, type: 'queue' as const, success: false };
+        })
+      );
       continue;
     }
 
-    await sendTelegramNotification(user.chatId, lead, notification.id);
+    // Send notifications in parallel with error handling
+    sendPromises.push(
+      sendTelegramNotification(user.chatId, lead, notification.id)
+        .then((success) => ({ userId: user.id, type: 'send' as const, success }))
+        .catch((err) => {
+          console.error(`[LeadNotifications] Failed to send to user ${user.id}:`, err);
+          return { userId: user.id, type: 'send' as const, success: false };
+        })
+    );
   }
+
+  // Wait for all notifications to be sent/queued in parallel (fault-tolerant)
+  const results = await Promise.all(sendPromises);
+  const sends = results.filter(r => r.type === 'send');
+  const queues = results.filter(r => r.type === 'queue');
+  const successSends = sends.filter(r => r.success).length;
+  const successQueues = queues.filter(r => r.success).length;
+  
+  console.log(`[LeadNotifications] Completed ${successSends}/${sends.length} sends + ${successQueues}/${queues.length} queues in ${Date.now() - sendStart}ms (total: ${Date.now() - txStart}ms)`);
 }
 
 export async function sendReassignedTelegramNotification(
@@ -369,10 +401,10 @@ export async function notifyUsersAboutReassignedLead(lead: ReassignedLeadData): 
   );
 
   // Check if this REASSIGNED lead was already notified in the last 30 minutes (prevents duplicates from dev/prod webhooks)
-  // Use a serializable transaction to prevent race conditions between concurrent webhook requests
   // NOTE: We include the newManager in the check - allows notifications if reassigned to DIFFERENT managers
   const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
   
+  const txStart = Date.now();
   let notification;
   try {
     notification = await prisma.$transaction(async (tx) => {
@@ -416,8 +448,9 @@ export async function notifyUsersAboutReassignedLead(lead: ReassignedLeadData): 
       console.log(`[LeadNotifications] Created notification record ${newNotification.id} for reassigned lead ${lead.leadId}`);
       return newNotification;
     }, {
-      isolationLevel: 'Serializable', // Prevent race conditions
+      isolationLevel: 'Serializable', // Serializable prevents race conditions; short transaction so minimal performance impact
     });
+    console.log(`[LeadNotifications] Reassigned transaction completed in ${Date.now() - txStart}ms`);
   } catch (error: any) {
     // Handle serialization failure (concurrent transaction conflict)
     if (error.code === 'P2034' || error.message?.includes('serialization')) {
@@ -431,6 +464,7 @@ export async function notifyUsersAboutReassignedLead(lead: ReassignedLeadData): 
     return; // Already notified, skip sending
   }
 
+  const usersStart = Date.now();
   const users = await prisma.telegramUser.findMany({
     where: {
       leadNotifications: true,
@@ -438,11 +472,16 @@ export async function notifyUsersAboutReassignedLead(lead: ReassignedLeadData): 
   });
 
   console.log(
-    `[LeadNotifications] Found ${users.length} users with lead notifications enabled`
+    `[LeadNotifications] Found ${users.length} users with lead notifications enabled (query: ${Date.now() - usersStart}ms)`
   );
 
+  const newManagerLower = lead.newManager.toLowerCase();
+  const sendStart = Date.now();
+  
+  // Process users in parallel for faster notifications (using error handling for fault tolerance)
+  const sendPromises: Promise<{ userId: number; type: 'send' | 'queue'; success: boolean }>[] = [];
+  
   for (const user of users) {
-    const newManagerLower = lead.newManager.toLowerCase();
     const userManagersLower = (user.notifyManagers || []).map(m => m.toLowerCase());
     
     if (
@@ -464,28 +503,52 @@ export async function notifyUsersAboutReassignedLead(lead: ReassignedLeadData): 
       console.log(
         `[LeadNotifications] Queueing reassigned lead for user ${user.id} - outside working hours`
       );
-      await prisma.notificationQueue.create({
-        data: {
-          userId: user.id,
-          notificationId: notification.id, // Link to existing notification for dedupe
-          leadId: lead.leadId,
-          leadName: lead.leadName,
-          phone: lead.phone,
-          source: lead.source,
-          manager: lead.newManager,
-          oldManager: lead.oldManager,
-          pipeline: lead.pipeline,
-          pipelineId: lead.pipelineId,
-          eventType: "reassigned",
-          scheduledFor: getNextMorningAt905(),
-          sent: false,
-        },
-      });
+      sendPromises.push(
+        prisma.notificationQueue.create({
+          data: {
+            userId: user.id,
+            notificationId: notification.id,
+            leadId: lead.leadId,
+            leadName: lead.leadName,
+            phone: lead.phone,
+            source: lead.source,
+            manager: lead.newManager,
+            oldManager: lead.oldManager,
+            pipeline: lead.pipeline,
+            pipelineId: lead.pipelineId,
+            eventType: "reassigned",
+            scheduledFor: getNextMorningAt905(),
+            sent: false,
+          },
+        })
+        .then(() => ({ userId: user.id, type: 'queue' as const, success: true }))
+        .catch((err) => {
+          console.error(`[LeadNotifications] Failed to queue reassigned for user ${user.id}:`, err);
+          return { userId: user.id, type: 'queue' as const, success: false };
+        })
+      );
       continue;
     }
 
-    await sendReassignedTelegramNotification(user.chatId, lead, notification.id);
+    // Send notifications in parallel with error handling
+    sendPromises.push(
+      sendReassignedTelegramNotification(user.chatId, lead, notification.id)
+        .then((success) => ({ userId: user.id, type: 'send' as const, success }))
+        .catch((err) => {
+          console.error(`[LeadNotifications] Failed to send reassigned to user ${user.id}:`, err);
+          return { userId: user.id, type: 'send' as const, success: false };
+        })
+    );
   }
+
+  // Wait for all notifications to be sent/queued in parallel (fault-tolerant)
+  const results = await Promise.all(sendPromises);
+  const sends = results.filter(r => r.type === 'send');
+  const queues = results.filter(r => r.type === 'queue');
+  const successSends = sends.filter(r => r.success).length;
+  const successQueues = queues.filter(r => r.success).length;
+  
+  console.log(`[LeadNotifications] Reassigned: completed ${successSends}/${sends.length} sends + ${successQueues}/${queues.length} queues in ${Date.now() - sendStart}ms (total: ${Date.now() - txStart}ms)`);
 }
 
 export async function sendQueuedNotifications(): Promise<number> {
