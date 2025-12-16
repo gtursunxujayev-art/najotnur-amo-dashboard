@@ -170,8 +170,13 @@ export async function buildDashboardData(
 
   const hasPipelineFilter = dashboardConfig.PIPELINE_IDS.length > 0;
 
+  const allWonStatusIds = [
+    ...dashboardConfig.WON_STATUS_IDS,
+    ...dashboardConfig.INTENSIV_WON_STATUS_IDS
+  ];
+
   const isWon = (lead: AmoLead) =>
-    dashboardConfig.WON_STATUS_IDS.includes(lead.status_id || -1);
+    allWonStatusIds.includes(lead.status_id || -1);
 
   const isOnlineDeal = (lead: AmoLead) =>
     dashboardConfig.ONLINE_COURSE_ENUM_IDS.length > 0 &&
@@ -210,6 +215,10 @@ export async function buildDashboardData(
     const statusId = lead.status_id || -1;
     const lossReasonId = lead.loss_reason_id ?? null;
 
+    // Won leads are always qualified (includes all Sotuv and Intensiv won statuses)
+    if (allWonStatusIds.includes(statusId)) {
+      return true;
+    }
     if (dashboardConfig.QUALIFIED_STATUS_IDS.includes(statusId)) {
       return true;
     }
@@ -376,26 +385,15 @@ export async function buildDashboardData(
   // Track skipped leads for logging
   let skippedDoubleCountLeads = 0;
 
-  // Combine all won status IDs for double-counting check
-  const allWonStatusIds = [
-    ...dashboardConfig.WON_STATUS_IDS,
-    ...dashboardConfig.INTENSIV_WON_STATUS_IDS
-  ];
-
   wonLeadsFiltered.forEach((lead) => {
     const pipelineId = lead.pipeline_id || -1;
     const isIntensivLead = pipelineId === dashboardConfig.INTENSIV_PIPELINE_ID;
     
     // Check if this lead moved from another won status (double-counting detection)
+    // Check all won statuses (both Sotuv and Intensiv) to prevent any double-counting
     const previousStatus = previousStatusMap.get(lead.id);
     if (previousStatus !== null && previousStatus !== undefined) {
-      // For Intensiv leads, check against Intensiv won statuses
-      // For Sotuv leads, check against standard won statuses
-      const wonStatusesToCheck = isIntensivLead 
-        ? dashboardConfig.INTENSIV_WON_STATUS_IDS 
-        : dashboardConfig.WON_STATUS_IDS;
-      
-      if (wonStatusesToCheck.includes(previousStatus)) {
+      if (allWonStatusIds.includes(previousStatus)) {
         console.log(`[Dashboard] Skipping lead ${lead.id} (${lead.name}) - moved from won status ${previousStatus} to ${lead.status_id}`);
         skippedDoubleCountLeads++;
         return; // Skip - this was already counted as a sale

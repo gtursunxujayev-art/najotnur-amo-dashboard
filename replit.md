@@ -142,3 +142,18 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 - **Feature**: Calls to extension 100 (Admin) are automatically attributed to extension 108 (Mohinur)
 - **Implementation**: `ONLINEPBX_EXTENSION_REDIRECT` mapping in `lib/extensionMapping.ts`
 - **Scope**: Only affects OnlinePBX calls (UTel and other sources unaffected)
+
+### Intensiv Pipeline Integration (December 16, 2025)
+- **Feature**: Added Intensiv pipeline (9663682) to dashboard and Sotuvchilar statistics
+- **Configuration** (`config/dashboardConfig.ts`):
+  - `INTENSIV_PIPELINE_ID`: 9663682
+  - `INTENSIV_WON_STATUS_IDS`: All city-specific payment statuses (Samarqand, Farg'ona, Urganch, Andijon, Nukus, Shimkent, Termiz, Qashqadaryo, Buxoro, Toshkent) + status 142
+  - `INTENSIV_NOT_QUALIFIED_REASON_IDS`: Qimmat (881379), Bolalar produkti (923603), Konkurentlardan sotib oldi (927869), Faqat ma'lumot so'radi (927871)
+  - `INTENSIV_COURSE_ENUM_ID`: 923929 (for field 1119699)
+- **Dashboard Updates**:
+  - New "Sotuv – Intensiv" card showing Intensiv sales count and revenue
+  - Revenue tracked from Google Sheets column C when value = "Intensiv"
+  - Double-counting prevention for moves between Intensiv won statuses
+- **Sotuvchilar Updates**:
+  - Active leads include all pipelines with combined won status filtering
+  - Sales from Intensiv pipeline counted in conversion calculations
