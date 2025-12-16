@@ -157,3 +157,7 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
 - **Sotuvchilar Updates**:
   - Active leads include all pipelines with combined won status filtering
   - Sales from Intensiv pipeline counted in conversion calculations
+- **PDF Reports Updates**:
+  - Added "Intensiv tushum" KPI card showing Intensiv revenue
+  - Added "Intensiv sotuvlar" metric showing Intensiv sales count
+  - Total sales count now includes Intensiv (Online + Offline + Intensiv)
