@@ -115,7 +115,7 @@ export async function GET(request: NextRequest) {
         { skipCalls: true }
       ),
       
-      // Get current active leads from amoCRM - return immediately if cache not ready
+      // Get current active leads from cache (fast path - returns immediately)
       (async () => {
         try {
           const { getActiveLeadsFromCache, isActiveLeadsCacheReady, getUsers } = await import('@/lib/amocrm');
@@ -127,19 +127,19 @@ export async function GET(request: NextRequest) {
             return new Map<string, number>();
           }
           
-          console.log(`[Sotuvchilar/Stats] Active leads cache ready - fetching from cache`);
-          
-          // Get cached data immediately
-          const users = await getUsers();
-          const usersMap = new Map<number, string>();
-          users.forEach((u) => usersMap.set(u.id, u.name));
-          
           const cachedData = getActiveLeadsFromCache();
           
           if (!cachedData) {
-            console.log(`[Sotuvchilar/Stats] No cached active leads data available`);
+            console.log(`[Sotuvchilar/Stats] No active leads data available`);
             return new Map<string, number>();
           }
+          
+          console.log(`[Sotuvchilar/Stats] Active leads cache ready - fetching from cache`);
+          
+          // Get users for ID to name conversion
+          const users = await getUsers();
+          const usersMap = new Map<number, string>();
+          users.forEach((u) => usersMap.set(u.id, u.name));
           
           // Convert manager IDs to names
           const activeLeadsByManager = new Map<string, number>();
@@ -148,7 +148,7 @@ export async function GET(request: NextRequest) {
             activeLeadsByManager.set(name, count);
           });
           
-          console.log(`[Sotuvchilar/Stats] Got ${activeLeadsByManager.size} managers from cache`);
+          console.log(`[Sotuvchilar/Stats] Got ${activeLeadsByManager.size} managers with active leads`);
           return activeLeadsByManager;
         } catch (err) {
           console.error('[Sotuvchilar/Stats] Error fetching active leads:', err);

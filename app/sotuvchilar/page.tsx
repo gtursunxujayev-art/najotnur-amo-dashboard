@@ -68,8 +68,13 @@ export default function SotuvchilarPage() {
       if (!res.ok) throw new Error('Failed to fetch stats');
       const data = await res.json();
       setStats(data);
-      if (data.managers.length > 0 && !selectedManager) {
-        setSelectedManager(data.managers[0].name);
+      
+      // Set or reset selected manager when data changes
+      if (data.managers.length > 0) {
+        const currentExists = data.managers.some((m: ManagerStats) => m.name === selectedManager);
+        if (!selectedManager || !currentExists) {
+          setSelectedManager(data.managers[0].name);
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
