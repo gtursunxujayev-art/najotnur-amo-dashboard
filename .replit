@@ -45,3 +45,6 @@ build = ["npm", "run", "build"]
 AMO_BASE_URL = "https://najotnur01.amocrm.ru"
 SHEETS_SPREADSHEET_ID = "1WmYVOW6surq2eG03WBE8mJGn2CnTaB-cgeQTrsqJnZo"
 ONLINEPBX_DOMAIN = "pbx13532.onpbx.ru"
+
+[userenv.production]
+PRODUCTION_BASE_URL = "https://najotnur-amo-dashboard-gtursunxujayev.replit.app/"
