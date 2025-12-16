@@ -51,10 +51,13 @@ export type DashboardData = {
   kelishuvSummasi: number;
   onlineSummasi: number;
   offlineSummasi: number;
+  intensivSummasi: number;        // Intensiv pipeline deals amount
   onlineSalesCount: number;       // Count of online won deals (from amoCRM)
   offlineSalesCount: number;      // Count of offline won deals (from amoCRM)
+  intensivSalesCount: number;     // Count of Intensiv pipeline won deals
   onlineRevenue: number;          // Revenue from Google Sheets (courseType = "Online")
   offlineRevenue: number;         // Revenue from Google Sheets (courseType = "Offline")
+  intensivRevenue: number;        // Revenue from Google Sheets (courseType = "Intensiv")
   oylikTushum: number;            // Total from Google Sheets
   haftalikTushum: number;         // Total from Google Sheets
   leadsCount: number;
@@ -156,8 +159,10 @@ export async function buildDashboardData(
   let kelishuvSummasi = 0;
   let onlineSummasi = 0;
   let offlineSummasi = 0;
+  let intensivSummasi = 0;
   let onlineSalesCount = 0;
   let offlineSalesCount = 0;
+  let intensivSalesCount = 0;
   let leadsCount = 0;
   let qualifiedLeadsCount = 0;
   let nonQualifiedLeadsCount = 0;
@@ -189,6 +194,13 @@ export async function buildDashboardData(
       const num = Number(val);
       return dashboardConfig.OFFLINE_COURSE_ENUM_IDS.includes(num);
     })();
+
+  const isIntensivPipelineLead = (lead: AmoLead) =>
+    lead.pipeline_id === dashboardConfig.INTENSIV_PIPELINE_ID;
+
+  const isIntensivWon = (lead: AmoLead) =>
+    isIntensivPipelineLead(lead) &&
+    dashboardConfig.INTENSIV_WON_STATUS_IDS.includes(lead.status_id || -1);
 
   const isLost = (lead: AmoLead) => 
     lead.loss_reason_id != null || 
@@ -333,10 +345,17 @@ export async function buildDashboardData(
   });
 
   // Process won deals from wonLeads (filtered by closed_at date, not created_at)
-  // First, filter to only won leads and get their previous statuses to detect double-counting
+  // Include both Sotuv pipeline and Intensiv pipeline won leads
   const wonLeadsFiltered = wonLeads.filter((lead) => {
-    if (!isWon(lead)) return false;
     const pipelineId = lead.pipeline_id || -1;
+    
+    // For Intensiv pipeline, check Intensiv won statuses
+    if (pipelineId === dashboardConfig.INTENSIV_PIPELINE_ID) {
+      return isIntensivWon(lead);
+    }
+    
+    // For Sotuv pipeline, check standard won statuses
+    if (!isWon(lead)) return false;
     if (hasPipelineFilter && !dashboardConfig.PIPELINE_IDS.includes(pipelineId)) return false;
     return true;
   });
@@ -357,12 +376,26 @@ export async function buildDashboardData(
   // Track skipped leads for logging
   let skippedDoubleCountLeads = 0;
 
+  // Combine all won status IDs for double-counting check
+  const allWonStatusIds = [
+    ...dashboardConfig.WON_STATUS_IDS,
+    ...dashboardConfig.INTENSIV_WON_STATUS_IDS
+  ];
+
   wonLeadsFiltered.forEach((lead) => {
+    const pipelineId = lead.pipeline_id || -1;
+    const isIntensivLead = pipelineId === dashboardConfig.INTENSIV_PIPELINE_ID;
+    
     // Check if this lead moved from another won status (double-counting detection)
     const previousStatus = previousStatusMap.get(lead.id);
     if (previousStatus !== null && previousStatus !== undefined) {
-      // If previous status was also a won status, skip this lead (already counted before)
-      if (dashboardConfig.WON_STATUS_IDS.includes(previousStatus)) {
+      // For Intensiv leads, check against Intensiv won statuses
+      // For Sotuv leads, check against standard won statuses
+      const wonStatusesToCheck = isIntensivLead 
+        ? dashboardConfig.INTENSIV_WON_STATUS_IDS 
+        : dashboardConfig.WON_STATUS_IDS;
+      
+      if (wonStatusesToCheck.includes(previousStatus)) {
         console.log(`[Dashboard] Skipping lead ${lead.id} (${lead.name}) - moved from won status ${previousStatus} to ${lead.status_id}`);
         skippedDoubleCountLeads++;
         return; // Skip - this was already counted as a sale
@@ -407,15 +440,22 @@ export async function buildDashboardData(
       wonFromQualifiedCount++;
     }
 
-    if (isOnlineDeal(lead)) {
-      onlineSummasi += dealAmount;
-      onlineSalesCount++;
-      ms.onlineSalesCount++;
-    }
-    if (isOfflineDeal(lead)) {
-      offlineSummasi += dealAmount;
-      offlineSalesCount++;
-      ms.offlineSalesCount++;
+    // Track Intensiv sales separately
+    if (isIntensivLead) {
+      intensivSummasi += dealAmount;
+      intensivSalesCount++;
+    } else {
+      // Track Online/Offline for Sotuv pipeline
+      if (isOnlineDeal(lead)) {
+        onlineSummasi += dealAmount;
+        onlineSalesCount++;
+        ms.onlineSalesCount++;
+      }
+      if (isOfflineDeal(lead)) {
+        offlineSummasi += dealAmount;
+        offlineSalesCount++;
+        ms.offlineSalesCount++;
+      }
     }
   });
 
@@ -466,6 +506,10 @@ export async function buildDashboardData(
     })
     .reduce((sum, r) => sum + r.amount, 0);
   
+  const intensivRevenue = revenueRows
+    .filter(r => r.courseType.toLowerCase() === 'intensiv')
+    .reduce((sum, r) => sum + r.amount, 0);
+  
   const courseTypeMap = new Map<string, { count: number; sum: number }>();
   revenueRows.forEach(r => {
     const ct = r.courseType.toLowerCase() || '(empty)';
@@ -489,10 +533,13 @@ export async function buildDashboardData(
     kelishuvSummasi,
     onlineSummasi,
     offlineSummasi,
+    intensivSummasi,
     onlineSalesCount,
     offlineSalesCount,
+    intensivSalesCount,
     onlineRevenue,
     offlineRevenue,
+    intensivRevenue,
     haftalikTushum,
     oylikTushum,
   });
@@ -564,10 +611,13 @@ export async function buildDashboardData(
     kelishuvSummasi,
     onlineSummasi,
     offlineSummasi,
+    intensivSummasi,
     onlineSalesCount,
     offlineSalesCount,
+    intensivSalesCount,
     onlineRevenue,
     offlineRevenue,
+    intensivRevenue,
     oylikTushum,
     haftalikTushum,
     leadsCount,

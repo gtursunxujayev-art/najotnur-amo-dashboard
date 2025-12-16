@@ -35,6 +35,13 @@ export type DashboardConfig = {
 
   ONLINE_COURSE_ENUM_IDS: number[];
   OFFLINE_COURSE_ENUM_IDS: number[];
+  INTENSIV_COURSE_ENUM_ID: number;
+
+  // Intensiv pipeline config
+  INTENSIV_PIPELINE_ID: number;
+  INTENSIV_WON_STATUS_IDS: number[];
+  INTENSIV_NOT_QUALIFIED_REASON_IDS: number[];
+  INTENSIV_OBJECTION_FIELD_ID: number;
 
   USE_AMO_CALLS: boolean;
   USE_SHEETS_CALLS: boolean;
@@ -64,7 +71,8 @@ function applyRevenueAliases(c: DashboardConfig) {
 
 const cfg: DashboardConfig = {
   "PIPELINE_IDS": [
-    9975586  // Sotuv
+    9975586,  // Sotuv
+    9663682   // Intensiv
   ],
   // Active leads pipelines: Only count leads from these 4 pipelines for faster queries
   "ACTIVE_LEADS_PIPELINE_IDS": [
@@ -124,6 +132,28 @@ const cfg: DashboardConfig = {
     865965,
     865967
   ],
+  "INTENSIV_COURSE_ENUM_ID": 923929,
+  "INTENSIV_PIPELINE_ID": 9663682,
+  "INTENSIV_WON_STATUS_IDS": [
+    77194310,   // Samarqand to'lov qildi
+    77194314,   // Farg'ona to'lov qildi
+    77194318,   // urganch to'lov qildi
+    82212246,   // andijon to'lov qildi
+    82212250,   // Nukus to'lov qildi
+    82212254,   // Shimkent to'lov qildi
+    82212258,   // termiz to'lov qildi
+    82212262,   // Qashqadaryo to'lov qildi
+    82212266,   // Buxoro to'lov qildi
+    77194322,   // toshkent to'lov qildi
+    142         // couchingga chaqirildi
+  ],
+  "INTENSIV_NOT_QUALIFIED_REASON_IDS": [
+    881379,     // Qimmat
+    923603,     // Bolalar produkti
+    927869,     // Konkurentlardan sotib oldi
+    927871      // Faqat ma'lumot so'radi
+  ],
+  "INTENSIV_OBJECTION_FIELD_ID": 1121759,
   "USE_AMO_CALLS": true,
   "USE_SHEETS_CALLS": false,
   "REVENUE_SHEETS": {
