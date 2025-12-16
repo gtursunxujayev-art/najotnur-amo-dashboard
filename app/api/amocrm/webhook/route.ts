@@ -44,8 +44,26 @@ function getPipelineName(pipelineId: number): string {
   }
 }
 
-function getManagerName(responsibleUserId: number): string {
-  return usersCache.get(responsibleUserId) || `User ${responsibleUserId}`;
+async function getManagerName(responsibleUserId: number): Promise<string> {
+  // Check cache first
+  const cached = usersCache.get(responsibleUserId);
+  if (cached) {
+    return cached;
+  }
+  
+  // If not in cache, try refreshing the cache
+  console.log(`[amoCRM/Webhook] User ${responsibleUserId} not in cache, refreshing...`);
+  await refreshUsersCache();
+  
+  // Check again after refresh
+  const afterRefresh = usersCache.get(responsibleUserId);
+  if (afterRefresh) {
+    return afterRefresh;
+  }
+  
+  // If still not found, log and return fallback
+  console.warn(`[amoCRM/Webhook] User ${responsibleUserId} not found in amoCRM API`);
+  return `User ${responsibleUserId}`;
 }
 
 function getCustomFields(lead: any): any[] {
@@ -240,7 +258,7 @@ export async function POST(request: Request) {
         leadName,
         phone: extractPhone(lead),
         source: extractSource(lead),
-        manager: getManagerName(responsibleUserId),
+        manager: await getManagerName(responsibleUserId),
         pipeline: getPipelineName(pipelineId),
         pipelineId,
         createdAt: createdAt || undefined,
@@ -275,8 +293,8 @@ export async function POST(request: Request) {
         leadName,
         phone: extractPhone(lead),
         source: extractSource(lead),
-        newManager: getManagerName(newResponsibleUserId),
-        oldManager: oldResponsibleUserId ? getManagerName(oldResponsibleUserId) : "Noma'lum",
+        newManager: await getManagerName(newResponsibleUserId),
+        oldManager: oldResponsibleUserId ? await getManagerName(oldResponsibleUserId) : "Noma'lum",
         pipeline: getPipelineName(pipelineId),
         pipelineId,
       };

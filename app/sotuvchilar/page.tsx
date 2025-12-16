@@ -46,8 +46,13 @@ export default function SotuvchilarPage() {
 
   useEffect(() => {
     fetchStats();
-    fetchResponseStats();
   }, [period, customStartDate, customEndDate]);
+
+  useEffect(() => {
+    if (selectedManager) {
+      fetchResponseStats();
+    }
+  }, [period, customStartDate, customEndDate, selectedManager]);
 
   const fetchStats = async () => {
     setLoading(true);
@@ -76,6 +81,10 @@ export default function SotuvchilarPage() {
   const fetchResponseStats = async () => {
     try {
       const params = new URLSearchParams();
+      
+      if (selectedManager) {
+        params.set('manager', selectedManager);
+      }
       
       if (period === 'custom' && customStartDate && customEndDate) {
         params.set('from', customStartDate);
