@@ -115,63 +115,41 @@ export async function GET(request: NextRequest) {
         { skipCalls: true }
       ),
       
-      // Get current active leads from amoCRM with timeout to prevent blocking
+      // Get current active leads from amoCRM - return immediately if cache not ready
       (async () => {
         try {
-          const { getCurrentActiveLeadsPerManager, getUsers, isActiveLeadsCacheReady } = await import('@/lib/amocrm');
+          const { getActiveLeadsFromCache, isActiveLeadsCacheReady, getUsers } = await import('@/lib/amocrm');
           
-          // If cache is ready, we can use a shorter timeout
-          // If not, allow longer timeout for initial fetch (90 seconds)
           const cacheReady = isActiveLeadsCacheReady();
-          const timeoutMs = cacheReady ? 10000 : 90000; // 10s if cached, 90s if fetching
           
-          console.log(`[Sotuvchilar/Stats] Active leads cache status: ${cacheReady ? 'ready' : 'not ready'}, timeout: ${timeoutMs}ms`);
+          if (!cacheReady) {
+            console.log(`[Sotuvchilar/Stats] Active leads cache not ready - returning empty (cache warming in background)`);
+            return new Map<string, number>();
+          }
           
-          let timeoutId: NodeJS.Timeout | null = null;
-          let didTimeout = false;
+          console.log(`[Sotuvchilar/Stats] Active leads cache ready - fetching from cache`);
           
-          const timeoutPromise = new Promise<Map<string, number>>((resolve) => {
-            timeoutId = setTimeout(() => {
-              didTimeout = true;
-              console.warn(`[Sotuvchilar/Stats] Active leads fetch timed out after ${timeoutMs}ms, using empty map`);
-              resolve(new Map<string, number>());
-            }, timeoutMs);
+          // Get cached data immediately
+          const users = await getUsers();
+          const usersMap = new Map<number, string>();
+          users.forEach((u) => usersMap.set(u.id, u.name));
+          
+          const cachedData = getActiveLeadsFromCache();
+          
+          if (!cachedData) {
+            console.log(`[Sotuvchilar/Stats] No cached active leads data available`);
+            return new Map<string, number>();
+          }
+          
+          // Convert manager IDs to names
+          const activeLeadsByManager = new Map<string, number>();
+          cachedData.forEach((count, managerId) => {
+            const name = usersMap.get(managerId) || `User ${managerId}`;
+            activeLeadsByManager.set(name, count);
           });
           
-          const fetchPromise = (async () => {
-            const users = await getUsers();
-            const usersMap = new Map<number, string>();
-            users.forEach((u) => usersMap.set(u.id, u.name));
-            
-            const allWonStatusIds = [
-              ...dashboardConfig.WON_STATUS_IDS,
-              ...dashboardConfig.INTENSIV_WON_STATUS_IDS
-            ];
-            const currentActiveLeadsByManagerId = await getCurrentActiveLeadsPerManager(
-              dashboardConfig.ACTIVE_LEADS_PIPELINE_IDS || dashboardConfig.PIPELINE_IDS,
-              allWonStatusIds,
-              dashboardConfig.LOST_STATUS_IDS
-            );
-            
-            // Convert manager IDs to names
-            const activeLeadsByManager = new Map<string, number>();
-            currentActiveLeadsByManagerId.forEach((count, managerId) => {
-              const name = usersMap.get(managerId) || `User ${managerId}`;
-              activeLeadsByManager.set(name, count);
-            });
-            
-            // Clear timeout since we got data
-            if (timeoutId) clearTimeout(timeoutId);
-            
-            if (!didTimeout) {
-              console.log(`[Sotuvchilar/Stats] Active leads fetch completed with ${activeLeadsByManager.size} managers`);
-            }
-            
-            return activeLeadsByManager;
-          })();
-          
-          // Return whichever completes first
-          return Promise.race([fetchPromise, timeoutPromise]);
+          console.log(`[Sotuvchilar/Stats] Got ${activeLeadsByManager.size} managers from cache`);
+          return activeLeadsByManager;
         } catch (err) {
           console.error('[Sotuvchilar/Stats] Error fetching active leads:', err);
           return new Map<string, number>();

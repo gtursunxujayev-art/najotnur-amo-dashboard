@@ -491,6 +491,17 @@ export function isActiveLeadsCacheReady(): boolean {
   return activeLeadsCache !== null && (Date.now() - activeLeadsCache.timestamp < ACTIVE_LEADS_CACHE_TTL);
 }
 
+/**
+ * Get active leads data from cache without triggering a fetch.
+ * Returns null if cache is empty or expired.
+ */
+export function getActiveLeadsFromCache(): Map<number, number> | null {
+  if (!activeLeadsCache || Date.now() - activeLeadsCache.timestamp >= ACTIVE_LEADS_CACHE_TTL) {
+    return null;
+  }
+  return activeLeadsCache.data;
+}
+
 // Cache for completed follow-ups
 let completedFollowUpsCache: {
   data: Map<number, number>;
