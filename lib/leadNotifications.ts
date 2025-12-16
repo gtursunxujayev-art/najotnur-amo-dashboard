@@ -164,19 +164,21 @@ export async function notifyUsersAboutLead(lead: LeadData): Promise<void> {
     `[LeadNotifications] Processing lead ${lead.leadId} - ${lead.leadName}`
   );
 
-  // Check if this lead was already notified in the last 5 minutes (prevents duplicates from dev/prod webhooks)
+  // Check if this NEW lead was already notified in the last 30 minutes (prevents duplicates from dev/prod webhooks)
   // Use a serializable transaction to prevent race conditions between concurrent webhook requests
-  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  // NOTE: We check by eventType="new" so reassigned notifications don't block new lead notifications
+  const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
   
   let notification;
   try {
     notification = await prisma.$transaction(async (tx) => {
-      // Check for existing notification within the transaction
+      // Check for existing "new" notification for this lead within time window
       const existingNotification = await tx.leadNotification.findFirst({
         where: {
           leadId: lead.leadId,
+          eventType: 'new',
           sentAt: {
-            gte: fiveMinutesAgo,
+            gte: thirtyMinutesAgo,
           },
         },
         orderBy: {
@@ -186,7 +188,7 @@ export async function notifyUsersAboutLead(lead: LeadData): Promise<void> {
 
       if (existingNotification) {
         console.log(
-          `[LeadNotifications] Skipping lead ${lead.leadId} - already notified at ${existingNotification.sentAt.toISOString()} (${Math.round((Date.now() - existingNotification.sentAt.getTime()) / 1000)}s ago)`
+          `[LeadNotifications] Skipping new lead ${lead.leadId} - already notified at ${existingNotification.sentAt.toISOString()} (${Math.round((Date.now() - existingNotification.sentAt.getTime()) / 1000)}s ago)`
         );
         return null;
       }
@@ -201,11 +203,12 @@ export async function notifyUsersAboutLead(lead: LeadData): Promise<void> {
           manager: lead.manager,
           pipeline: lead.pipeline,
           pipelineId: lead.pipelineId,
+          eventType: 'new',
           isQueued: false,
         },
       });
       
-      console.log(`[LeadNotifications] Created notification record ${newNotification.id} for lead ${lead.leadId}`);
+      console.log(`[LeadNotifications] Created notification record ${newNotification.id} for new lead ${lead.leadId}`);
       return newNotification;
     }, {
       isolationLevel: 'Serializable', // Prevent race conditions
@@ -213,7 +216,7 @@ export async function notifyUsersAboutLead(lead: LeadData): Promise<void> {
   } catch (error: any) {
     // Handle serialization failure (concurrent transaction conflict)
     if (error.code === 'P2034' || error.message?.includes('serialization')) {
-      console.log(`[LeadNotifications] Lead ${lead.leadId} - concurrent request handled, skipping`);
+      console.log(`[LeadNotifications] New lead ${lead.leadId} - concurrent request handled, skipping`);
       return;
     }
     throw error;
@@ -259,6 +262,7 @@ export async function notifyUsersAboutLead(lead: LeadData): Promise<void> {
       await prisma.notificationQueue.create({
         data: {
           userId: user.id,
+          notificationId: notification.id, // Link to existing notification for dedupe
           leadId: lead.leadId,
           leadName: lead.leadName,
           phone: lead.phone,
@@ -266,6 +270,7 @@ export async function notifyUsersAboutLead(lead: LeadData): Promise<void> {
           manager: lead.manager,
           pipeline: lead.pipeline,
           pipelineId: lead.pipelineId,
+          eventType: 'new',
           scheduledFor: getNextMorningAt905(),
           sent: false,
         },
@@ -353,20 +358,22 @@ export async function notifyUsersAboutReassignedLead(lead: ReassignedLeadData): 
     `[LeadNotifications] Processing reassigned lead ${lead.leadId} - ${lead.leadName} (${lead.oldManager} → ${lead.newManager})`
   );
 
-  // Check if this lead was already notified in the last 5 minutes (prevents duplicates from dev/prod webhooks)
+  // Check if this REASSIGNED lead was already notified in the last 30 minutes (prevents duplicates from dev/prod webhooks)
   // Use a serializable transaction to prevent race conditions between concurrent webhook requests
-  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  // NOTE: We include the newManager in the check - allows notifications if reassigned to DIFFERENT managers
+  const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
   
   let notification;
   try {
     notification = await prisma.$transaction(async (tx) => {
-      // Check for existing notification within the transaction
+      // Check for existing "reassigned" notification for this lead to the SAME manager within time window
       const existingNotification = await tx.leadNotification.findFirst({
         where: {
           leadId: lead.leadId,
-          manager: lead.newManager,
+          eventType: 'reassigned',
+          manager: lead.newManager, // Allow if reassigned to different manager
           sentAt: {
-            gte: fiveMinutesAgo,
+            gte: thirtyMinutesAgo,
           },
         },
         orderBy: {
@@ -376,7 +383,7 @@ export async function notifyUsersAboutReassignedLead(lead: ReassignedLeadData): 
 
       if (existingNotification) {
         console.log(
-          `[LeadNotifications] Skipping reassigned lead ${lead.leadId} - already notified at ${existingNotification.sentAt.toISOString()} (${Math.round((Date.now() - existingNotification.sentAt.getTime()) / 1000)}s ago)`
+          `[LeadNotifications] Skipping reassigned lead ${lead.leadId} to ${lead.newManager} - already notified at ${existingNotification.sentAt.toISOString()} (${Math.round((Date.now() - existingNotification.sentAt.getTime()) / 1000)}s ago)`
         );
         return null;
       }
@@ -391,6 +398,7 @@ export async function notifyUsersAboutReassignedLead(lead: ReassignedLeadData): 
           manager: lead.newManager,
           pipeline: lead.pipeline,
           pipelineId: lead.pipelineId,
+          eventType: 'reassigned',
           isQueued: false,
         },
       });
@@ -449,6 +457,7 @@ export async function notifyUsersAboutReassignedLead(lead: ReassignedLeadData): 
       await prisma.notificationQueue.create({
         data: {
           userId: user.id,
+          notificationId: notification.id, // Link to existing notification for dedupe
           leadId: lead.leadId,
           leadName: lead.leadName,
           phone: lead.phone,
@@ -500,18 +509,34 @@ export async function sendQueuedNotifications(): Promise<number> {
       continue;
     }
 
-    const notification = await prisma.leadNotification.create({
-      data: {
-        leadId: item.leadId,
-        leadName: item.leadName,
-        phone: item.phone,
-        source: item.source,
-        manager: item.manager,
-        pipeline: item.pipeline,
-        pipelineId: item.pipelineId,
-        isQueued: true,
-      },
-    });
+    // Use existing notification ID if available (new flow), otherwise create new one (legacy queue items)
+    let notificationId = item.notificationId;
+    if (notificationId) {
+      // Update sentAt to now (dispatch time) so response-time metrics are accurate
+      await prisma.leadNotification.update({
+        where: { id: notificationId },
+        data: { 
+          sentAt: new Date(),
+          isQueued: false,
+        },
+      });
+    } else {
+      // Legacy queue items without notificationId - create a new LeadNotification
+      const notification = await prisma.leadNotification.create({
+        data: {
+          leadId: item.leadId,
+          leadName: item.leadName,
+          phone: item.phone,
+          source: item.source,
+          manager: item.manager,
+          pipeline: item.pipeline,
+          pipelineId: item.pipelineId,
+          eventType: item.eventType,
+          isQueued: false,
+        },
+      });
+      notificationId = notification.id;
+    }
 
     let success = false;
 
@@ -530,7 +555,7 @@ export async function sendQueuedNotifications(): Promise<number> {
       success = await sendReassignedTelegramNotification(
         user.chatId,
         reassignedLead,
-        notification.id
+        notificationId
       );
     } else {
       const lead: LeadData = {
@@ -546,7 +571,7 @@ export async function sendQueuedNotifications(): Promise<number> {
       success = await sendTelegramNotification(
         user.chatId,
         lead,
-        notification.id
+        notificationId
       );
     }
 

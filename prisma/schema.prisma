@@ -41,6 +41,7 @@ model LeadNotification {
   manager     String   // Assigned manager name
   pipeline    String   // Sotuv/Intensiv
   pipelineId  Int      // amoCRM pipeline ID
+  eventType   String   @default("new") // "new" or "reassigned"
   sentAt      DateTime @default(now())
   isQueued    Boolean  @default(false) // true if queued for morning delivery
 
@@ -49,6 +50,7 @@ model LeadNotification {
   @@index([leadId])
   @@index([sentAt])
   @@index([manager])
+  @@index([leadId, eventType, sentAt]) // For duplicate detection
 }
 
 // Track user responses to lead notifications (button clicks)
@@ -71,23 +73,25 @@ model LeadNotificationResponse {
 
 // Queue for after-hours notifications
 model NotificationQueue {
-  id          String   @id @default(cuid())
-  userId      Int      // TelegramUser id to send to
-  leadId      Int      // amoCRM lead ID
-  leadName    String
-  phone       String?
-  source      String?
-  manager     String   // For new leads: the manager. For reassigned: newManager
-  oldManager  String?  // For reassigned leads only
-  pipeline    String
-  pipelineId  Int
-  eventType   String   @default("new") // "new" or "reassigned"
-  createdAt   DateTime @default(now())
-  scheduledFor DateTime // When to send (9:05 AM GMT+5)
-  sent        Boolean  @default(false)
+  id              String   @id @default(cuid())
+  userId          Int      // TelegramUser id to send to
+  notificationId  String?  // Reference to LeadNotification record (created upfront for dedupe)
+  leadId          Int      // amoCRM lead ID
+  leadName        String
+  phone           String?
+  source          String?
+  manager         String   // For new leads: the manager. For reassigned: newManager
+  oldManager      String?  // For reassigned leads only
+  pipeline        String
+  pipelineId      Int
+  eventType       String   @default("new") // "new" or "reassigned"
+  createdAt       DateTime @default(now())
+  scheduledFor    DateTime // When to send (9:05 AM GMT+5)
+  sent            Boolean  @default(false)
 
   @@index([scheduledFor])
   @@index([sent])
+  @@index([notificationId])
 }
 
 model CallsCache {
