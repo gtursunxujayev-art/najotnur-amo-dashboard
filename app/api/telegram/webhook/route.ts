@@ -409,15 +409,16 @@ async function handleHoursSelection(
   const endTime = user?.notifyEndTime;
   const currentSetting = !startTime || !endTime ? "24/7" : `${startTime} - ${endTime}`;
 
-  const text = `<b>⏰ Bildirishnomalar vaqti</b>\n\n` +
+  const text = `<b>⏰ Yuborish vaqti (GMT+5):</b>\n\n` +
     `Hozirgi sozlama: <b>${currentSetting}</b>\n\n` +
-    `Ish vaqtidan tashqarida kelgan lidlar keyingi ish kuni boshida yuboriladi.`;
+    `Ish vaqtidan tashqarida kelgan lidlar 9:05 da yuboriladi.`;
 
   const replyMarkup = {
     inline_keyboard: [
+      [{ text: "🔄 24/7 (to'xtovsiz)", callback_data: "notif_hours_nonstop" }],
       [{ text: "🕘 09:00 - 18:00", callback_data: "notif_hours_9_18" }],
       [{ text: "🕗 08:00 - 20:00", callback_data: "notif_hours_8_20" }],
-      [{ text: "🔄 24/7 (to'xtovsiz)", callback_data: "notif_hours_nonstop" }],
+      [{ text: "✏️ Boshqa vaqt...", callback_data: "notif_hours_custom" }],
       [{ text: "◀️ Orqaga", callback_data: "notif_back" }],
     ],
   };
@@ -459,6 +460,53 @@ async function setWorkingHours(
   await handleNotificationSettings(chatId, messageId);
 }
 
+const pendingCustomHours = new Map<string, boolean>();
+
+async function promptCustomHours(
+  chatId: number | bigint | string,
+  messageId?: number
+) {
+  const text = `<b>✏️ Boshqa vaqt kiriting</b>\n\n` +
+    `Quyidagi formatda yuboring:\n` +
+    `<code>HH:MM - HH:MM</code>\n\n` +
+    `Masalan: <code>07:30 - 19:00</code>\n\n` +
+    `⚠️ Vaqt GMT+5 (O'zbekiston) formatida`;
+
+  const replyMarkup = {
+    inline_keyboard: [
+      [{ text: "◀️ Bekor qilish", callback_data: "notif_hours" }],
+    ],
+  };
+
+  pendingCustomHours.set(String(chatId), true);
+
+  if (messageId) {
+    await editTelegramMessage(chatId, messageId, text, replyMarkup);
+  } else {
+    await sendTelegramText(chatId, text, replyMarkup);
+  }
+}
+
+function parseCustomTimeInput(input: string): { start: string; end: string } | null {
+  const match = input.match(/^(\d{1,2}):(\d{2})\s*[-–]\s*(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+
+  const [, startH, startM, endH, endM] = match;
+  const startHour = parseInt(startH);
+  const startMin = parseInt(startM);
+  const endHour = parseInt(endH);
+  const endMin = parseInt(endM);
+
+  if (startHour > 23 || startMin > 59 || endHour > 23 || endMin > 59) {
+    return null;
+  }
+
+  const start = `${startHour.toString().padStart(2, "0")}:${startMin.toString().padStart(2, "0")}`;
+  const end = `${endHour.toString().padStart(2, "0")}:${endMin.toString().padStart(2, "0")}`;
+
+  return { start, end };
+}
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -490,6 +538,18 @@ export async function POST(req: Request) {
       } else if (/^\/help\b/i.test(text)) {
         const helpText = `<b>O'quv Kurslar Bot</b>\n\nBunaqa buyruqlardan foydalaning:\n/courses - O'quv kurslarni ko'rish\n/notifications - Lid bildirishnomalari\n/help - Bu xabar`;
         await sendTelegramText(chatId, helpText);
+      } else if (pendingCustomHours.get(String(chatId))) {
+        const parsed = parseCustomTimeInput(text);
+        if (parsed) {
+          pendingCustomHours.delete(String(chatId));
+          await setWorkingHours(chatId, parsed.start, parsed.end);
+          await sendTelegramText(chatId, `✅ Vaqt sozlandi: ${parsed.start} - ${parsed.end}`);
+        } else {
+          await sendTelegramText(
+            chatId,
+            `❌ Noto'g'ri format.\n\nQuyidagi formatda yuboring:\n<code>HH:MM - HH:MM</code>\n\nMasalan: <code>07:30 - 19:00</code>`
+          );
+        }
       }
 
       // Save user in DB
@@ -550,6 +610,7 @@ export async function POST(req: Request) {
       } else if (callbackData === "notif_mgr_all") {
         await clearManagerFilter(chatId, messageId);
       } else if (callbackData === "notif_hours") {
+        pendingCustomHours.delete(String(chatId));
         await handleHoursSelection(chatId, messageId);
       } else if (callbackData === "notif_hours_nonstop") {
         await setNonStopHours(chatId, messageId);
@@ -557,7 +618,10 @@ export async function POST(req: Request) {
         await setWorkingHours(chatId, "09:00", "18:00", messageId);
       } else if (callbackData === "notif_hours_8_20") {
         await setWorkingHours(chatId, "08:00", "20:00", messageId);
+      } else if (callbackData === "notif_hours_custom") {
+        await promptCustomHours(chatId, messageId);
       } else if (callbackData === "notif_back") {
+        pendingCustomHours.delete(String(chatId));
         await handleNotificationSettings(chatId, messageId);
       }
 
