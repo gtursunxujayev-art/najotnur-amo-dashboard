@@ -71,7 +71,11 @@ export async function sendTelegramNotification(
     return false;
   }
 
-  const leadUrl = `https://najotnur01.amocrm.ru/leads/detail/${lead.leadId}`;
+  const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+    ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+    : process.env.REPLIT_DEPLOYMENT_URL || "https://najotnur01.amocrm.ru";
+  
+  const clickUrl = `${baseUrl}/api/lead-click/${notificationId}/${chatId}`;
 
   let createdTimeStr = "";
   if (lead.createdAt) {
@@ -106,13 +110,7 @@ export async function sendTelegramNotification(
       [
         {
           text: "📋 CRM da ochish",
-          url: leadUrl,
-        },
-      ],
-      [
-        {
-          text: "✅ Ko'rdim",
-          callback_data: `lead_resp_${notificationId}`,
+          url: clickUrl,
         },
       ],
     ],

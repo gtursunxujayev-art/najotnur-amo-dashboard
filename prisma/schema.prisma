@@ -56,6 +56,7 @@ model LeadNotificationResponse {
   id              String   @id @default(cuid())
   notificationId  String
   userId          Int
+  visitorId       String?  // chatId as string for URL-based tracking
   clickedAt       DateTime @default(now())
   responseTimeMs  Int      // Time from notification sent to button click
 
@@ -63,6 +64,7 @@ model LeadNotificationResponse {
   user            TelegramUser     @relation(fields: [userId], references: [id])
 
   @@unique([notificationId, userId]) // One response per user per notification
+  @@unique([notificationId, visitorId]) // For URL-based tracking
   @@index([userId])
   @@index([clickedAt])
 }
