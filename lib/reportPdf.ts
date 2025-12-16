@@ -254,8 +254,9 @@ export async function generateDashboardPdf(
 
     const kpiData = [
       { label: "Tushum", value: formatMoney(data.oylikTushum) },
-      { label: "Offline tushum", value: formatMoney(data.offlineRevenue) },
       { label: "Online tushum", value: formatMoney(data.onlineRevenue) },
+      { label: "Offline tushum", value: formatMoney(data.offlineRevenue) },
+      { label: "Intensiv tushum", value: formatMoney(data.intensivRevenue || 0) },
       { label: "Kelishuv summasi", value: formatMoney(data.kelishuvSummasi) },
     ];
 
@@ -307,7 +308,7 @@ export async function generateDashboardPdf(
     y = cardY - 20;
 
     // All metrics (leads and sales)
-    const totalSalesCount = (data.onlineSalesCount || 0) + (data.offlineSalesCount || 0);
+    const totalSalesCount = (data.onlineSalesCount || 0) + (data.offlineSalesCount || 0) + (data.intensivSalesCount || 0);
     const metrics = [
       { label: "Jami lidlar", value: data.leadsCount },
       { label: "Qualified lidlar", value: data.qualifiedLeadsCount },
@@ -315,7 +316,8 @@ export async function generateDashboardPdf(
       { label: "Jami sotuvlar", value: totalSalesCount },
       { label: "Online sotuvlar", value: data.onlineSalesCount || 0 },
       { label: "Offline sotuvlar", value: data.offlineSalesCount || 0 },
-      { label: "Konversiya (qualified → sotuv)", value: `${(data.conversionFromQualified * 100).toFixed(1)}%` },
+      { label: "Intensiv sotuvlar", value: data.intensivSalesCount || 0 },
+      { label: "Konversiya (qualified -> sotuv)", value: `${(data.conversionFromQualified * 100).toFixed(1)}%` },
     ];
 
     // Calculate metrics section height - 2 columns
