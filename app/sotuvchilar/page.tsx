@@ -144,11 +144,11 @@ export default function SotuvchilarPage() {
   };
 
   const formatResponseTime = (ms: number): string => {
-    if (ms < 1000) return `${ms}ms`;
-    if (ms < 60000) return `${Math.round(ms / 1000)}s`;
-    const minutes = Math.floor(ms / 60000);
-    const seconds = Math.round((ms % 60000) / 1000);
-    return `${minutes}m ${seconds}s`;
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   };
 
   const selectedManagerData = stats?.managers.find((m) => m.name === selectedManager);
@@ -378,45 +378,51 @@ export default function SotuvchilarPage() {
             )}
 
             {/* Response Time Section */}
-            {responseStats.length > 0 && (
+            {selectedManager && (
               <div className="rounded-lg bg-slate-800/50 p-4">
                 <h3 className="mb-4 text-lg font-semibold text-white">Lid bildirishnomalariga javob vaqti</h3>
                 <p className="mb-3 text-xs text-slate-400">
                   Yangi lid haqida xabar kelgandan keyin CRM tugmasini bosguncha o'rtacha vaqt
                 </p>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs text-slate-200">
-                    <thead>
-                      <tr className="border-b border-slate-700">
-                        <th className="px-3 py-2">Menejer</th>
-                        <th className="px-3 py-2 text-center">Bildirishnomalar</th>
-                        <th className="px-3 py-2 text-center">Javoblar</th>
-                        <th className="px-3 py-2 text-center">O'rtacha javob vaqti</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {responseStats.map((stat) => (
-                        <tr key={stat.manager} className="border-b border-slate-700 hover:bg-slate-700/50">
-                          <td className="px-3 py-2 font-semibold">{stat.manager}</td>
-                          <td className="px-3 py-2 text-center">{stat.totalNotifications}</td>
-                          <td className="px-3 py-2 text-center">{stat.totalResponses}</td>
-                          <td className="px-3 py-2 text-center">
-                            {stat.avgResponseTimeMs > 0 ? (
-                              <span className={`font-semibold ${
-                                stat.avgResponseTimeMs < 60000 ? 'text-green-400' :
-                                stat.avgResponseTimeMs < 300000 ? 'text-yellow-400' : 'text-red-400'
-                              }`}>
-                                {formatResponseTime(stat.avgResponseTimeMs)}
-                              </span>
-                            ) : (
-                              <span className="text-slate-500">-</span>
-                            )}
-                          </td>
+                {responseStats.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs text-slate-200">
+                      <thead>
+                        <tr className="border-b border-slate-700">
+                          <th className="px-3 py-2">Menejer</th>
+                          <th className="px-3 py-2 text-center">Bildirishnomalar</th>
+                          <th className="px-3 py-2 text-center">Javoblar</th>
+                          <th className="px-3 py-2 text-center">O'rtacha javob vaqti</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {responseStats.map((stat) => (
+                          <tr key={stat.manager} className="border-b border-slate-700 hover:bg-slate-700/50">
+                            <td className="px-3 py-2 font-semibold">{stat.manager}</td>
+                            <td className="px-3 py-2 text-center">{stat.totalNotifications}</td>
+                            <td className="px-3 py-2 text-center">{stat.totalResponses}</td>
+                            <td className="px-3 py-2 text-center">
+                              {stat.avgResponseTimeMs > 0 ? (
+                                <span className={`font-semibold ${
+                                  stat.avgResponseTimeMs < 60000 ? 'text-green-400' :
+                                  stat.avgResponseTimeMs < 300000 ? 'text-yellow-400' : 'text-red-400'
+                                }`}>
+                                  {formatResponseTime(stat.avgResponseTimeMs)}
+                                </span>
+                              ) : (
+                                <span className="text-slate-500">-</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-slate-400">
+                    Bu davr uchun bildirishnoma ma'lumotlari mavjud emas
+                  </div>
+                )}
               </div>
             )}
           </>
