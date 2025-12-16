@@ -82,9 +82,10 @@ export async function sendTelegramNotification(
     return false;
   }
 
-  const baseUrl = process.env.REPLIT_DEV_DOMAIN 
-    ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-    : process.env.REPLIT_DEPLOYMENT_URL || "https://najotnur01.amocrm.ru";
+  // Prioritize production deployment URL over dev domain for button links
+  const baseUrl = process.env.REPLIT_DEPLOYMENT_URL 
+    || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null)
+    || "https://najotnur01.amocrm.ru";
   
   const clickUrl = `${baseUrl}/api/lead-click/${notificationId}/${chatId}`;
 
@@ -292,9 +293,10 @@ export async function sendReassignedTelegramNotification(
     return false;
   }
 
-  const baseUrl = process.env.REPLIT_DEV_DOMAIN 
-    ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-    : process.env.REPLIT_DEPLOYMENT_URL || "https://najotnur01.amocrm.ru";
+  // Prioritize production deployment URL over dev domain for button links
+  const baseUrl = process.env.REPLIT_DEPLOYMENT_URL 
+    || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null)
+    || "https://najotnur01.amocrm.ru";
   
   const clickUrl = `${baseUrl}/api/lead-click/${notificationId}/${chatId}`;
 
