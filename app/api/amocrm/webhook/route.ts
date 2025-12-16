@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { notifyUsersAboutLead } from "@/lib/leadNotifications";
+import { notifyUsersAboutLead, notifyUsersAboutReassignedLead } from "@/lib/leadNotifications";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -189,21 +189,23 @@ export async function POST(request: Request) {
     console.log("[amoCRM/Webhook] Parsed data:", JSON.stringify(data, null, 2));
 
     const newLeads = data.leads?.add || [];
+    const responsibleLeads = data.leads?.responsible || [];
     const isNewLeadEvent = newLeads.length > 0;
+    const isResponsibleChangeEvent = responsibleLeads.length > 0;
     
-    const leads = isNewLeadEvent ? newLeads : [];
-    
-    if (!isNewLeadEvent && (data.leads?.update || data.leads?.status)) {
-      console.log("[amoCRM/Webhook] Skipping update/status event - only processing new leads");
-      return NextResponse.json({ ok: true, message: "Only new lead events are processed" });
+    if (!isNewLeadEvent && !isResponsibleChangeEvent && (data.leads?.update || data.leads?.status)) {
+      console.log("[amoCRM/Webhook] Skipping update/status event - only processing new leads and responsible changes");
+      return NextResponse.json({ ok: true, message: "Only new lead and responsible change events are processed" });
     }
 
-    if (!leads.length) {
+    if (!newLeads.length && !responsibleLeads.length) {
       console.log("[amoCRM/Webhook] No leads in webhook data");
       return NextResponse.json({ ok: true, message: "No leads to process" });
     }
 
-    for (const lead of leads) {
+    let processedCount = 0;
+
+    for (const lead of newLeads) {
       const leadId = parseInt(lead.id);
       const leadName = lead.name || "Nomsiz lid";
       const pipelineId = parseInt(lead.pipeline_id || lead.status?.pipeline_id);
@@ -232,14 +234,47 @@ export async function POST(request: Request) {
         createdAt: createdAt || undefined,
       };
 
-      console.log("[amoCRM/Webhook] Processing lead:", leadData);
-
+      console.log("[amoCRM/Webhook] Processing new lead:", leadData);
       await notifyUsersAboutLead(leadData);
+      processedCount++;
+    }
+
+    for (const lead of responsibleLeads) {
+      const leadId = parseInt(lead.id);
+      const leadName = lead.name || "Nomsiz lid";
+      const pipelineId = parseInt(lead.pipeline_id);
+      const newResponsibleUserId = parseInt(lead.responsible_user_id);
+      const oldResponsibleUserId = parseInt(lead.old_responsible_user_id);
+
+      if (
+        pipelineId !== SOTUV_PIPELINE_ID &&
+        pipelineId !== INTENSIV_PIPELINE_ID
+      ) {
+        console.log(
+          `[amoCRM/Webhook] Skipping responsible change for lead ${leadId} - pipeline ${pipelineId} not tracked`
+        );
+        continue;
+      }
+
+      const leadData = {
+        leadId,
+        leadName,
+        phone: extractPhone(lead),
+        source: extractSource(lead),
+        newManager: getManagerName(newResponsibleUserId),
+        oldManager: getManagerName(oldResponsibleUserId),
+        pipeline: getPipelineName(pipelineId),
+        pipelineId,
+      };
+
+      console.log("[amoCRM/Webhook] Processing responsible change:", leadData);
+      await notifyUsersAboutReassignedLead(leadData);
+      processedCount++;
     }
 
     return NextResponse.json({
       ok: true,
-      message: `Processed ${leads.length} lead(s)`,
+      message: `Processed ${processedCount} lead event(s)`,
     });
   } catch (error: any) {
     console.error("[amoCRM/Webhook] Error:", error);

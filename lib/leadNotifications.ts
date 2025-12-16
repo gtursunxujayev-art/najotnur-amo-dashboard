@@ -14,6 +14,17 @@ interface LeadData {
   createdAt?: number;
 }
 
+interface ReassignedLeadData {
+  leadId: number;
+  leadName: string;
+  phone?: string;
+  source?: string;
+  newManager: string;
+  oldManager: string;
+  pipeline: string;
+  pipelineId: number;
+}
+
 function getCurrentTimeInGMT5(): Date {
   const now = new Date();
   const utc = now.getTime() + now.getTimezoneOffset() * 60000;
@@ -220,6 +231,151 @@ export async function notifyUsersAboutLead(lead: LeadData): Promise<void> {
   }
 }
 
+export async function sendReassignedTelegramNotification(
+  chatId: bigint | number,
+  lead: ReassignedLeadData,
+  notificationId: string
+): Promise<boolean> {
+  if (!TELEGRAM_BOT_TOKEN) {
+    console.error("[LeadNotifications] Missing TELEGRAM_BOT_TOKEN");
+    return false;
+  }
+
+  const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+    ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+    : process.env.REPLIT_DEPLOYMENT_URL || "https://najotnur01.amocrm.ru";
+  
+  const clickUrl = `${baseUrl}/api/lead-click/${notificationId}/${chatId}`;
+
+  let message = `🔄 <b>Lid sizga o'tkazildi!</b>\n\n`;
+  message += `👤 <b>Ismi:</b> ${lead.leadName}\n`;
+  if (lead.phone) {
+    message += `📞 <b>Telefon:</b> ${lead.phone}\n`;
+  }
+  if (lead.source) {
+    message += `📍 <b>Qayerdan:</b> ${lead.source}\n`;
+  }
+  message += `👨‍💼 <b>Yangi menejer:</b> ${lead.newManager}\n`;
+  message += `👤 <b>Oldingi menejer:</b> ${lead.oldManager}\n`;
+  message += `📊 <b>Voronka:</b> ${lead.pipeline}\n`;
+
+  const replyMarkup = {
+    inline_keyboard: [
+      [
+        {
+          text: "📋 CRM da ochish",
+          url: clickUrl,
+        },
+      ],
+    ],
+  };
+
+  try {
+    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: String(chatId),
+        text: message,
+        parse_mode: "HTML",
+        reply_markup: replyMarkup,
+      }),
+    });
+
+    const body = await res.text();
+    if (!res.ok) {
+      console.error(
+        `[LeadNotifications] Failed to send reassigned notification to ${chatId}:`,
+        res.status,
+        body
+      );
+      return false;
+    }
+
+    console.log(`[LeadNotifications] Sent reassigned notification to ${chatId}`);
+    return true;
+  } catch (error) {
+    console.error(`[LeadNotifications] Error sending reassigned notification to ${chatId}:`, error);
+    return false;
+  }
+}
+
+export async function notifyUsersAboutReassignedLead(lead: ReassignedLeadData): Promise<void> {
+  console.log(
+    `[LeadNotifications] Processing reassigned lead ${lead.leadId} - ${lead.leadName} (${lead.oldManager} → ${lead.newManager})`
+  );
+
+  const notification = await prisma.leadNotification.create({
+    data: {
+      leadId: lead.leadId,
+      leadName: lead.leadName,
+      phone: lead.phone,
+      source: lead.source,
+      manager: lead.newManager,
+      pipeline: lead.pipeline,
+      pipelineId: lead.pipelineId,
+      isQueued: false,
+    },
+  });
+
+  const users = await prisma.telegramUser.findMany({
+    where: {
+      leadNotifications: true,
+    },
+  });
+
+  console.log(
+    `[LeadNotifications] Found ${users.length} users with lead notifications enabled`
+  );
+
+  for (const user of users) {
+    const newManagerLower = lead.newManager.toLowerCase();
+    const userManagersLower = (user.notifyManagers || []).map(m => m.toLowerCase());
+    
+    if (
+      userManagersLower.length > 0 &&
+      !userManagersLower.includes(newManagerLower)
+    ) {
+      console.log(
+        `[LeadNotifications] Skipping user ${user.id} for reassigned lead - manager filter: ${user.notifyManagers.join(", ")}`
+      );
+      continue;
+    }
+
+    const withinHours = isWithinWorkingHours(
+      user.notifyStartTime,
+      user.notifyEndTime
+    );
+
+    if (!withinHours) {
+      console.log(
+        `[LeadNotifications] Queueing reassigned lead for user ${user.id} - outside working hours`
+      );
+      await prisma.notificationQueue.create({
+        data: {
+          userId: user.id,
+          leadId: lead.leadId,
+          leadName: lead.leadName,
+          phone: lead.phone,
+          source: lead.source,
+          manager: lead.newManager,
+          oldManager: lead.oldManager,
+          pipeline: lead.pipeline,
+          pipelineId: lead.pipelineId,
+          eventType: "reassigned",
+          scheduledFor: getNextMorningAt905(),
+          sent: false,
+        },
+      });
+      continue;
+    }
+
+    await sendReassignedTelegramNotification(user.chatId, lead, notification.id);
+  }
+}
+
 export async function sendQueuedNotifications(): Promise<number> {
   const now = new Date();
 
@@ -254,40 +410,55 @@ export async function sendQueuedNotifications(): Promise<number> {
       continue;
     }
 
-    let existingNotification = await prisma.leadNotification.findFirst({
-      where: { leadId: item.leadId },
+    const notification = await prisma.leadNotification.create({
+      data: {
+        leadId: item.leadId,
+        leadName: item.leadName,
+        phone: item.phone,
+        source: item.source,
+        manager: item.manager,
+        pipeline: item.pipeline,
+        pipelineId: item.pipelineId,
+        isQueued: true,
+      },
     });
 
-    if (!existingNotification) {
-      existingNotification = await prisma.leadNotification.create({
-        data: {
-          leadId: item.leadId,
-          leadName: item.leadName,
-          phone: item.phone,
-          source: item.source,
-          manager: item.manager,
-          pipeline: item.pipeline,
-          pipelineId: item.pipelineId,
-          isQueued: true,
-        },
-      });
+    let success = false;
+
+    if (item.eventType === "reassigned" && item.oldManager) {
+      const reassignedLead: ReassignedLeadData = {
+        leadId: item.leadId,
+        leadName: item.leadName,
+        phone: item.phone ?? undefined,
+        source: item.source ?? undefined,
+        newManager: item.manager,
+        oldManager: item.oldManager,
+        pipeline: item.pipeline,
+        pipelineId: item.pipelineId,
+      };
+
+      success = await sendReassignedTelegramNotification(
+        user.chatId,
+        reassignedLead,
+        notification.id
+      );
+    } else {
+      const lead: LeadData = {
+        leadId: item.leadId,
+        leadName: item.leadName,
+        phone: item.phone ?? undefined,
+        source: item.source ?? undefined,
+        manager: item.manager,
+        pipeline: item.pipeline,
+        pipelineId: item.pipelineId,
+      };
+
+      success = await sendTelegramNotification(
+        user.chatId,
+        lead,
+        notification.id
+      );
     }
-
-    const lead: LeadData = {
-      leadId: item.leadId,
-      leadName: item.leadName,
-      phone: item.phone ?? undefined,
-      source: item.source ?? undefined,
-      manager: item.manager,
-      pipeline: item.pipeline,
-      pipelineId: item.pipelineId,
-    };
-
-    const success = await sendTelegramNotification(
-      user.chatId,
-      lead,
-      existingNotification.id
-    );
 
     if (success) {
       sentCount++;

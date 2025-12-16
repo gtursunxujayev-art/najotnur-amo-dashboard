@@ -77,9 +77,11 @@ model NotificationQueue {
   leadName    String
   phone       String?
   source      String?
-  manager     String
+  manager     String   // For new leads: the manager. For reassigned: newManager
+  oldManager  String?  // For reassigned leads only
   pipeline    String
   pipelineId  Int
+  eventType   String   @default("new") // "new" or "reassigned"
   createdAt   DateTime @default(now())
   scheduledFor DateTime // When to send (9:05 AM GMT+5)
   sent        Boolean  @default(false)
