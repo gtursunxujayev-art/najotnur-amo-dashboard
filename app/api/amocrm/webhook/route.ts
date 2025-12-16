@@ -13,15 +13,19 @@ const MANAGERS: Record<number, string> = {
   6625970: "Sabrina",
   6626192: "Oyshaxon",
   7197714: "Marg'uba",
+  8565280: "Kesha",
+  8587936: "Admin",
   10148086: "Mumtoza",
   10148142: "Matluba",
   10403196: "Mohinur",
   10148106: "sabina",
   10403170: "Gulchehra",
+  10374578: "Kamilla",
   11136174: "Orzugul",
   12681170: "Asal",
   12681150: "Shaxnoza",
   10363642: "Nodira",
+  13251146: "Aziz",
 };
 
 function getPipelineName(pipelineId: number): string {
@@ -244,7 +248,9 @@ export async function POST(request: Request) {
       const leadName = lead.name || "Nomsiz lid";
       const pipelineId = parseInt(lead.pipeline_id);
       const newResponsibleUserId = parseInt(lead.responsible_user_id);
-      const oldResponsibleUserId = parseInt(lead.old_responsible_user_id);
+      const oldResponsibleUserId = lead.old_responsible_user_id 
+        ? parseInt(lead.old_responsible_user_id) 
+        : null;
 
       if (
         pipelineId !== SOTUV_PIPELINE_ID &&
@@ -262,7 +268,7 @@ export async function POST(request: Request) {
         phone: extractPhone(lead),
         source: extractSource(lead),
         newManager: getManagerName(newResponsibleUserId),
-        oldManager: getManagerName(oldResponsibleUserId),
+        oldManager: oldResponsibleUserId ? getManagerName(oldResponsibleUserId) : "Noma'lum",
         pipeline: getPipelineName(pipelineId),
         pipelineId,
       };
