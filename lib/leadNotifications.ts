@@ -82,8 +82,10 @@ export async function sendTelegramNotification(
     return false;
   }
 
-  // Prioritize production deployment URL over dev domain for button links
-  const baseUrl = process.env.REPLIT_DEPLOYMENT_URL 
+  // Prioritize: explicit production URL > REPLIT_DOMAINS (production) > REPLIT_DEV_DOMAIN (dev) > fallback
+  const replitDomains = process.env.REPLIT_DOMAINS?.split(',')[0]; // First domain in production
+  const baseUrl = process.env.PRODUCTION_BASE_URL
+    || (replitDomains ? `https://${replitDomains}` : null)
     || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null)
     || "https://najotnur01.amocrm.ru";
   
@@ -293,8 +295,10 @@ export async function sendReassignedTelegramNotification(
     return false;
   }
 
-  // Prioritize production deployment URL over dev domain for button links
-  const baseUrl = process.env.REPLIT_DEPLOYMENT_URL 
+  // Prioritize: explicit production URL > REPLIT_DOMAINS (production) > REPLIT_DEV_DOMAIN (dev) > fallback
+  const replitDomains = process.env.REPLIT_DOMAINS?.split(',')[0]; // First domain in production
+  const baseUrl = process.env.PRODUCTION_BASE_URL
+    || (replitDomains ? `https://${replitDomains}` : null)
     || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null)
     || "https://najotnur01.amocrm.ru";
   
