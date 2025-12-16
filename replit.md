@@ -128,3 +128,17 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
   - Qo'ng'iroqlar (Call count)
   - Umumiy vaqt (Total duration formatted as Xh Xm Xs)
 - **Production Ready**: Uses direct Prisma queries instead of HTTP self-calls for reliability in serverless environments
+
+### Double-Counting Prevention for Won Leads (December 16, 2025)
+- **Problem**: When leads moved between won statuses (e.g., 79190542 "Qisman to'lov" → 142 "Sotildi"), amoCRM updated the `closed_at` date, causing the sale to be counted again
+- **Solution**: Before counting a won lead, the app now checks the lead's previous status via amoCRM Events API
+- **Implementation**:
+  - New `getLeadPreviousStatus()` and `getLeadsPreviousStatuses()` functions in `lib/amocrm.ts`
+  - Dashboard logic now skips leads whose previous status was also a won status
+  - Batched API calls with rate limiting protection
+- **Result**: Leads moving between won statuses (79190542 ↔ 142) are no longer double-counted
+
+### OnlinePBX Extension Redirect (December 14, 2025)
+- **Feature**: Calls to extension 100 (Admin) are automatically attributed to extension 108 (Mohinur)
+- **Implementation**: `ONLINEPBX_EXTENSION_REDIRECT` mapping in `lib/extensionMapping.ts`
+- **Scope**: Only affects OnlinePBX calls (UTel and other sources unaffected)
