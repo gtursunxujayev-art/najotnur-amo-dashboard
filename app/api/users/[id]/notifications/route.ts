@@ -5,10 +5,11 @@ export const dynamic = "force-dynamic";
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = parseInt(params.id);
+    const { id } = await params;
+    const userId = parseInt(id);
     
     const user = await prisma.telegramUser.findUnique({
       where: { id: userId },
@@ -40,10 +41,11 @@ export async function GET(
 
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = parseInt(params.id);
+    const { id } = await params;
+    const userId = parseInt(id);
     const body = await request.json();
 
     const { leadNotifications, notifyManagers, notifyStartTime, notifyEndTime } = body;
