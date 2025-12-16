@@ -58,6 +58,7 @@ export default function UsersPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedUserId, setExpandedUserId] = useState<number | null>(null);
+  const [customTimeInputs, setCustomTimeInputs] = useState<Record<number, { start: string; end: string }>>({});
 
   const load = async () => {
     try {
@@ -525,6 +526,45 @@ export default function UsersPage() {
                                 }
                               >
                                 08:00 - 20:00
+                              </button>
+                            </div>
+                            <div className="mt-3 flex items-center gap-2">
+                              <input
+                                type="time"
+                                className="rounded bg-slate-700 px-2 py-1 text-xs text-white"
+                                value={customTimeInputs[u.id]?.start || u.notifyStartTime || "09:00"}
+                                onChange={(e) =>
+                                  setCustomTimeInputs((prev) => ({
+                                    ...prev,
+                                    [u.id]: { ...prev[u.id], start: e.target.value, end: prev[u.id]?.end || u.notifyEndTime || "18:00" },
+                                  }))
+                                }
+                              />
+                              <span className="text-xs text-slate-400">—</span>
+                              <input
+                                type="time"
+                                className="rounded bg-slate-700 px-2 py-1 text-xs text-white"
+                                value={customTimeInputs[u.id]?.end || u.notifyEndTime || "18:00"}
+                                onChange={(e) =>
+                                  setCustomTimeInputs((prev) => ({
+                                    ...prev,
+                                    [u.id]: { ...prev[u.id], end: e.target.value, start: prev[u.id]?.start || u.notifyStartTime || "09:00" },
+                                  }))
+                                }
+                              />
+                              <button
+                                className="rounded bg-emerald-600 px-3 py-1 text-xs text-white hover:bg-emerald-500"
+                                onClick={() => {
+                                  const times = customTimeInputs[u.id];
+                                  if (times?.start && times?.end) {
+                                    updateNotificationSettings(u.id, {
+                                      notifyStartTime: times.start,
+                                      notifyEndTime: times.end,
+                                    });
+                                  }
+                                }}
+                              >
+                                Saqlash
                               </button>
                             </div>
                             <p className="mt-2 text-xs text-slate-400">
