@@ -6,6 +6,7 @@ import {
   getLossReasons,
   getFieldEnumMapping,
   getStatusMapping,
+  getLeadsPreviousStatuses,
   AmoLead,
 } from "@/lib/amocrm";
 import { dashboardConfig } from "@/config/dashboardConfig";
@@ -332,14 +333,40 @@ export async function buildDashboardData(
   });
 
   // Process won deals from wonLeads (filtered by closed_at date, not created_at)
-  wonLeads.forEach((lead) => {
-    if (!isWon(lead)) {
-      return; // Skip leads that aren't won
-    }
-
+  // First, filter to only won leads and get their previous statuses to detect double-counting
+  const wonLeadsFiltered = wonLeads.filter((lead) => {
+    if (!isWon(lead)) return false;
     const pipelineId = lead.pipeline_id || -1;
-    if (hasPipelineFilter && !dashboardConfig.PIPELINE_IDS.includes(pipelineId)) {
-      return; // Skip leads from other pipelines
+    if (hasPipelineFilter && !dashboardConfig.PIPELINE_IDS.includes(pipelineId)) return false;
+    return true;
+  });
+
+  // Fetch previous statuses for all won leads to detect moves between won statuses
+  const wonLeadIds = wonLeadsFiltered.map((lead) => lead.id);
+  let previousStatusMap = new Map<number, number | null>();
+  
+  if (wonLeadIds.length > 0) {
+    try {
+      previousStatusMap = await getLeadsPreviousStatuses(wonLeadIds);
+    } catch (err) {
+      console.error("[Dashboard] Error fetching previous statuses:", err);
+      // Continue without filtering - better to potentially double-count than miss sales
+    }
+  }
+
+  // Track skipped leads for logging
+  let skippedDoubleCountLeads = 0;
+
+  wonLeadsFiltered.forEach((lead) => {
+    // Check if this lead moved from another won status (double-counting detection)
+    const previousStatus = previousStatusMap.get(lead.id);
+    if (previousStatus !== null && previousStatus !== undefined) {
+      // If previous status was also a won status, skip this lead (already counted before)
+      if (dashboardConfig.WON_STATUS_IDS.includes(previousStatus)) {
+        console.log(`[Dashboard] Skipping lead ${lead.id} (${lead.name}) - moved from won status ${previousStatus} to ${lead.status_id}`);
+        skippedDoubleCountLeads++;
+        return; // Skip - this was already counted as a sale
+      }
     }
 
     const managerId = lead.responsible_user_id || 0;
@@ -391,6 +418,10 @@ export async function buildDashboardData(
       ms.offlineSalesCount++;
     }
   });
+
+  if (skippedDoubleCountLeads > 0) {
+    console.log(`[Dashboard] Skipped ${skippedDoubleCountLeads} leads that moved between won statuses (avoiding double-counting)`);
+  }
 
   // Non-qualified leads: Lost leads (status 143) with field 1121759 containing specific reason IDs
   // Only count if the objection field value is in NOT_QUALIFIED_REASON_IDS

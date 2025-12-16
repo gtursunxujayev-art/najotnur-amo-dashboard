@@ -231,6 +231,67 @@ export async function getStatusMapping(): Promise<Record<number, string>> {
   }
 }
 
+/**
+ * Get the previous status for a lead by checking its most recent status change event.
+ * Returns the status_id the lead had BEFORE its current status.
+ * Used to detect if a lead moved between won statuses (which shouldn't be double-counted).
+ */
+export async function getLeadPreviousStatus(leadId: number): Promise<number | null> {
+  try {
+    const data = await amoRequest(
+      `/api/v4/events?filter[entity]=lead&filter[entity_id]=${leadId}&filter[type]=lead_status_changed&limit=1`
+    );
+    const events = data?._embedded?.events || [];
+    
+    if (events.length === 0) {
+      return null;
+    }
+    
+    // Get the most recent status change event
+    const latestEvent = events[0];
+    const beforeStatus = latestEvent.value_before?.[0]?.lead_status?.id;
+    
+    return beforeStatus || null;
+  } catch (err) {
+    console.error(`[amocrm] Error fetching previous status for lead ${leadId}:`, err);
+    return null;
+  }
+}
+
+/**
+ * Batch fetch previous statuses for multiple leads.
+ * Returns a Map of leadId -> previousStatusId
+ * Optimized to reduce API calls by batching.
+ */
+export async function getLeadsPreviousStatuses(leadIds: number[]): Promise<Map<number, number | null>> {
+  const result = new Map<number, number | null>();
+  
+  // Process in batches to avoid rate limiting
+  const batchSize = 10;
+  for (let i = 0; i < leadIds.length; i += batchSize) {
+    const batch = leadIds.slice(i, i + batchSize);
+    
+    // Fetch in parallel within each batch
+    const promises = batch.map(async (leadId) => {
+      const prevStatus = await getLeadPreviousStatus(leadId);
+      return { leadId, prevStatus };
+    });
+    
+    const results = await Promise.all(promises);
+    results.forEach(({ leadId, prevStatus }) => {
+      result.set(leadId, prevStatus);
+    });
+    
+    // Small delay between batches to avoid rate limiting
+    if (i + batchSize < leadIds.length) {
+      await sleep(200);
+    }
+  }
+  
+  console.log(`[amocrm] Fetched previous statuses for ${leadIds.length} leads`);
+  return result;
+}
+
 // Cache for active leads data (TTL: 1 hour)
 let activeLeadsCache: {
   data: Map<number, number>;
