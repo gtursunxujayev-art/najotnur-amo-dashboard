@@ -189,6 +189,11 @@ export default function DashboardPage() {
               subtitle={`${data.offlineRevenue.toLocaleString("ru-RU")} so'm`}
             />
             <MetricCard
+              title="Sotuv – Intensiv"
+              value={data.intensivSalesCount.toLocaleString("ru-RU")}
+              subtitle={`${data.intensivRevenue.toLocaleString("ru-RU")} so'm`}
+            />
+            <MetricCard
               title="Lidlar (jami)"
               value={data.leadsCount.toLocaleString("ru-RU")}
               subtitle="Tanlangan davr"

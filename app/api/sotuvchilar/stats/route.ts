@@ -143,9 +143,13 @@ export async function GET(request: NextRequest) {
             const usersMap = new Map<number, string>();
             users.forEach((u) => usersMap.set(u.id, u.name));
             
+            const allWonStatusIds = [
+              ...dashboardConfig.WON_STATUS_IDS,
+              ...dashboardConfig.INTENSIV_WON_STATUS_IDS
+            ];
             const currentActiveLeadsByManagerId = await getCurrentActiveLeadsPerManager(
               dashboardConfig.ACTIVE_LEADS_PIPELINE_IDS || dashboardConfig.PIPELINE_IDS,
-              dashboardConfig.WON_STATUS_IDS,
+              allWonStatusIds,
               dashboardConfig.LOST_STATUS_IDS
             );
             
