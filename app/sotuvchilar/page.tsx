@@ -27,17 +27,26 @@ interface SummaryStats {
   managers: ManagerStats[];
 }
 
+interface ResponseStats {
+  manager: string;
+  totalNotifications: number;
+  totalResponses: number;
+  avgResponseTimeMs: number;
+}
+
 export default function SotuvchilarPage() {
   const [period, setPeriod] = useState<Period>('today');
   const [selectedManager, setSelectedManager] = useState<string>('');
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
   const [stats, setStats] = useState<SummaryStats | null>(null);
+  const [responseStats, setResponseStats] = useState<ResponseStats[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
 
   useEffect(() => {
     fetchStats();
+    fetchResponseStats();
   }, [period, customStartDate, customEndDate]);
 
   const fetchStats = async () => {
@@ -62,6 +71,75 @@ export default function SotuvchilarPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchResponseStats = async () => {
+    try {
+      const params = new URLSearchParams();
+      
+      if (period === 'custom' && customStartDate && customEndDate) {
+        params.set('from', customStartDate);
+        params.set('to', customEndDate);
+      } else {
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        let fromDate: Date, toDate: Date;
+
+        switch (period) {
+          case 'today':
+            fromDate = today;
+            toDate = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+            break;
+          case 'yesterday':
+            fromDate = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+            toDate = today;
+            break;
+          case 'week':
+            const dayOfWeek = now.getDay();
+            const monday = new Date(today);
+            monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+            fromDate = monday;
+            toDate = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+            break;
+          case 'lastweek':
+            const lastMonday = new Date(today);
+            lastMonday.setDate(today.getDate() - (now.getDay() === 0 ? 6 : now.getDay() - 1) - 7);
+            fromDate = lastMonday;
+            toDate = new Date(lastMonday.getTime() + 7 * 24 * 60 * 60 * 1000);
+            break;
+          case 'month':
+            fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+            toDate = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+            break;
+          case 'lastmonth':
+            fromDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            toDate = new Date(now.getFullYear(), now.getMonth(), 1);
+            break;
+          default:
+            fromDate = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+            toDate = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+        }
+
+        params.set('from', fromDate.toISOString());
+        params.set('to', toDate.toISOString());
+      }
+
+      const res = await fetch(`/api/response-stats?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        setResponseStats(data.stats || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch response stats:', err);
+    }
+  };
+
+  const formatResponseTime = (ms: number): string => {
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60000) return `${Math.round(ms / 1000)}s`;
+    const minutes = Math.floor(ms / 60000);
+    const seconds = Math.round((ms % 60000) / 1000);
+    return `${minutes}m ${seconds}s`;
   };
 
   const selectedManagerData = stats?.managers.find((m) => m.name === selectedManager);
@@ -287,6 +365,49 @@ export default function SotuvchilarPage() {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Response Time Section */}
+            {responseStats.length > 0 && (
+              <div className="rounded-lg bg-slate-800/50 p-4">
+                <h3 className="mb-4 text-lg font-semibold text-white">Lid bildirishnomalariga javob vaqti</h3>
+                <p className="mb-3 text-xs text-slate-400">
+                  Yangi lid haqida xabar kelgandan keyin CRM tugmasini bosguncha o'rtacha vaqt
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-slate-200">
+                    <thead>
+                      <tr className="border-b border-slate-700">
+                        <th className="px-3 py-2">Menejer</th>
+                        <th className="px-3 py-2 text-center">Bildirishnomalar</th>
+                        <th className="px-3 py-2 text-center">Javoblar</th>
+                        <th className="px-3 py-2 text-center">O'rtacha javob vaqti</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {responseStats.map((stat) => (
+                        <tr key={stat.manager} className="border-b border-slate-700 hover:bg-slate-700/50">
+                          <td className="px-3 py-2 font-semibold">{stat.manager}</td>
+                          <td className="px-3 py-2 text-center">{stat.totalNotifications}</td>
+                          <td className="px-3 py-2 text-center">{stat.totalResponses}</td>
+                          <td className="px-3 py-2 text-center">
+                            {stat.avgResponseTimeMs > 0 ? (
+                              <span className={`font-semibold ${
+                                stat.avgResponseTimeMs < 60000 ? 'text-green-400' :
+                                stat.avgResponseTimeMs < 300000 ? 'text-yellow-400' : 'text-red-400'
+                              }`}>
+                                {formatResponseTime(stat.avgResponseTimeMs)}
+                              </span>
+                            ) : (
+                              <span className="text-slate-500">-</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </>

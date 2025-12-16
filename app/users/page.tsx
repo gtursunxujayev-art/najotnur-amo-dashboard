@@ -1,7 +1,7 @@
 // app/users/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 
 type TelegramUser = {
   id: number;
@@ -12,7 +12,25 @@ type TelegramUser = {
   dailyReport: boolean;
   weeklyReport: boolean;
   monthlyReport: boolean;
+  leadNotifications: boolean;
+  notifyManagers: string[];
+  notifyStartTime: string | null;
+  notifyEndTime: string | null;
 };
+
+const MANAGERS = [
+  "Madina",
+  "Zilola",
+  "Sabrina",
+  "Oyshaxon",
+  "Marg'uba",
+  "Mumtoza",
+  "Matluba",
+  "Mohinur",
+  "sabina",
+  "Gulchehra",
+  "Orzugul",
+];
 
 type ManualPeriodKey =
   | "today"
@@ -39,6 +57,7 @@ export default function UsersPage() {
   const [periodByUser, setPeriodByUser] = useState<Record<number, ManualPeriodKey>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [expandedUserId, setExpandedUserId] = useState<number | null>(null);
 
   const load = async () => {
     try {
@@ -164,6 +183,67 @@ export default function UsersPage() {
     }
   };
 
+  const updateNotificationSettings = async (
+    userId: number,
+    patch: {
+      leadNotifications?: boolean;
+      notifyManagers?: string[];
+      notifyStartTime?: string | null;
+      notifyEndTime?: string | null;
+    }
+  ) => {
+    try {
+      setSavingId(userId);
+      setError(null);
+      setMessage(null);
+
+      const res = await fetch(`/api/users/${userId}/notifications`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.ok === false) {
+        throw new Error(data.error || "Update failed");
+      }
+
+      setUsers((prev) =>
+        prev.map((x) =>
+          x.id === userId
+            ? {
+                ...x,
+                leadNotifications: data.data.leadNotifications ?? x.leadNotifications,
+                notifyManagers: data.data.notifyManagers ?? x.notifyManagers,
+                notifyStartTime: data.data.notifyStartTime,
+                notifyEndTime: data.data.notifyEndTime,
+              }
+            : x
+        )
+      );
+      setMessage("Bildirishnoma sozlamalari yangilandi");
+    } catch (err: any) {
+      console.error("[users] notification update error", err);
+      setError(err?.message || "Failed to update notification settings");
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const toggleManager = (user: TelegramUser, manager: string) => {
+    const currentManagers = user.notifyManagers || [];
+    let newManagers: string[];
+    
+    if (currentManagers.includes(manager)) {
+      newManagers = currentManagers.filter((m) => m !== manager);
+    } else {
+      newManagers = [...currentManagers, manager];
+    }
+    
+    updateNotificationSettings(user.id, { notifyManagers: newManagers });
+  };
+
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-slate-50">
       <h1 className="mb-4 text-3xl font-bold">Telegram report users</h1>
@@ -227,6 +307,9 @@ export default function UsersPage() {
                 <th className="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
                   Manual report
                 </th>
+                <th className="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Lid xabarlari
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
@@ -239,7 +322,8 @@ export default function UsersPage() {
                 const periodValue = periodByUser[u.id] || "today";
 
                 return (
-                  <tr key={u.id} className="hover:bg-slate-800/50">
+                  <React.Fragment key={u.id}>
+                  <tr className="hover:bg-slate-800/50">
                     <td className="px-3 py-2 text-xs text-slate-300">
                       {u.id}
                     </td>
@@ -321,7 +405,138 @@ export default function UsersPage() {
                         </button>
                       </div>
                     </td>
+
+                    {/* Lead Notifications */}
+                    <td className="px-3 py-2 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4"
+                          checked={u.leadNotifications}
+                          disabled={savingId === u.id}
+                          onChange={(e) =>
+                            updateNotificationSettings(u.id, {
+                              leadNotifications: e.target.checked,
+                            })
+                          }
+                        />
+                        <button
+                          className="rounded bg-blue-600 px-2 py-1 text-xs font-semibold text-white hover:bg-blue-500"
+                          onClick={() =>
+                            setExpandedUserId(
+                              expandedUserId === u.id ? null : u.id
+                            )
+                          }
+                        >
+                          {expandedUserId === u.id ? "Yopish" : "Sozlamalar"}
+                        </button>
+                      </div>
+                    </td>
                   </tr>
+
+                  {/* Expanded notification settings */}
+                  {expandedUserId === u.id && (
+                    <tr className="bg-slate-800/70">
+                      <td colSpan={9} className="px-4 py-4">
+                        <div className="space-y-4">
+                          <div>
+                            <p className="mb-2 text-xs font-semibold text-slate-300">
+                              Qaysi menejerlar lidlarini yuborish:
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                className={`rounded px-2 py-1 text-xs ${
+                                  (u.notifyManagers || []).length === 0
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-slate-700 text-slate-300"
+                                }`}
+                                onClick={() =>
+                                  updateNotificationSettings(u.id, {
+                                    notifyManagers: [],
+                                  })
+                                }
+                              >
+                                Barcha menejerlar
+                              </button>
+                              {MANAGERS.map((manager) => (
+                                <button
+                                  key={manager}
+                                  className={`rounded px-2 py-1 text-xs ${
+                                    (u.notifyManagers || []).includes(manager)
+                                      ? "bg-emerald-600 text-white"
+                                      : "bg-slate-700 text-slate-300"
+                                  }`}
+                                  onClick={() => toggleManager(u, manager)}
+                                >
+                                  {manager}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div>
+                            <p className="mb-2 text-xs font-semibold text-slate-300">
+                              Yuborish vaqti (GMT+5):
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                className={`rounded px-2 py-1 text-xs ${
+                                  !u.notifyStartTime && !u.notifyEndTime
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-slate-700 text-slate-300"
+                                }`}
+                                onClick={() =>
+                                  updateNotificationSettings(u.id, {
+                                    notifyStartTime: null,
+                                    notifyEndTime: null,
+                                  })
+                                }
+                              >
+                                24/7 (to'xtovsiz)
+                              </button>
+                              <button
+                                className={`rounded px-2 py-1 text-xs ${
+                                  u.notifyStartTime === "09:00" &&
+                                  u.notifyEndTime === "18:00"
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-slate-700 text-slate-300"
+                                }`}
+                                onClick={() =>
+                                  updateNotificationSettings(u.id, {
+                                    notifyStartTime: "09:00",
+                                    notifyEndTime: "18:00",
+                                  })
+                                }
+                              >
+                                09:00 - 18:00
+                              </button>
+                              <button
+                                className={`rounded px-2 py-1 text-xs ${
+                                  u.notifyStartTime === "08:00" &&
+                                  u.notifyEndTime === "20:00"
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-slate-700 text-slate-300"
+                                }`}
+                                onClick={() =>
+                                  updateNotificationSettings(u.id, {
+                                    notifyStartTime: "08:00",
+                                    notifyEndTime: "20:00",
+                                  })
+                                }
+                              >
+                                08:00 - 20:00
+                              </button>
+                            </div>
+                            <p className="mt-2 text-xs text-slate-400">
+                              Ish vaqtidan tashqarida kelgan lidlar 9:05 da
+                              yuboriladi.
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
                 );
               })}
             </tbody>

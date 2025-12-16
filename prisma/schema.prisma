@@ -20,6 +20,70 @@ model TelegramUser {
   monthlyReport Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  // Lead notification preferences
+  leadNotifications    Boolean  @default(false)
+  notifyManagers       String[] @default([]) // Empty = all managers, or specific manager names
+  notifyStartTime      String?  // e.g., "09:00" (GMT+5), null = non-stop
+  notifyEndTime        String?  // e.g., "18:00" (GMT+5), null = non-stop
+
+  // Response tracking
+  responses LeadNotificationResponse[]
+}
+
+// Track lead notifications sent to users
+model LeadNotification {
+  id          String   @id @default(cuid())
+  leadId      Int      // amoCRM lead ID
+  leadName    String
+  phone       String?
+  source      String?  // Where lead came from
+  manager     String   // Assigned manager name
+  pipeline    String   // Sotuv/Intensiv
+  pipelineId  Int      // amoCRM pipeline ID
+  sentAt      DateTime @default(now())
+  isQueued    Boolean  @default(false) // true if queued for morning delivery
+
+  responses   LeadNotificationResponse[]
+
+  @@index([leadId])
+  @@index([sentAt])
+  @@index([manager])
+}
+
+// Track user responses to lead notifications (button clicks)
+model LeadNotificationResponse {
+  id              String   @id @default(cuid())
+  notificationId  String
+  userId          Int
+  clickedAt       DateTime @default(now())
+  responseTimeMs  Int      // Time from notification sent to button click
+
+  notification    LeadNotification @relation(fields: [notificationId], references: [id])
+  user            TelegramUser     @relation(fields: [userId], references: [id])
+
+  @@unique([notificationId, userId]) // One response per user per notification
+  @@index([userId])
+  @@index([clickedAt])
+}
+
+// Queue for after-hours notifications
+model NotificationQueue {
+  id          String   @id @default(cuid())
+  userId      Int      // TelegramUser id to send to
+  leadId      Int      // amoCRM lead ID
+  leadName    String
+  phone       String?
+  source      String?
+  manager     String
+  pipeline    String
+  pipelineId  Int
+  createdAt   DateTime @default(now())
+  scheduledFor DateTime // When to send (9:05 AM GMT+5)
+  sent        Boolean  @default(false)
+
+  @@index([scheduledFor])
+  @@index([sent])
 }
 
 model CallsCache {

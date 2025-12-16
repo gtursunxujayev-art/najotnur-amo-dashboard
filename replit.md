@@ -161,3 +161,40 @@ The application is built with Next.js 16 (App Router) and React 19, leveraging T
   - Added "Intensiv tushum" KPI card showing Intensiv revenue
   - Added "Intensiv sotuvlar" metric showing Intensiv sales count
   - Total sales count now includes Intensiv (Online + Offline + Intensiv)
+
+### Real-Time Lead Notifications (December 16, 2025)
+- **Feature**: Send instant Telegram notifications when new leads are created in amoCRM
+- **Notification Content**:
+  - Lead name (Ismi)
+  - Phone number (Telefon)
+  - Source (Qayerdan - where the lead came from)
+  - Manager (Menejer - assigned manager)
+  - Pipeline (Voronka - Sotuv/Intensiv)
+  - Inline button to open lead in CRM (`https://najotnur01.amocrm.ru/leads/detail/{leadId}`)
+- **User Preferences** (via Telegram bot `/notifications` command or Users admin panel):
+  - Enable/disable lead notifications
+  - Filter by specific managers (receive notifications only for selected managers' leads)
+  - Working hours with after-hours queuing:
+    - 24/7 (non-stop) - default
+    - 09:00-18:00 GMT+5
+    - 08:00-20:00 GMT+5
+  - Leads arriving outside working hours are queued and sent at 9:05 AM
+- **Response Time Tracking**:
+  - Tracks when users click the CRM button on notifications
+  - Calculates average response time per manager
+  - Shows response time stats on Sotuvchilar page with color coding:
+    - Green: < 1 minute
+    - Yellow: 1-5 minutes
+    - Red: > 5 minutes
+- **Implementation**:
+  - amoCRM webhook endpoint: `/api/amocrm/webhook` (needs to be configured in amoCRM)
+  - Database models: `LeadNotification`, `LeadNotificationResponse`, `NotificationQueue`
+  - TelegramUser fields: `leadNotifications`, `notifyManagers[]`, `notifyStartTime`, `notifyEndTime`
+  - API endpoints: `/api/response-stats`, `/api/users/[id]/notifications`
+  - Queued notifications script: `npm run notifications:send-queued`
+- **Setup Instructions**:
+  1. Configure amoCRM webhook to POST to `{your-domain}/api/amocrm/webhook` on lead creation
+  2. Users can enable notifications via Telegram `/notifications` command
+  3. Set up Replit Scheduled Deployment for queued notifications:
+     - Command: `npm run notifications:send-queued`
+     - Schedule: `5 4 * * *` (9:05 AM GMT+5 = 4:05 UTC)
