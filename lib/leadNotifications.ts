@@ -164,18 +164,64 @@ export async function notifyUsersAboutLead(lead: LeadData): Promise<void> {
     `[LeadNotifications] Processing lead ${lead.leadId} - ${lead.leadName}`
   );
 
-  const notification = await prisma.leadNotification.create({
-    data: {
-      leadId: lead.leadId,
-      leadName: lead.leadName,
-      phone: lead.phone,
-      source: lead.source,
-      manager: lead.manager,
-      pipeline: lead.pipeline,
-      pipelineId: lead.pipelineId,
-      isQueued: false,
-    },
-  });
+  // Check if this lead was already notified in the last 5 minutes (prevents duplicates from dev/prod webhooks)
+  // Use a serializable transaction to prevent race conditions between concurrent webhook requests
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  
+  let notification;
+  try {
+    notification = await prisma.$transaction(async (tx) => {
+      // Check for existing notification within the transaction
+      const existingNotification = await tx.leadNotification.findFirst({
+        where: {
+          leadId: lead.leadId,
+          sentAt: {
+            gte: fiveMinutesAgo,
+          },
+        },
+        orderBy: {
+          sentAt: 'desc',
+        },
+      });
+
+      if (existingNotification) {
+        console.log(
+          `[LeadNotifications] Skipping lead ${lead.leadId} - already notified at ${existingNotification.sentAt.toISOString()} (${Math.round((Date.now() - existingNotification.sentAt.getTime()) / 1000)}s ago)`
+        );
+        return null;
+      }
+
+      // Create the notification record within the same transaction
+      const newNotification = await tx.leadNotification.create({
+        data: {
+          leadId: lead.leadId,
+          leadName: lead.leadName,
+          phone: lead.phone,
+          source: lead.source,
+          manager: lead.manager,
+          pipeline: lead.pipeline,
+          pipelineId: lead.pipelineId,
+          isQueued: false,
+        },
+      });
+      
+      console.log(`[LeadNotifications] Created notification record ${newNotification.id} for lead ${lead.leadId}`);
+      return newNotification;
+    }, {
+      isolationLevel: 'Serializable', // Prevent race conditions
+    });
+  } catch (error: any) {
+    // Handle serialization failure (concurrent transaction conflict)
+    if (error.code === 'P2034' || error.message?.includes('serialization')) {
+      console.log(`[LeadNotifications] Lead ${lead.leadId} - concurrent request handled, skipping`);
+      return;
+    }
+    throw error;
+  }
+  
+  if (!notification) {
+    return; // Already notified, skip sending
+  }
 
   const users = await prisma.telegramUser.findMany({
     where: {
@@ -307,18 +353,65 @@ export async function notifyUsersAboutReassignedLead(lead: ReassignedLeadData): 
     `[LeadNotifications] Processing reassigned lead ${lead.leadId} - ${lead.leadName} (${lead.oldManager} → ${lead.newManager})`
   );
 
-  const notification = await prisma.leadNotification.create({
-    data: {
-      leadId: lead.leadId,
-      leadName: lead.leadName,
-      phone: lead.phone,
-      source: lead.source,
-      manager: lead.newManager,
-      pipeline: lead.pipeline,
-      pipelineId: lead.pipelineId,
-      isQueued: false,
-    },
-  });
+  // Check if this lead was already notified in the last 5 minutes (prevents duplicates from dev/prod webhooks)
+  // Use a serializable transaction to prevent race conditions between concurrent webhook requests
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  
+  let notification;
+  try {
+    notification = await prisma.$transaction(async (tx) => {
+      // Check for existing notification within the transaction
+      const existingNotification = await tx.leadNotification.findFirst({
+        where: {
+          leadId: lead.leadId,
+          manager: lead.newManager,
+          sentAt: {
+            gte: fiveMinutesAgo,
+          },
+        },
+        orderBy: {
+          sentAt: 'desc',
+        },
+      });
+
+      if (existingNotification) {
+        console.log(
+          `[LeadNotifications] Skipping reassigned lead ${lead.leadId} - already notified at ${existingNotification.sentAt.toISOString()} (${Math.round((Date.now() - existingNotification.sentAt.getTime()) / 1000)}s ago)`
+        );
+        return null;
+      }
+
+      // Create the notification record within the same transaction
+      const newNotification = await tx.leadNotification.create({
+        data: {
+          leadId: lead.leadId,
+          leadName: lead.leadName,
+          phone: lead.phone,
+          source: lead.source,
+          manager: lead.newManager,
+          pipeline: lead.pipeline,
+          pipelineId: lead.pipelineId,
+          isQueued: false,
+        },
+      });
+      
+      console.log(`[LeadNotifications] Created notification record ${newNotification.id} for reassigned lead ${lead.leadId}`);
+      return newNotification;
+    }, {
+      isolationLevel: 'Serializable', // Prevent race conditions
+    });
+  } catch (error: any) {
+    // Handle serialization failure (concurrent transaction conflict)
+    if (error.code === 'P2034' || error.message?.includes('serialization')) {
+      console.log(`[LeadNotifications] Reassigned lead ${lead.leadId} - concurrent request handled, skipping`);
+      return;
+    }
+    throw error;
+  }
+  
+  if (!notification) {
+    return; // Already notified, skip sending
+  }
 
   const users = await prisma.telegramUser.findMany({
     where: {
