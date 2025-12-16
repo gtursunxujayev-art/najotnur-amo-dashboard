@@ -89,6 +89,8 @@ export async function sendTelegramNotification(
     || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null)
     || "https://najotnur01.amocrm.ru";
   
+  console.log(`[LeadNotifications] URL resolution: PRODUCTION_BASE_URL=${process.env.PRODUCTION_BASE_URL || 'not set'}, REPLIT_DOMAINS=${process.env.REPLIT_DOMAINS || 'not set'}, REPLIT_DEV_DOMAIN=${process.env.REPLIT_DEV_DOMAIN || 'not set'}, using baseUrl=${baseUrl}`);
+  
   const clickUrl = `${baseUrl}/api/lead-click/${notificationId}/${chatId}`;
 
   let createdTimeStr = "";
@@ -301,6 +303,8 @@ export async function sendReassignedTelegramNotification(
     || (replitDomains ? `https://${replitDomains}` : null)
     || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null)
     || "https://najotnur01.amocrm.ru";
+  
+  console.log(`[LeadNotifications] URL resolution (reassigned): PRODUCTION_BASE_URL=${process.env.PRODUCTION_BASE_URL || 'not set'}, REPLIT_DOMAINS=${process.env.REPLIT_DOMAINS || 'not set'}, REPLIT_DEV_DOMAIN=${process.env.REPLIT_DEV_DOMAIN || 'not set'}, using baseUrl=${baseUrl}`);
   
   const clickUrl = `${baseUrl}/api/lead-click/${notificationId}/${chatId}`;
 
