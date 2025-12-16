@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { notifyUsersAboutLead, notifyUsersAboutReassignedLead } from "@/lib/leadNotifications";
+import { getUsers } from "@/lib/amocrm";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -7,26 +8,30 @@ export const dynamic = "force-dynamic";
 const SOTUV_PIPELINE_ID = 9975586;
 const INTENSIV_PIPELINE_ID = 9663682;
 
-const MANAGERS: Record<number, string> = {
-  6549430: "Madina",
-  7199594: "Zilola",
-  6625970: "Sabrina",
-  6626192: "Oyshaxon",
-  7197714: "Marg'uba",
-  8565280: "Kesha",
-  8587936: "Admin",
-  10148086: "Mumtoza",
-  10148142: "Matluba",
-  10403196: "Mohinur",
-  10148106: "sabina",
-  10403170: "Gulchehra",
-  10374578: "Kamilla",
-  11136174: "Orzugul",
-  12681170: "Asal",
-  12681150: "Shaxnoza",
-  10363642: "Nodira",
-  13251146: "Aziz",
-};
+// Cache for amoCRM users (refreshed every 5 minutes)
+let usersCache: Map<number, string> = new Map();
+let usersCacheTime: number = 0;
+const USERS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+async function refreshUsersCache(): Promise<void> {
+  const now = Date.now();
+  if (usersCache.size > 0 && now - usersCacheTime < USERS_CACHE_TTL) {
+    return; // Cache is still valid
+  }
+
+  try {
+    console.log("[amoCRM/Webhook] Refreshing users cache from amoCRM API");
+    const users = await getUsers();
+    usersCache = new Map();
+    for (const user of users) {
+      usersCache.set(user.id, user.name);
+    }
+    usersCacheTime = now;
+    console.log(`[amoCRM/Webhook] Cached ${usersCache.size} users from amoCRM`);
+  } catch (error) {
+    console.error("[amoCRM/Webhook] Failed to refresh users cache:", error);
+  }
+}
 
 function getPipelineName(pipelineId: number): string {
   switch (pipelineId) {
@@ -40,7 +45,7 @@ function getPipelineName(pipelineId: number): string {
 }
 
 function getManagerName(responsibleUserId: number): string {
-  return MANAGERS[responsibleUserId] || `User ${responsibleUserId}`;
+  return usersCache.get(responsibleUserId) || `User ${responsibleUserId}`;
 }
 
 function getCustomFields(lead: any): any[] {
@@ -206,6 +211,9 @@ export async function POST(request: Request) {
       console.log("[amoCRM/Webhook] No leads in webhook data");
       return NextResponse.json({ ok: true, message: "No leads to process" });
     }
+
+    // Refresh users cache before processing
+    await refreshUsersCache();
 
     let processedCount = 0;
 
