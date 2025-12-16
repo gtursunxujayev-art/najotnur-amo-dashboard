@@ -386,9 +386,6 @@ export async function sendQueuedNotifications(): Promise<number> {
         lte: now,
       },
     },
-    include: {
-      // No relation defined, we'll fetch user separately
-    },
   });
 
   console.log(
