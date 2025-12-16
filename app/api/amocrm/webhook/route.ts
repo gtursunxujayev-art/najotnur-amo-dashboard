@@ -36,17 +36,40 @@ function getManagerName(responsibleUserId: number): string {
   return MANAGERS[responsibleUserId] || `User ${responsibleUserId}`;
 }
 
-function extractPhone(lead: any): string | undefined {
-  if (!lead.custom_fields_values) return undefined;
+function getCustomFields(lead: any): any[] {
+  if (lead.custom_fields_values && Array.isArray(lead.custom_fields_values)) {
+    return lead.custom_fields_values;
+  }
+  
+  if (lead.custom_fields) {
+    if (Array.isArray(lead.custom_fields)) {
+      return lead.custom_fields;
+    }
+    return Object.values(lead.custom_fields);
+  }
+  
+  return [];
+}
 
-  for (const field of lead.custom_fields_values) {
+function extractPhone(lead: any): string | undefined {
+  const customFields = getCustomFields(lead);
+
+  for (const field of customFields) {
+    const fieldCode = field.field_code || field.code;
+    const fieldName = field.field_name || field.name;
+    
     if (
-      field.field_code === "PHONE" ||
-      field.field_name?.toLowerCase().includes("телефон") ||
-      field.field_name?.toLowerCase().includes("phone")
+      fieldCode === "PHONE" ||
+      fieldName?.toLowerCase().includes("телефон") ||
+      fieldName?.toLowerCase().includes("phone")
     ) {
-      const value = field.values?.[0]?.value;
-      if (value) return value;
+      const values = field.values || field.value;
+      if (Array.isArray(values) && values[0]) {
+        return values[0].value || values[0];
+      }
+      if (typeof values === "string") {
+        return values;
+      }
     }
   }
 
@@ -61,31 +84,116 @@ function extractSource(lead: any): string | undefined {
   if (lead._embedded?.tags?.length > 0) {
     return lead._embedded.tags.map((t: any) => t.name).join(", ");
   }
+  
+  if (lead.tags) {
+    const tags = Array.isArray(lead.tags) ? lead.tags : Object.values(lead.tags);
+    if (tags.length > 0) {
+      return tags.map((t: any) => t.name || t).filter(Boolean).join(", ");
+    }
+  }
 
-  if (!lead.custom_fields_values) return undefined;
+  const customFields = getCustomFields(lead);
 
-  for (const field of lead.custom_fields_values) {
+  for (const field of customFields) {
+    const fieldName = field.field_name || field.name;
+    
     if (
-      field.field_name?.toLowerCase().includes("источник") ||
-      field.field_name?.toLowerCase().includes("source") ||
-      field.field_name?.toLowerCase().includes("manba")
+      fieldName?.toLowerCase().includes("источник") ||
+      fieldName?.toLowerCase().includes("source") ||
+      fieldName?.toLowerCase().includes("manba") ||
+      fieldName?.toLowerCase().includes("qayerdan")
     ) {
-      const value = field.values?.[0]?.value;
-      if (value) return value;
+      const values = field.values || field.value;
+      if (Array.isArray(values) && values[0]) {
+        return values[0].value || values[0];
+      }
+      if (typeof values === "string") {
+        return values;
+      }
     }
   }
 
   return undefined;
 }
 
+function parseFormDataToObject(formData: FormData): any {
+  const result: any = {};
+  
+  for (const [key, value] of formData.entries()) {
+    const keys = key.match(/[^\[\]]+/g);
+    if (!keys) {
+      result[key] = value;
+      continue;
+    }
+    
+    let current = result;
+    for (let i = 0; i < keys.length; i++) {
+      const k = keys[i];
+      const isLast = i === keys.length - 1;
+      const nextKey = keys[i + 1];
+      const isNextNumeric = nextKey && /^\d+$/.test(nextKey);
+      
+      if (isLast) {
+        current[k] = value;
+      } else {
+        if (current[k] === undefined) {
+          current[k] = isNextNumeric ? [] : {};
+        }
+        current = current[k];
+      }
+    }
+  }
+  
+  return result;
+}
+
 export async function POST(request: Request) {
   try {
     console.log("[amoCRM/Webhook] Received webhook");
 
-    const data = await request.json();
-    console.log("[amoCRM/Webhook] Data:", JSON.stringify(data, null, 2));
+    const contentType = request.headers.get("content-type") || "";
+    let data: any;
 
-    const leads = data.leads?.add || data.leads?.update || [];
+    if (contentType.includes("application/json")) {
+      data = await request.json();
+    } else if (contentType.includes("application/x-www-form-urlencoded")) {
+      const formData = await request.formData();
+      data = parseFormDataToObject(formData);
+    } else {
+      const text = await request.text();
+      console.log("[amoCRM/Webhook] Raw body:", text.substring(0, 500));
+      
+      if (text.includes("=") && text.includes("&")) {
+        const params = new URLSearchParams(text);
+        const formData = new FormData();
+        for (const [key, value] of params.entries()) {
+          formData.append(key, value);
+        }
+        data = parseFormDataToObject(formData);
+      } else {
+        try {
+          data = JSON.parse(text);
+        } catch {
+          console.error("[amoCRM/Webhook] Unable to parse body");
+          return NextResponse.json(
+            { ok: false, error: "Invalid request body format" },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    console.log("[amoCRM/Webhook] Parsed data:", JSON.stringify(data, null, 2));
+
+    const newLeads = data.leads?.add || [];
+    const isNewLeadEvent = newLeads.length > 0;
+    
+    const leads = isNewLeadEvent ? newLeads : [];
+    
+    if (!isNewLeadEvent && (data.leads?.update || data.leads?.status)) {
+      console.log("[amoCRM/Webhook] Skipping update/status event - only processing new leads");
+      return NextResponse.json({ ok: true, message: "Only new lead events are processed" });
+    }
 
     if (!leads.length) {
       console.log("[amoCRM/Webhook] No leads in webhook data");
