@@ -8,28 +8,27 @@ export const dynamic = "force-dynamic";
 const SOTUV_PIPELINE_ID = 9975586;
 const INTENSIV_PIPELINE_ID = 9663682;
 
-// Cache for amoCRM users (refreshed every 5 minutes)
 let usersCache: Map<number, string> = new Map();
 let usersCacheTime: number = 0;
-const USERS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const USERS_CACHE_TTL = 5 * 60 * 1000;
 
 async function refreshUsersCache(): Promise<void> {
   const now = Date.now();
   if (usersCache.size > 0 && now - usersCacheTime < USERS_CACHE_TTL) {
-    return; // Cache is still valid
+    return;
   }
 
   try {
-    console.log("[amoCRM/Webhook] Refreshing users cache from amoCRM API");
+    console.log("[Webhook] Refreshing users cache");
     const users = await getUsers();
     usersCache = new Map();
     for (const user of users) {
       usersCache.set(user.id, user.name);
     }
     usersCacheTime = now;
-    console.log(`[amoCRM/Webhook] Cached ${usersCache.size} users from amoCRM`);
+    console.log(`[Webhook] Cached ${usersCache.size} users`);
   } catch (error) {
-    console.error("[amoCRM/Webhook] Failed to refresh users cache:", error);
+    console.error("[Webhook] Failed to refresh users cache:", error);
   }
 }
 
@@ -45,24 +44,20 @@ function getPipelineName(pipelineId: number): string {
 }
 
 async function getManagerName(responsibleUserId: number): Promise<string> {
-  // Check cache first
   const cached = usersCache.get(responsibleUserId);
   if (cached) {
     return cached;
   }
   
-  // If not in cache, try refreshing the cache
-  console.log(`[amoCRM/Webhook] User ${responsibleUserId} not in cache, refreshing...`);
+  console.log(`[Webhook] User ${responsibleUserId} not in cache, refreshing...`);
   await refreshUsersCache();
   
-  // Check again after refresh
   const afterRefresh = usersCache.get(responsibleUserId);
   if (afterRefresh) {
     return afterRefresh;
   }
   
-  // If still not found, log and return fallback
-  console.warn(`[amoCRM/Webhook] User ${responsibleUserId} not found in amoCRM API`);
+  console.warn(`[Webhook] User ${responsibleUserId} not found`);
   return `User ${responsibleUserId}`;
 }
 
@@ -123,15 +118,16 @@ function extractSource(lead: any): string | undefined {
   }
 
   const customFields = getCustomFields(lead);
-
+  
   for (const field of customFields) {
+    const fieldCode = field.field_code || field.code;
     const fieldName = field.field_name || field.name;
     
     if (
+      fieldCode === "UTM_SOURCE" ||
       fieldName?.toLowerCase().includes("источник") ||
       fieldName?.toLowerCase().includes("source") ||
-      fieldName?.toLowerCase().includes("manba") ||
-      fieldName?.toLowerCase().includes("qayerdan")
+      fieldName?.toLowerCase().includes("utm")
     ) {
       const values = field.values || field.value;
       if (Array.isArray(values) && values[0]) {
@@ -150,36 +146,130 @@ function parseFormDataToObject(formData: FormData): any {
   const result: any = {};
   
   for (const [key, value] of formData.entries()) {
-    const keys = key.match(/[^\[\]]+/g);
-    if (!keys) {
-      result[key] = value;
-      continue;
-    }
+    if (typeof value !== "string") continue;
     
-    let current = result;
-    for (let i = 0; i < keys.length; i++) {
-      const k = keys[i];
-      const isLast = i === keys.length - 1;
-      const nextKey = keys[i + 1];
-      const isNextNumeric = nextKey && /^\d+$/.test(nextKey);
+    const matches = key.match(/^([^\[]+)(\[.+\])$/);
+    if (matches) {
+      const rootKey = matches[1];
+      const path = matches[2];
       
-      if (isLast) {
-        current[k] = value;
-      } else {
-        if (current[k] === undefined) {
-          current[k] = isNextNumeric ? [] : {};
-        }
-        current = current[k];
+      if (!result[rootKey]) {
+        result[rootKey] = {};
       }
+      
+      const pathParts = path.match(/\[([^\]]*)\]/g) || [];
+      let current = result[rootKey];
+      
+      for (let i = 0; i < pathParts.length - 1; i++) {
+        const part = pathParts[i].slice(1, -1);
+        if (!current[part]) {
+          current[part] = {};
+        }
+        current = current[part];
+      }
+      
+      const lastPart = pathParts[pathParts.length - 1].slice(1, -1);
+      current[lastPart] = value;
+    } else {
+      result[key] = value;
     }
   }
   
   return result;
 }
 
-export async function POST(request: Request) {
+async function processWebhookAsync(data: any): Promise<void> {
   try {
-    console.log("[amoCRM/Webhook] Received webhook");
+    const newLeads = data.leads?.add || [];
+    const responsibleLeads = data.leads?.responsible || [];
+
+    if (!newLeads.length && !responsibleLeads.length) {
+      console.log("[Webhook/Async] No leads to process");
+      return;
+    }
+
+    await refreshUsersCache();
+
+    let processedCount = 0;
+
+    for (const lead of newLeads) {
+      try {
+        const leadId = parseInt(lead.id);
+        const leadName = lead.name || "Nomsiz lid";
+        const pipelineId = parseInt(lead.pipeline_id || lead.status?.pipeline_id);
+        const responsibleUserId = parseInt(lead.responsible_user_id);
+
+        if (pipelineId !== SOTUV_PIPELINE_ID && pipelineId !== INTENSIV_PIPELINE_ID) {
+          console.log(`[Webhook/Async] Skipping lead ${leadId} - pipeline ${pipelineId} not tracked`);
+          continue;
+        }
+
+        const createdAt = parseInt(lead.date_create || lead.created_at || "0");
+        
+        const leadData = {
+          leadId,
+          leadName,
+          phone: extractPhone(lead),
+          source: extractSource(lead),
+          manager: await getManagerName(responsibleUserId),
+          pipeline: getPipelineName(pipelineId),
+          pipelineId,
+          createdAt: createdAt || undefined,
+        };
+
+        console.log("[Webhook/Async] Processing new lead:", leadData);
+        await notifyUsersAboutLead(leadData);
+        processedCount++;
+      } catch (leadError) {
+        console.error("[Webhook/Async] Error processing new lead:", leadError);
+      }
+    }
+
+    for (const lead of responsibleLeads) {
+      try {
+        const leadId = parseInt(lead.id);
+        const leadName = lead.name || "Nomsiz lid";
+        const pipelineId = parseInt(lead.pipeline_id);
+        const newResponsibleUserId = parseInt(lead.responsible_user_id);
+        const oldResponsibleUserId = lead.old_responsible_user_id 
+          ? parseInt(lead.old_responsible_user_id) 
+          : null;
+
+        if (pipelineId !== SOTUV_PIPELINE_ID && pipelineId !== INTENSIV_PIPELINE_ID) {
+          console.log(`[Webhook/Async] Skipping responsible change for lead ${leadId} - pipeline ${pipelineId} not tracked`);
+          continue;
+        }
+
+        const leadData = {
+          leadId,
+          leadName,
+          phone: extractPhone(lead),
+          source: extractSource(lead),
+          newManager: await getManagerName(newResponsibleUserId),
+          oldManager: oldResponsibleUserId ? await getManagerName(oldResponsibleUserId) : "Noma'lum",
+          pipeline: getPipelineName(pipelineId),
+          pipelineId,
+        };
+
+        console.log("[Webhook/Async] Processing responsible change:", leadData);
+        await notifyUsersAboutReassignedLead(leadData);
+        processedCount++;
+      } catch (leadError) {
+        console.error("[Webhook/Async] Error processing responsible change:", leadError);
+      }
+    }
+
+    console.log(`[Webhook/Async] Completed processing ${processedCount} lead event(s)`);
+  } catch (error) {
+    console.error("[Webhook/Async] Fatal error in async processing:", error);
+  }
+}
+
+export async function POST(request: Request) {
+  const startTime = Date.now();
+  
+  try {
+    console.log("[Webhook] Received webhook request");
 
     const contentType = request.headers.get("content-type") || "";
     let data: any;
@@ -191,7 +281,6 @@ export async function POST(request: Request) {
       data = parseFormDataToObject(formData);
     } else {
       const text = await request.text();
-      console.log("[amoCRM/Webhook] Raw body:", text.substring(0, 500));
       
       if (text.includes("=") && text.includes("&")) {
         const params = new URLSearchParams(text);
@@ -204,16 +293,11 @@ export async function POST(request: Request) {
         try {
           data = JSON.parse(text);
         } catch {
-          console.error("[amoCRM/Webhook] Unable to parse body");
-          return NextResponse.json(
-            { ok: false, error: "Invalid request body format" },
-            { status: 400 }
-          );
+          console.error("[Webhook] Unable to parse body, but returning 200 anyway");
+          return NextResponse.json({ ok: true, message: "Received" });
         }
       }
     }
-
-    console.log("[amoCRM/Webhook] Parsed data:", JSON.stringify(data, null, 2));
 
     const newLeads = data.leads?.add || [];
     const responsibleLeads = data.leads?.responsible || [];
@@ -221,106 +305,39 @@ export async function POST(request: Request) {
     const isResponsibleChangeEvent = responsibleLeads.length > 0;
     
     if (!isNewLeadEvent && !isResponsibleChangeEvent && (data.leads?.update || data.leads?.status)) {
-      console.log("[amoCRM/Webhook] Skipping update/status event - only processing new leads and responsible changes");
-      return NextResponse.json({ ok: true, message: "Only new lead and responsible change events are processed" });
+      console.log("[Webhook] Skipping update/status event");
+      return NextResponse.json({ ok: true, message: "Event type not tracked" });
     }
 
     if (!newLeads.length && !responsibleLeads.length) {
-      console.log("[amoCRM/Webhook] No leads in webhook data");
-      return NextResponse.json({ ok: true, message: "No leads to process" });
+      console.log("[Webhook] No leads in webhook data");
+      return NextResponse.json({ ok: true, message: "No leads" });
     }
 
-    // Refresh users cache before processing
-    await refreshUsersCache();
+    console.log(`[Webhook] Quick parse complete in ${Date.now() - startTime}ms, starting async processing`);
+    console.log(`[Webhook] New leads: ${newLeads.length}, Responsible changes: ${responsibleLeads.length}`);
 
-    let processedCount = 0;
-
-    for (const lead of newLeads) {
-      const leadId = parseInt(lead.id);
-      const leadName = lead.name || "Nomsiz lid";
-      const pipelineId = parseInt(lead.pipeline_id || lead.status?.pipeline_id);
-      const responsibleUserId = parseInt(lead.responsible_user_id);
-
-      if (
-        pipelineId !== SOTUV_PIPELINE_ID &&
-        pipelineId !== INTENSIV_PIPELINE_ID
-      ) {
-        console.log(
-          `[amoCRM/Webhook] Skipping lead ${leadId} - pipeline ${pipelineId} not tracked`
-        );
-        continue;
-      }
-
-      const createdAt = parseInt(lead.date_create || lead.created_at || "0");
-      
-      const leadData = {
-        leadId,
-        leadName,
-        phone: extractPhone(lead),
-        source: extractSource(lead),
-        manager: await getManagerName(responsibleUserId),
-        pipeline: getPipelineName(pipelineId),
-        pipelineId,
-        createdAt: createdAt || undefined,
-      };
-
-      console.log("[amoCRM/Webhook] Processing new lead:", leadData);
-      await notifyUsersAboutLead(leadData);
-      processedCount++;
-    }
-
-    for (const lead of responsibleLeads) {
-      const leadId = parseInt(lead.id);
-      const leadName = lead.name || "Nomsiz lid";
-      const pipelineId = parseInt(lead.pipeline_id);
-      const newResponsibleUserId = parseInt(lead.responsible_user_id);
-      const oldResponsibleUserId = lead.old_responsible_user_id 
-        ? parseInt(lead.old_responsible_user_id) 
-        : null;
-
-      if (
-        pipelineId !== SOTUV_PIPELINE_ID &&
-        pipelineId !== INTENSIV_PIPELINE_ID
-      ) {
-        console.log(
-          `[amoCRM/Webhook] Skipping responsible change for lead ${leadId} - pipeline ${pipelineId} not tracked`
-        );
-        continue;
-      }
-
-      const leadData = {
-        leadId,
-        leadName,
-        phone: extractPhone(lead),
-        source: extractSource(lead),
-        newManager: await getManagerName(newResponsibleUserId),
-        oldManager: oldResponsibleUserId ? await getManagerName(oldResponsibleUserId) : "Noma'lum",
-        pipeline: getPipelineName(pipelineId),
-        pipelineId,
-      };
-
-      console.log("[amoCRM/Webhook] Processing responsible change:", leadData);
-      await notifyUsersAboutReassignedLead(leadData);
-      processedCount++;
-    }
+    setImmediate(() => {
+      processWebhookAsync(data).catch(err => {
+        console.error("[Webhook] Async processing error:", err);
+      });
+    });
 
     return NextResponse.json({
       ok: true,
-      message: `Processed ${processedCount} lead event(s)`,
+      message: "Webhook received, processing in background",
+      responseTime: Date.now() - startTime,
     });
   } catch (error: any) {
-    console.error("[amoCRM/Webhook] Error:", error);
-    return NextResponse.json(
-      { ok: false, error: error.message },
-      { status: 400 }
-    );
+    console.error("[Webhook] Error parsing request:", error);
+    return NextResponse.json({ ok: true, message: "Error logged, accepted" });
   }
 }
 
 export async function GET() {
   return NextResponse.json({
     ok: true,
-    message: "amoCRM webhook endpoint is active",
+    message: "amoCRM webhook endpoint is active (async mode)",
     trackedPipelines: [
       { id: SOTUV_PIPELINE_ID, name: "Sotuv" },
       { id: INTENSIV_PIPELINE_ID, name: "Intensiv" },
