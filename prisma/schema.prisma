@@ -156,3 +156,18 @@ model UtelCall {
   @@index([extension])
   @@index([createdAt])
 }
+
+// Log all incoming amoCRM webhooks for debugging
+model WebhookLog {
+  id          String   @id @default(cuid())
+  eventType   String   // "leads.add", "leads.responsible", "leads.update", etc.
+  leadIds     String[] // Array of lead IDs in this webhook
+  payload     String   // Truncated JSON payload for debugging
+  processed   Boolean  @default(false) // Whether processing started
+  completed   Boolean  @default(false) // Whether processing completed successfully
+  error       String?  // Error message if processing failed
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([eventType])
+}

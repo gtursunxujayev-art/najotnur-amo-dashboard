@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { notifyUsersAboutLead, notifyUsersAboutReassignedLead } from "@/lib/leadNotifications";
 import { getUsers } from "@/lib/amocrm";
+import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -178,13 +179,22 @@ function parseFormDataToObject(formData: FormData): any {
   return result;
 }
 
-async function processWebhookAsync(data: any): Promise<void> {
+async function processWebhookAsync(data: any, logId: string): Promise<void> {
   try {
+    await prisma.webhookLog.update({
+      where: { id: logId },
+      data: { processed: true }
+    });
+
     const newLeads = data.leads?.add || [];
     const responsibleLeads = data.leads?.responsible || [];
 
     if (!newLeads.length && !responsibleLeads.length) {
       console.log("[Webhook/Async] No leads to process");
+      await prisma.webhookLog.update({
+        where: { id: logId },
+        data: { completed: true }
+      });
       return;
     }
 
@@ -260,8 +270,17 @@ async function processWebhookAsync(data: any): Promise<void> {
     }
 
     console.log(`[Webhook/Async] Completed processing ${processedCount} lead event(s)`);
-  } catch (error) {
+    
+    await prisma.webhookLog.update({
+      where: { id: logId },
+      data: { completed: true }
+    });
+  } catch (error: any) {
     console.error("[Webhook/Async] Fatal error in async processing:", error);
+    await prisma.webhookLog.update({
+      where: { id: logId },
+      data: { error: error.message || "Unknown error" }
+    }).catch(() => {});
   }
 }
 
@@ -314,13 +333,42 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, message: "No leads" });
     }
 
-    console.log(`[Webhook] Quick parse complete in ${Date.now() - startTime}ms, starting async processing`);
+    console.log(`[Webhook] Quick parse complete in ${Date.now() - startTime}ms`);
     console.log(`[Webhook] New leads: ${newLeads.length}, Responsible changes: ${responsibleLeads.length}`);
 
+    // Fire-and-forget: log and process asynchronously
     setImmediate(() => {
-      processWebhookAsync(data).catch(err => {
-        console.error("[Webhook] Async processing error:", err);
-      });
+      (async () => {
+        try {
+          // Determine event type for logging
+          let eventType = "unknown";
+          const leadIds: string[] = [];
+          if (newLeads.length > 0) {
+            eventType = "leads.add";
+            newLeads.forEach((l: any) => leadIds.push(String(l.id)));
+          }
+          if (responsibleLeads.length > 0) {
+            eventType = newLeads.length > 0 ? "leads.add+responsible" : "leads.responsible";
+            responsibleLeads.forEach((l: any) => leadIds.push(String(l.id)));
+          }
+
+          // Log webhook to database for debugging
+          const webhookLog = await prisma.webhookLog.create({
+            data: {
+              eventType,
+              leadIds,
+              payload: JSON.stringify(data).substring(0, 5000),
+              processed: false,
+              completed: false,
+            }
+          });
+          
+          console.log(`[Webhook] Logged to DB, logId=${webhookLog.id}`);
+          await processWebhookAsync(data, webhookLog.id);
+        } catch (err) {
+          console.error("[Webhook] Async processing error:", err);
+        }
+      })();
     });
 
     return NextResponse.json({
