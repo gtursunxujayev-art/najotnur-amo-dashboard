@@ -2,6 +2,7 @@
 import * as cron from "node-cron";
 import { prisma } from "@/lib/prisma";
 import type { ScheduledTask } from "node-cron";
+import { getBaseUrl } from "@/lib/baseUrl";
 
 interface SchedulerStatus {
   initialized: boolean;
@@ -203,9 +204,3 @@ export function initializeScheduler() {
   console.log("[Scheduler] 🔧 Use /api/scheduler/status to check execution history");
 }
 
-function getBaseUrl(): string {
-  if (process.env.REPLIT_DOMAINS) {
-    return `https://${process.env.REPLIT_DOMAINS}`;
-  }
-  return "http://localhost:5000";
-}
