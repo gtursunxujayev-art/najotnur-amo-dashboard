@@ -1,48 +1,52 @@
-import { google } from 'googleapis';
+import { google } from "googleapis";
 
-let connectionSettings: any;
+/**
+ * Google Sheets client for Vercel / generic Node.js using a
+ * Google Cloud **service account**.
+ *
+ * It reads credentials from environment variables:
+ * - GOOGLE_PROJECT_ID
+ * - GOOGLE_CLIENT_EMAIL
+ * - GOOGLE_PRIVATE_KEY   (with \n line breaks or real newlines)
+ *
+ * NOTE: The old Replit Connector based implementation has been removed
+ * for production. If you still run this on Replit with connectors,
+ * prefer setting these env vars instead of relying on REPLIT_CONNECTORS.
+ */
 
-async function getAccessToken() {
-  if (connectionSettings && connectionSettings.settings.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
-    return connectionSettings.settings.access_token;
+let sheetsClient: ReturnType<typeof google.sheets> | null = null;
+
+function createJwtClient() {
+  const projectId = process.env.GOOGLE_PROJECT_ID;
+  const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+  const rawPrivateKey = process.env.GOOGLE_PRIVATE_KEY;
+
+  if (!projectId || !clientEmail || !rawPrivateKey) {
+    throw new Error(
+      "Missing Google service account env vars. Please set GOOGLE_PROJECT_ID, GOOGLE_CLIENT_EMAIL and GOOGLE_PRIVATE_KEY."
+    );
   }
-  
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY 
-    ? 'repl ' + process.env.REPL_IDENTITY 
-    : process.env.WEB_REPL_RENEWAL 
-    ? 'depl ' + process.env.WEB_REPL_RENEWAL 
-    : null;
 
-  if (!xReplitToken) {
-    throw new Error('X_REPLIT_TOKEN not found for repl/depl');
-  }
+  // Vercel and many env systems store the key with literal '\n' sequences.
+  // Convert them to real newlines so Google client can parse it.
+  const privateKey = rawPrivateKey.replace(/\\n/g, "\n");
 
-  connectionSettings = await fetch(
-    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-sheet',
-    {
-      headers: {
-        'Accept': 'application/json',
-        'X_REPLIT_TOKEN': xReplitToken
-      }
-    }
-  ).then(res => res.json()).then(data => data.items?.[0]);
-
-  const accessToken = connectionSettings?.settings?.access_token || connectionSettings.settings?.oauth?.credentials?.access_token;
-
-  if (!connectionSettings || !accessToken) {
-    throw new Error('Google Sheet not connected');
-  }
-  return accessToken;
+  return new google.auth.JWT({
+    email: clientEmail,
+    key: privateKey,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+    subject: undefined,
+  });
 }
 
 export async function getGoogleSheetsClient() {
-  const accessToken = await getAccessToken();
+  if (sheetsClient) {
+    return sheetsClient;
+  }
 
-  const oauth2Client = new google.auth.OAuth2();
-  oauth2Client.setCredentials({
-    access_token: accessToken
-  });
+  const auth = createJwtClient();
+  sheetsClient = google.sheets({ version: "v4", auth });
 
-  return google.sheets({ version: 'v4', auth: oauth2Client });
+  return sheetsClient;
 }
+
