@@ -179,22 +179,27 @@ function parseFormDataToObject(formData: FormData): any {
   return result;
 }
 
-async function processWebhookAsync(data: any, logId: string): Promise<void> {
+async function processWebhookAsync(data: any, logId: string | null): Promise<void> {
   try {
-    await prisma.webhookLog.update({
-      where: { id: logId },
-      data: { processed: true }
-    });
+    // Update log if available
+    if (logId) {
+      await prisma.webhookLog.update({
+        where: { id: logId },
+        data: { processed: true }
+      }).catch(() => {});
+    }
 
     const newLeads = data.leads?.add || [];
     const responsibleLeads = data.leads?.responsible || [];
 
     if (!newLeads.length && !responsibleLeads.length) {
       console.log("[Webhook/Async] No leads to process");
-      await prisma.webhookLog.update({
-        where: { id: logId },
-        data: { completed: true }
-      });
+      if (logId) {
+        await prisma.webhookLog.update({
+          where: { id: logId },
+          data: { completed: true }
+        }).catch(() => {});
+      }
       return;
     }
 
@@ -271,16 +276,20 @@ async function processWebhookAsync(data: any, logId: string): Promise<void> {
 
     console.log(`[Webhook/Async] Completed processing ${processedCount} lead event(s)`);
     
-    await prisma.webhookLog.update({
-      where: { id: logId },
-      data: { completed: true }
-    });
+    if (logId) {
+      await prisma.webhookLog.update({
+        where: { id: logId },
+        data: { completed: true }
+      }).catch(() => {});
+    }
   } catch (error: any) {
     console.error("[Webhook/Async] Fatal error in async processing:", error);
-    await prisma.webhookLog.update({
-      where: { id: logId },
-      data: { error: error.message || "Unknown error" }
-    }).catch(() => {});
+    if (logId) {
+      await prisma.webhookLog.update({
+        where: { id: logId },
+        data: { error: error.message || "Unknown error" }
+      }).catch(() => {});
+    }
   }
 }
 
@@ -339,32 +348,39 @@ export async function POST(request: Request) {
     // Fire-and-forget: log and process asynchronously
     setImmediate(() => {
       (async () => {
+        let logId: string | null = null;
+        
         try {
-          // Determine event type for logging
-          let eventType = "unknown";
-          const leadIds: string[] = [];
-          if (newLeads.length > 0) {
-            eventType = "leads.add";
-            newLeads.forEach((l: any) => leadIds.push(String(l.id)));
-          }
-          if (responsibleLeads.length > 0) {
-            eventType = newLeads.length > 0 ? "leads.add+responsible" : "leads.responsible";
-            responsibleLeads.forEach((l: any) => leadIds.push(String(l.id)));
-          }
-
-          // Log webhook to database for debugging
-          const webhookLog = await prisma.webhookLog.create({
-            data: {
-              eventType,
-              leadIds,
-              payload: JSON.stringify(data).substring(0, 5000),
-              processed: false,
-              completed: false,
+          // Try to log webhook to database (optional - don't fail if table missing)
+          try {
+            let eventType = "unknown";
+            const leadIds: string[] = [];
+            if (newLeads.length > 0) {
+              eventType = "leads.add";
+              newLeads.forEach((l: any) => leadIds.push(String(l.id)));
             }
-          });
+            if (responsibleLeads.length > 0) {
+              eventType = newLeads.length > 0 ? "leads.add+responsible" : "leads.responsible";
+              responsibleLeads.forEach((l: any) => leadIds.push(String(l.id)));
+            }
+
+            const webhookLog = await prisma.webhookLog.create({
+              data: {
+                eventType,
+                leadIds,
+                payload: JSON.stringify(data).substring(0, 5000),
+                processed: false,
+                completed: false,
+              }
+            });
+            logId = webhookLog.id;
+            console.log(`[Webhook] Logged to DB, logId=${logId}`);
+          } catch (logErr: any) {
+            console.warn("[Webhook] Could not log to WebhookLog (table may not exist):", logErr?.message);
+          }
           
-          console.log(`[Webhook] Logged to DB, logId=${webhookLog.id}`);
-          await processWebhookAsync(data, webhookLog.id);
+          // Process webhook regardless of logging success
+          await processWebhookAsync(data, logId);
         } catch (err) {
           console.error("[Webhook] Async processing error:", err);
         }
