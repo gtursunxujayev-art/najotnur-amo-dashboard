@@ -147,13 +147,11 @@ export async function getOnlinePBXWebhookCalls(
   to: Date
 ): Promise<OnlinePBXCall[]> {
   try {
-    const domain = process.env.VERCEL_URL || process.env.REPLIT_DOMAINS || "localhost:5000";
-    const protocol = domain === "localhost:5000" ? "http" : "https";
-    
     const fromStr = from.toISOString().split('T')[0];
     const toStr = to.toISOString().split('T')[0];
-    
-    const url = `${protocol}://${domain}/api/onlinepbx/calls?from=${fromStr}&to=${toStr}`;
+    const { getBaseUrl } = await import("@/lib/baseUrl");
+    const baseUrl = getBaseUrl();
+    const url = `${baseUrl}/api/onlinepbx/calls?from=${fromStr}&to=${toStr}`;
     
     console.log(`[OnlinePBX] Fetching webhook-based calls from: ${url}`);
     
