@@ -1,5 +1,6 @@
 // app/api/scheduler/test/route.ts - Manually trigger reports for testing
 import { NextResponse } from "next/server";
+import { getBaseUrl } from "@/lib/baseUrl";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,17 +22,12 @@ export async function GET(request: Request) {
     console.log(`[scheduler/test] 🧪 Manually triggering ${type} report...`);
 
     const reportEndpoint = `/api/reports/${type}`;
-    const baseUrl =
-      process.env.REPLIT_DOMAINS ||
-      (typeof window !== "undefined" ? window.location.origin : "http://localhost:5000");
-    const fullUrl =
-      baseUrl.includes("http") || baseUrl.includes("localhost")
-        ? `${baseUrl}${reportEndpoint}`
-        : `http://localhost:5000${reportEndpoint}`;
+    const baseUrl = getBaseUrl();
+    const reportUrl = `${baseUrl}${reportEndpoint}`;
 
-    console.log(`[scheduler/test] Calling: ${fullUrl}`);
+    console.log(`[scheduler/test] Calling: ${reportUrl}`);
 
-    const res = await fetch(fullUrl, { method: "GET" });
+    const res = await fetch(reportUrl, { method: "GET" });
     const data = await res.json();
 
     console.log(`[scheduler/test] ✅ Response:`, data);
