@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
+import { getBaseUrl } from "@/lib/baseUrl";
 
 const prisma = new PrismaClient();
 
@@ -100,7 +101,7 @@ export async function GET(request: Request) {
           phone: c.phone,
           source: c.source,
         })),
-        webhookUrl: `https://${process.env.REPLIT_DOMAIN || "[REPLIT_DOMAIN]"}/api/onlinepbx/webhook`,
+        webhookUrl: `${getBaseUrl()}/api/onlinepbx/webhook`,
         instructions: {
           configure: "Set this webhook URL in your OnlinePBX panel settings",
           test: "Make a test call and check back here - new calls should appear within seconds",
