@@ -320,24 +320,17 @@ If you received this, the notification system is working correctly!`;
 async function testWebhookUrl(): Promise<TestResult> {
   const start = Date.now();
   
-  const productionUrl = process.env.PRODUCTION_BASE_URL;
-  const replitDomains = process.env.REPLIT_DOMAINS;
-  const replitDevDomain = process.env.REPLIT_DEV_DOMAIN;
-  
-  let webhookUrl: string | null = null;
-  let source = "";
-  
-  if (productionUrl) {
-    webhookUrl = productionUrl;
-    source = "PRODUCTION_BASE_URL";
-  } else if (replitDomains) {
-    const domains = replitDomains.split(",");
-    webhookUrl = `https://${domains[0]}`;
-    source = "REPLIT_DOMAINS";
-  } else if (replitDevDomain) {
-    webhookUrl = `https://${replitDevDomain}`;
-    source = "REPLIT_DEV_DOMAIN";
-  }
+  const { getBaseUrl } = await import("@/lib/baseUrl");
+  const webhookUrl = getBaseUrl();
+  const source = webhookUrl === (process.env.PRODUCTION_BASE_URL || "").replace(/\/+$/, "")
+    ? "PRODUCTION_BASE_URL"
+    : process.env.VERCEL_URL
+    ? "VERCEL_URL"
+    : process.env.REPLIT_DOMAINS
+    ? "REPLIT_DOMAINS"
+    : process.env.REPLIT_DEV_DOMAIN
+    ? "REPLIT_DEV_DOMAIN"
+    : "fallback";
   
   if (!webhookUrl) {
     return {
