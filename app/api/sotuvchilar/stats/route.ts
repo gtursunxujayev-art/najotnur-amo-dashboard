@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { getManagerNameFromExtension } from '@/lib/extensionMapping';
 import { dashboardConfig } from '@/config/dashboardConfig';
 import { getNowGMT5, getTodayStartGMT5, getTodayEndGMT5, getWeekStartGMT5, getMonthStartGMT5, getYesterdayRangeGMT5, getLastWeekRangeGMT5, getLastMonthRangeGMT5 } from '@/lib/timezoneGMT5';
+import { getBaseUrl } from "@/lib/baseUrl";
 
 export const dynamic = 'force-dynamic';
 
@@ -91,10 +92,8 @@ export async function GET(request: NextRequest) {
     }
 
     console.log(`[Sotuvchilar/Stats] Fetching stats for period: ${periodParam} (${fromDate.toISOString()} to ${toDate.toISOString()}) - GMT+5`);
-
-    const baseUrl = process.env.REPLIT_DOMAINS 
-      ? `https://${process.env.REPLIT_DOMAINS}` 
-      : 'http://localhost:5000';
+    
+    const baseUrl = getBaseUrl();
     
     const fromISO = fromDate.toISOString();
     const toISO = toDate.toISOString();
