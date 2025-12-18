@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getBaseUrl } from "@/lib/baseUrl";
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TIMEZONE_OFFSET = 5; // GMT+5
@@ -82,14 +83,10 @@ export async function sendTelegramNotification(
     return false;
   }
 
-  // Prioritize: explicit production URL > REPLIT_DOMAINS (production) > REPLIT_DEV_DOMAIN (dev) > fallback
-  const replitDomains = process.env.REPLIT_DOMAINS?.split(',')[0]; // First domain in production
-  const baseUrl = process.env.PRODUCTION_BASE_URL
-    || (replitDomains ? `https://${replitDomains}` : null)
-    || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null)
-    || "https://najotnur01.amocrm.ru";
-  
-  console.log(`[LeadNotifications] URL resolution: PRODUCTION_BASE_URL=${process.env.PRODUCTION_BASE_URL || 'not set'}, REPLIT_DOMAINS=${process.env.REPLIT_DOMAINS || 'not set'}, REPLIT_DEV_DOMAIN=${process.env.REPLIT_DEV_DOMAIN || 'not set'}, using baseUrl=${baseUrl}`);
+  const baseUrl = getBaseUrl();
+  console.log(
+    `[LeadNotifications] URL resolution: PRODUCTION_BASE_URL=${process.env.PRODUCTION_BASE_URL || "not set"}, VERCEL_URL=${process.env.VERCEL_URL || "not set"}, REPLIT_DOMAINS=${process.env.REPLIT_DOMAINS || "not set"}, REPLIT_DEV_DOMAIN=${process.env.REPLIT_DEV_DOMAIN || "not set"}, using baseUrl=${baseUrl}`
+  );
   
   const clickUrl = `${baseUrl}/api/lead-click/${notificationId}/${chatId}`;
 
@@ -329,14 +326,10 @@ export async function sendReassignedTelegramNotification(
     return false;
   }
 
-  // Prioritize: explicit production URL > REPLIT_DOMAINS (production) > REPLIT_DEV_DOMAIN (dev) > fallback
-  const replitDomains = process.env.REPLIT_DOMAINS?.split(',')[0]; // First domain in production
-  const baseUrl = process.env.PRODUCTION_BASE_URL
-    || (replitDomains ? `https://${replitDomains}` : null)
-    || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null)
-    || "https://najotnur01.amocrm.ru";
-  
-  console.log(`[LeadNotifications] URL resolution (reassigned): PRODUCTION_BASE_URL=${process.env.PRODUCTION_BASE_URL || 'not set'}, REPLIT_DOMAINS=${process.env.REPLIT_DOMAINS || 'not set'}, REPLIT_DEV_DOMAIN=${process.env.REPLIT_DEV_DOMAIN || 'not set'}, using baseUrl=${baseUrl}`);
+  const baseUrl = getBaseUrl();
+  console.log(
+    `[LeadNotifications] URL resolution (reassigned): PRODUCTION_BASE_URL=${process.env.PRODUCTION_BASE_URL || "not set"}, VERCEL_URL=${process.env.VERCEL_URL || "not set"}, REPLIT_DOMAINS=${process.env.REPLIT_DOMAINS || "not set"}, REPLIT_DEV_DOMAIN=${process.env.REPLIT_DEV_DOMAIN || "not set"}, using baseUrl=${baseUrl}`
+  );
   
   const clickUrl = `${baseUrl}/api/lead-click/${notificationId}/${chatId}`;
 
