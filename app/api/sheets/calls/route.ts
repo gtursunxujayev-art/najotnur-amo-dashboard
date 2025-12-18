@@ -40,13 +40,18 @@ function formatDuration(seconds: number): string {
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const spreadsheetId = searchParams.get("spreadsheetId");
+    const spreadsheetId =
+      searchParams.get("spreadsheetId") || process.env.SHEETS_SPREADSHEET_ID || "";
     const sheetName = searchParams.get("sheetName") || "Sheet1";
     const periodParam = (searchParams.get("period") || "week") as PeriodKey;
 
     if (!spreadsheetId) {
       return NextResponse.json(
-        { success: false, error: "Missing spreadsheetId parameter" },
+        {
+          success: false,
+          error:
+            "Missing spreadsheetId. Provide ?spreadsheetId=... or set SHEETS_SPREADSHEET_ID env var.",
+        },
         { status: 400 }
       );
     }
