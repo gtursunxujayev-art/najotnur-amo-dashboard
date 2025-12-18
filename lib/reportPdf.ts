@@ -5,6 +5,7 @@ import fs from "fs";
 import path from "path";
 import fontkit from "@pdf-lib/fontkit";
 import { prisma } from "@/lib/prisma";
+import { ONLINEPBX_NAME_REDIRECT } from "@/lib/extensionMapping";
 
 type ManagerCallStats = {
   managerName: string;
@@ -63,7 +64,12 @@ async function fetchManagerCallStats(period: Period): Promise<ManagerCallStats[]
     
     // Process OnlinePBX calls (manager is in 'user' field)
     for (const call of onlinePbxCalls) {
-      const managerName = call.user || 'Unknown';
+      let managerName = call.user || 'Unknown';
+      
+      // Apply name redirect (e.g., Admin → Mohinur)
+      if (ONLINEPBX_NAME_REDIRECT[managerName]) {
+        managerName = ONLINEPBX_NAME_REDIRECT[managerName];
+      }
       
       // Filter out non-manager entries (phone numbers, IVR extensions)
       if (!managerName || /^\d+$/.test(managerName) || /^[+\d\s()-]+$/.test(managerName)) {
@@ -83,7 +89,12 @@ async function fetchManagerCallStats(period: Period): Promise<ManagerCallStats[]
     
     // Process UTel calls (manager is in 'manager' field)
     for (const call of utelCalls) {
-      const managerName = call.manager || 'Unknown';
+      let managerName = call.manager || 'Unknown';
+      
+      // Apply name redirect (e.g., Admin → Mohinur)
+      if (ONLINEPBX_NAME_REDIRECT[managerName]) {
+        managerName = ONLINEPBX_NAME_REDIRECT[managerName];
+      }
       
       // Filter out non-manager entries (phone numbers, IVR extensions)
       if (!managerName || /^\d+$/.test(managerName) || /^[+\d\s()-]+$/.test(managerName)) {
