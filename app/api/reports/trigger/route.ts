@@ -2,6 +2,7 @@
 // Manual endpoint to trigger specific reports for testing
 
 import { NextResponse } from "next/server";
+import { getBaseUrl } from "@/lib/baseUrl";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,12 +22,8 @@ export async function GET(req: Request) {
     }
 
     console.log(`[reports/trigger] Manually triggering ${type} report`);
-
-    // Call the appropriate report endpoint
-    const baseUrl = process.env.REPLIT_DOMAINS
-      ? `https://${process.env.REPLIT_DOMAINS}`
-      : "http://localhost:5000";
-
+    
+    const baseUrl = getBaseUrl();
     const reportUrl = `${baseUrl}/api/reports/${type}`;
     const res = await fetch(reportUrl, { method: "GET" });
     const data = await res.json();
